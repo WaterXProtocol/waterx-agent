@@ -94,6 +94,23 @@ describe("classify", () => {
     expect(classify(new SignerError("no key", "cmd")).status).toBe("auth");
   });
 
+  it("reads rate limiting as transient — it says so in words", () => {
+    // The testnet faucet is the first thing a new wallet touches, and it
+    // answers a busy client with "Too many requests … Please retry later".
+    // Classified `rejected`, that told an agent to give up permanently on the
+    // one step every new user takes first.
+    for (const message of [
+      "Too many requests from this client have been sent to the faucet. Please retry later",
+      "HTTP 429",
+      "rate limit exceeded",
+      "service is temporarily unavailable",
+    ]) {
+      const outcome = classify(new Error(message));
+      expect(outcome.status, message).toBe("unavailable");
+      expect(outcome.retryable, message).toBe(true);
+    }
+  });
+
   it("reads a bare network fault as transient rather than as a rejection", () => {
     // These never become `WaterXApiError` — a gRPC submission, a config fetch.
     // Labelling one `rejected` tells a caller to stop when it should wait.

@@ -25,6 +25,6 @@ await run(async () => {
     confirm: confirmed(),
   });
   reportTx(agent, "create-account", result);
-  note("\nThe indexer assigns the account id; re-run `npm run accounts` in a moment,");
+  note("\nThe indexer assigns the account id; re-run `pnpm run accounts` in a moment,");
   note("then set WATERX_ACCOUNT_ID in .env.");
 });

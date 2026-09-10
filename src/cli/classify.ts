@@ -127,6 +127,15 @@ export function classify(error: unknown): Outcome {
   return { ...base, status: "rejected", message };
 }
 
+/**
+ * Phrases that mean "ask again later", not "this cannot work".
+ *
+ * Rate limiting belongs here and was missing. The testnet faucet answers a
+ * fresh wallet with "Too many requests from this client have been sent to the
+ * faucet. Please retry later" — a sentence that says, in words, that it is
+ * transient — and it was classified `rejected`, telling an agent to give up
+ * permanently on the one step every new user takes first.
+ */
 const TRANSIENT = [
   "fetch failed",
   "timeout",
@@ -138,6 +147,13 @@ const TRANSIENT = [
   "socket hang up",
   "network",
   "unavailable",
+  "too many requests",
+  "rate limit",
+  "rate-limited",
+  "429",
+  "retry later",
+  "try again later",
+  "temporarily",
 ];
 
 const looksTransient = (message: string): boolean => {

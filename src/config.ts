@@ -52,7 +52,7 @@ const DEFAULT_GRPC_URL: Record<Network, string> = {
 /**
  * waterx-config deployment document — the single source of truth for package
  * and object ids. The agent reads it only to *report* what it is pointed at
- * (`npm run doctor`); it never builds a PTB from it, because the backend owns
+ * (`pnpm run doctor`); it never builds a PTB from it, because the backend owns
  * PTB composition. Override with `WATERX_CONFIG_URL`.
  */
 const DEFAULT_CONFIG_URL: Record<Network, string> = {

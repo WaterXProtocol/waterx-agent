@@ -551,12 +551,12 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
           config.accountId === undefined
             ? warn(
                 "account",
-                `no WaterX account for ${ownerAddress} — run \`npm run create-account\``,
+                `no WaterX account for ${ownerAddress} — run \`pnpm run create-account\``,
               )
             : fail(
                 "account",
                 `WATERX_ACCOUNT_ID is set to ${config.accountId} but ${ownerAddress} owns no account ` +
-                  `on this deployment. The id is stale — clear it and run \`npm run create-account\`.`,
+                  `on this deployment. The id is stale — clear it and run \`pnpm run create-account\`.`,
               ),
         );
       } else {
