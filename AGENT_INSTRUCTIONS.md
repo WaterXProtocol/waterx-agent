@@ -80,9 +80,14 @@ Reads need no key and sign nothing. Run them freely.
 
 ```bash
 pnpm --silent run doctor --json      # is anything blocking reads or writes?
+pnpm --silent run balance --json     # freeMargin is what a new order may commit
 pnpm --silent run positions --json
 pnpm --silent run ticker -- --ticker BTC --json
 ```
+
+Check `writeReady` **before** previewing a write. A preview on a process with
+no account fails with `config`, which is correct but is a worse first thing for
+a user to see than the list of what is missing.
 
 `doctor` reports `readReady` and `writeReady` separately. `readReady: false`
 means the deployment is unreachable and nothing else will work. `writeReady:

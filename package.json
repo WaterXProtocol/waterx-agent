@@ -31,6 +31,7 @@
     "cancel-order": "tsx scripts/orders/cancel-order.ts",
     "wlp": "tsx scripts/wlp/wlp.ts",
     "accounts": "tsx scripts/query/accounts.ts",
+    "balance": "tsx scripts/query/balance.ts",
     "positions": "tsx scripts/query/positions.ts",
     "orders": "tsx scripts/query/orders.ts",
     "delegates": "tsx scripts/query/delegates.ts",

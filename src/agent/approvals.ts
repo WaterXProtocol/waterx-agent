@@ -115,11 +115,21 @@ export function statusOf(id: string, now = Date.now(), path = APPROVALS_FILE): A
   if (created === undefined) return undefined;
   const request = created.request as ApprovalRequest;
 
+  // Who approved it is carried into every later state, not dropped once the
+  // approval is spent. An audit trail that forgets the approver the moment it
+  // matters — after the trade — is not an audit trail; `pnpm run approvals`
+  // listed every executed write with `approvedBy: null`.
+  const approval = records.find((r) => r.type === "approval");
+  const by = typeof approval?.by === "string" ? { approvedBy: approval.by } : {};
+  const at = approval === undefined ? {} : { approvedAt: approval.at };
+
   const consumed = records.find((r) => r.type === "consumed");
   if (consumed !== undefined) {
     return {
       request,
       state: "consumed",
+      ...at,
+      ...by,
       consumedAt: consumed.at,
       ...(typeof consumed.digest === "string" ? { digest: consumed.digest } : {}),
       ...(typeof consumed.submissionId === "string" ? { submissionId: consumed.submissionId } : {}),
@@ -131,25 +141,21 @@ export function statusOf(id: string, now = Date.now(), path = APPROVALS_FILE): A
     return {
       request,
       state: "rejected",
+      ...at,
+      ...by,
       rejectedAt: rejected.at,
       ...(typeof rejected.reason === "string" ? { reason: rejected.reason } : {}),
     };
   }
 
-  const approved = records.find((r) => r.type === "approval");
-  if (approved !== undefined) {
+  if (approval !== undefined) {
     // An approval that has aged past the request's expiry is not spendable:
     // the price it was given against is gone. Say `expired` rather than
     // `approved` so `execute` refuses for the reason that is true.
     if (now > request.expiresAt) {
-      return { request, state: "expired", approvedAt: approved.at };
+      return { request, state: "expired", ...at, ...by };
     }
-    return {
-      request,
-      state: "approved",
-      approvedAt: approved.at,
-      ...(typeof approved.by === "string" ? { approvedBy: approved.by } : {}),
-    };
+    return { request, state: "approved", ...at, ...by };
   }
 
   return { request, state: now > request.expiresAt ? "expired" : "pending" };

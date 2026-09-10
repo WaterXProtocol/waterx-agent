@@ -103,7 +103,9 @@ Exit codes carry the same answer: `0` ok, `2` usage, `3` config, `4` auth,
 | `doctor` | Whether reads and writes are ready, and what is blocking either |
 | `markets`, `ticker`, `market-data` | Listed markets, live prices, 24h stats |
 | `info` | The deployment's collateral, backing assets and market list |
-| `positions`, `orders`, `funds`, `pnl`, `history` | Account state |
+| `balance` | Free margin, committed collateral, unrealised PnL, total equity |
+| `positions`, `orders`, `pnl`, `history` | Exposure and realised results |
+| `funds` | Deposit and withdrawal **history** — not balances; use `balance` |
 | `accounts`, `delegates` | Which accounts this wallet owns, and who may act on them |
 | `limits` | The execution policy and risk ceilings this process is bound by |
 | `approvals` | Previewed plans, who approved them, and anything unsettled |
@@ -136,6 +138,11 @@ Show the user `fill` (which way it trades), `sizeBase` and `notionalUsd` (how
 much), and `bound` — `kind: "max"` means *pay at most* this, `kind: "min"`
 means *receive at least* this. Those three are what a person is actually
 approving.
+
+Size against **`freeMargin`** from `pnpm --silent run balance --json`, never
+against `totalEquity`: equity includes collateral already committed to open
+positions and resting orders, and sizing from it is how an account tries to
+commit money it does not have.
 
 ## Things that will surprise you
 

@@ -573,7 +573,7 @@ Every command takes `--json` (one JSON document on stdout, nothing else) and
 
 **WLP** — `wlp -- --action mint|burn|cancel-burn|claim`
 
-**Reads** — `accounts` · `positions` · `orders` · `delegates` · `markets` ·
+**Reads** — `balance` · `accounts` · `positions` · `orders` · `delegates` · `markets` ·
 `ticker` · `candles` · `trades` · `funding` · `history` · `funds` · `pnl` ·
 `wlp-info` · `info` · `market-data` · `referral`
 

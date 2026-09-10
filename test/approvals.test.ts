@@ -112,6 +112,19 @@ describe("approvals", () => {
     expect(status?.digest).toBe("d1");
   });
 
+  it("remembers who approved it after it has been spent", () => {
+    // The moment the approver matters most is after the trade. Reporting
+    // `approvedBy: null` on every executed write made the ledger useless as
+    // the audit trail it exists to be.
+    const request = requestOn(approvals);
+    approve(request.id, "someone", Date.now(), approvals);
+    markConsumed(request.id, { digest: "d1" }, Date.now(), approvals);
+    const status = statusOf(request.id, Date.now(), approvals);
+    expect(status?.state).toBe("consumed");
+    expect(status?.approvedBy).toBe("someone");
+    expect(status?.approvedAt).toBeTypeOf("number");
+  });
+
   it("keeps a refusal rather than deleting it", () => {
     const request = requestOn(approvals);
     reject(request.id, "wrong size", Date.now(), approvals);
