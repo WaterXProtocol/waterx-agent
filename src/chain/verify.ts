@@ -103,10 +103,8 @@ import { fromBase64 } from "@mysten/sui/utils";
 import { ExecutionPolicyError } from "../errors.ts";
 import type { WriteIntent } from "../policy.ts";
 import { ABI, KNOWN_FUNCTIONS, SDK_VERSION } from "./abi.generated.ts";
-import corpus from "./abi-corpus.json" with { type: "json" };
-
-/** Entrypoints the corpus has never captured, and why. */
-const UNCONFIRMED_ENTRYPOINTS: Readonly<Record<string, string>> = corpus.uncaptured;
+import { corpusFor } from "./corpus.ts";
+import type { Network } from "../config.ts";
 import {
   exceptionCovers,
   normalizePackage,
@@ -143,6 +141,15 @@ export interface VerificationContext {
    * that names the signer as gas owner is the backend billing us.
    */
   sponsored: boolean;
+  /**
+   * Which deployment these bytes are for.
+   *
+   * Required, and not derived from `deployment`: the recorded argument layouts
+   * are per network — testnet and mainnet publish different packages under the
+   * same names — so "has this entrypoint ever been confirmed?" has a different
+   * answer on each. A default here would answer for the wrong one silently.
+   */
+  network: Network;
 }
 
 /**
@@ -2275,11 +2282,13 @@ function assertGasIsRight(
 export function assertLayoutConfirmed(
   intent: WriteIntent,
   allowUnconfirmed: readonly string[],
+  network: Network,
 ): void {
+  const unconfirmed = corpusFor(network).uncaptured;
   const entrypoint = ACTION_RULES[intent.action]?.entrypoint;
   const why =
-    entrypoint !== undefined && Object.hasOwn(UNCONFIRMED_ENTRYPOINTS, entrypoint)
-      ? UNCONFIRMED_ENTRYPOINTS[entrypoint]
+    entrypoint !== undefined && Object.hasOwn(unconfirmed, entrypoint)
+      ? unconfirmed[entrypoint]
       : undefined;
   if (why === undefined || allowUnconfirmed.includes(entrypoint ?? "")) return;
   throw refuse(
@@ -2334,7 +2343,7 @@ export function assertTransactionMatches(
     );
   }
 
-  assertLayoutConfirmed(intent, context.allowUnconfirmed ?? []);
+  assertLayoutConfirmed(intent, context.allowUnconfirmed ?? [], context.network);
 
   assertGasIsRight(data, intent, signerAddress, context.sponsored);
 

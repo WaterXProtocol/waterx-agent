@@ -12,7 +12,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadConfig } from "../src/config.ts";
 import { ACTION_RULES } from "../src/chain/verify.ts";
-import corpus from "../src/chain/abi-corpus.json" with { type: "json" };
+import { corpusFor } from "../src/chain/corpus.ts";
+
+/** The suite runs with no `WATERX_NETWORK`, which is testnet — the fixture the
+ *  committed captures describe. Named rather than inferred, so a change to the
+ *  default network fails here instead of silently testing the other one. */
+const corpus = corpusFor("testnet");
 
 afterEach(() => {
   vi.unstubAllEnvs();

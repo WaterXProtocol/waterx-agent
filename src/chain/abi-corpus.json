@@ -1,563 +1,1072 @@
 {
-  "capturedAt": "2026-09-10",
-  "network": "sui_testnet",
-  "sdkVersion": "4.3.3",
-  "packages": {
-    "bucket_framework": "63dc0d88e834716e564a6aaa1a893b6745f6cb1cb00d9d86a72208e02268873d",
-    "constant_rule": "b623f1243a990d892f6f5c9b3e336d86f27b3d6c1491e93a0e6cc4a55976caed",
-    "enclave": "28221bbe0ba9351b563d9911e828926e01783fc105870d57a02d73da79a874ae",
-    "mock_sui": "896e53015216c5034825c056bcde37a694263601df2534ae5c91b8a3d9150c78",
-    "mock_usdc": "7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a",
-    "mock_usdsui": "c0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016",
-    "native_custody": "45910f4c3ba9942c0e69bd81fba71d28a290950691a42baa96f82a8112ae44bd",
-    "pyth_rule": "907e3691cedbb44e2e5f823003446f4c8e3601bc47987f9e012e625353709e00",
-    "supra_rule": "30fbd5dfd842202829fae2a9a2d0a3dcab0f0b81183dff1543967c45d2a33578",
-    "testnet_faucet": "26ae20135e44ac79d75fa34f0425812fc148417225d5f4c451060fc7cc9b36dd",
-    "usd": "6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7",
-    "waterx_account": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-    "waterx_credit": "da82a19a2225291b5f25d29d58e4b1c943ca50901940e6eb528545f45da61c13",
-    "waterx_oracle": "3833ad543033a3efe82e88a252f6845f22944af42990591a143c1ae7faae7a67",
-    "waterx_perp": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-    "waterx_perp_view": "d01bf55e2c29abdc26caa377976f9e7cdc19964453db6e96ee3f6ac9ba99d37c",
-    "waterx_prediction": "0274cc0502d43d177d9422c0dc4bfa510da83789bfe10e86e73ae1bd04277290",
-    "waterx_prediction_gift": "a3fec380a480fefcda38c125af0e57b06e775f49568c88ecec960e263ec1f5d8",
-    "waterx_referral": "0ab918a0dd576e44b84f14ed4a2329030c6c07e09f44e82c544b23f3ddbf6b7f",
-    "waterx_rule": "9572f18cb21403340d21fce437a70411636b47015beda0f54f54dceb9a1d186d",
-    "waterx_staking": "60518e116d6b824a834a8ad4735f360095ea729fd88680a12670ef95db227aa2",
-    "withdrawal_queue": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
-    "wlp": "da92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9",
-    "wormhole_bridge": "5982b3b04d91160abe83aebe9b78e960a80c846dd0de72e5a44a88b339e434c5"
-  },
-  "captured": {
-    "account::add_delegate": [
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
-          "permissions": "00000000"
-        },
-        "positions": [
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "9999999999999999999999999999999999999999999999999999999999999999",
-          "00",
-          "00000000",
-          "00",
-          null
+  "version": 2,
+  "networks": {
+    "mainnet": {
+      "capturedAt": "2026-09-10",
+      "network": "sui_mainnet",
+      "sdkVersion": "4.3.3",
+      "packages": {
+        "bucket_framework": "e2d49d67ff42dc500275f2d84841bf35632aa6c1abdb70af66a10e1de93a4400",
+        "constant_rule": "685dcb32ce65e0eaab691596bab72c6ace4f227f81277f83cc5bd59c6e574d09",
+        "enclave": "bce5b23dc3bca7b514adc36954cd01ac5227d17c2e7764c36e9b3808364c6693",
+        "native_custody": "84e1f8aa9456205e6e38e878988e5ee4714f2254d7408ee40b455f0e8a1446c0",
+        "pyth_lazer_rule": "5435e3b146de4083ecd3de9fb4638a397d1ba44db8f1f77b89f256f05f80cd5f",
+        "pyth_rule": "00d486565f8bf241035df334322af9d23e8b6b81f21d7702c32f35947958f50a",
+        "usd": "c70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4",
+        "waterx_account": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+        "waterx_credit": "f22d3e583abf09f4b01733fe0abf5c056b5fe1d704d62607f42551ea1245704f",
+        "waterx_oracle": "d6fd5fa8be2f2cb3042fbb11f31f26c27280676f6a08681b16cbb5e4cb64f24e",
+        "waterx_perp": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+        "waterx_perp_view": "ace3c08864acdbc7163de6f72347213ac2fe03044a8c2c4cc3bbeb80e2cf5cdb",
+        "waterx_prediction": "972184710f3ea2d54973d325ca4035c8d44d1a9571da7ee42a34cf8da72facbd",
+        "waterx_prediction_gift": "b8095fcd57c81c96b7b7742111d9dde1a637d614d6acdfbc7ddf16a90032c560",
+        "waterx_referral": "17235897a9c2e977d60f3ded7b05e85724d7ee846b1519e6d8af7fdbc840da37",
+        "waterx_rule": "0a974d1987f0538c4124da2071642586f06fcc9121b1de51497b568d7906001b",
+        "waterx_staking": "da968d77a68decca71f5c0b0d79d06be601374770380f39af90de6285d66ad20",
+        "withdrawal_queue": "200752ac52233e07a8814d93d626bb88621f6c066e2252e5d77c9c0903aa0bcf",
+        "wlp": "183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc",
+        "wormhole_bridge": "5df5483a84cba4c244e98ef6519c2358d690cd8316dc50f09278c709371f0ee9"
+      },
+      "captured": {
+        "account::add_delegate": [
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "00000000"
+            },
+            "positions": [
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "00",
+              "00000000",
+              "00",
+              null
+            ],
+            "typeArguments": []
+          }
         ],
-        "typeArguments": []
-      }
-    ],
-    "account::create_account": [
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "alias": "0570726f6265"
-        },
-        "positions": [
-          null,
-          null,
-          "0570726f6265"
+        "account::create_account": [
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "alias": "0570726f6265"
+            },
+            "positions": [
+              null,
+              null,
+              "0570726f6265"
+            ],
+            "typeArguments": []
+          }
         ],
-        "typeArguments": []
-      }
-    ],
-    "account::remove_delegate": [
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "accountId": "a53a40904c4fb97672aee5532ddd5c1a1faf20aea890fa12a090b32c52bfa055",
-          "delegateAddress": "1d74ec9bc04ed750bd478f920b012a0a467ff3ee0af5300b4640957723780edd"
-        },
-        "positions": [
-          null,
-          null,
-          "a53a40904c4fb97672aee5532ddd5c1a1faf20aea890fa12a090b32c52bfa055",
-          "1d74ec9bc04ed750bd478f920b012a0a467ff3ee0af5300b4640957723780edd",
-          null
+        "account::remove_delegate": [
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "delegateAddress": "7d7f5e8bf835d9477a68759dd3d23e97bd97303c669ec549850f81a7af363a22"
+            },
+            "positions": [
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "7d7f5e8bf835d9477a68759dd3d23e97bd97303c669ec549850f81a7af363a22",
+              null
+            ],
+            "typeArguments": []
+          }
         ],
-        "typeArguments": []
-      }
-    ],
-    "account::request": [
-      {
-        "package": "63dc0d88e834716e564a6aaa1a893b6745f6cb1cb00d9d86a72208e02268873d",
-        "sent": {},
-        "positions": [],
-        "typeArguments": []
-      }
-    ],
-    "account::request_withdraw": [
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "amount": "c1c62d0000000000",
-          "recipient": "b1428c767c4c11df019581b2ec6f702543240be4dd70eed91e097d2b66d9de6c"
-        },
-        "positions": [
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "c1c62d0000000000",
-          "b1428c767c4c11df019581b2ec6f702543240be4dd70eed91e097d2b66d9de6c",
-          null,
-          null
+        "account::request": [
+          {
+            "package": "e2d49d67ff42dc500275f2d84841bf35632aa6c1abdb70af66a10e1de93a4400",
+            "sent": {},
+            "positions": [],
+            "typeArguments": []
+          }
         ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
-        ]
-      }
-    ],
-    "account::set_delegate_protocol_permission": [
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
-          "permissions": "01000000"
-        },
-        "positions": [
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "9999999999999999999999999999999999999999999999999999999999999999",
-          "01000000",
-          null
+        "account::request_withdraw": [
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "amount": "c1c62d0000000000",
+              "recipient": "26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4"
+            },
+            "positions": [
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "c1c62d0000000000",
+              "26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4",
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD"
+            ]
+          }
         ],
-        "typeArguments": [
-          "0x505622c7f91372446d9bb5e0b874f3a0746e4abaafdaf8209962bcdb44af2b35::request::TradingRequest<0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD>"
+        "account::set_delegate_protocol_permission": [
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "01000000"
+            },
+            "positions": [
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "01000000",
+              null
+            ],
+            "typeArguments": [
+              "0x44dad8a2899167fe2806c2c298366c0824180fc382aa66cb8bd034b2e9aef96f::request::TradingRequest<0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD>"
+            ]
+          },
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "01000000"
+            },
+            "positions": [
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "01000000",
+              null
+            ],
+            "typeArguments": [
+              "0x44dad8a2899167fe2806c2c298366c0824180fc382aa66cb8bd034b2e9aef96f::account_data::WaterXPerp"
+            ]
+          },
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "02000000"
+            },
+            "positions": [
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "02000000",
+              null
+            ],
+            "typeArguments": [
+              "0x972184710f3ea2d54973d325ca4035c8d44d1a9571da7ee42a34cf8da72facbd::account_data::WaterXPrediction"
+            ]
+          },
+          {
+            "package": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "04000000"
+            },
+            "positions": [
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "04000000",
+              null
+            ],
+            "typeArguments": [
+              "0x061d53088c7beede5b7f087ed950563b94722104f26f5f84ea5d51921b1b7bf4::witness::WaterXStaking"
+            ]
+          }
+        ],
+        "custody_vault::mint": [
+          {
+            "package": "84e1f8aa9456205e6e38e878988e5ee4714f2254d7408ee40b455f0e8a1446c0",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              null,
+              "00"
+            ],
+            "typeArguments": [
+              "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC",
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD"
+            ]
+          }
+        ],
+        "lp_pool::mint_wlp": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "depositAmount": "47420f0000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "47420f0000000000",
+              "0000000000000000",
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP",
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD"
+            ]
+          }
+        ],
+        "request::new_place_order_argument": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "isLong": "01",
+              "isStopOrder": "00",
+              "reduceOnly": "00",
+              "size": "e6dd597b020000000000000000000000",
+              "triggerPrice": "00",
+              "linkedPositionId": "00",
+              "acceptablePrice": "01b076f82e00000000",
+              "collateralAmount": "00093d0000000000"
+            },
+            "positions": [
+              "01",
+              "00",
+              "00",
+              "e6dd597b020000000000000000000000",
+              "00",
+              "00",
+              "01b076f82e00000000",
+              "00093d0000000000"
+            ],
+            "typeArguments": []
+          },
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "isLong": "00",
+              "isStopOrder": "00",
+              "reduceOnly": "01",
+              "size": "e6dd597b020000000000000000000000",
+              "triggerPrice": "0100105e5f000000000000000000000000",
+              "linkedPositionId": "00",
+              "acceptablePrice": "00",
+              "collateralAmount": "0000000000000000"
+            },
+            "positions": [
+              "00",
+              "00",
+              "01",
+              "e6dd597b020000000000000000000000",
+              "0100105e5f000000000000000000000000",
+              "00",
+              "00",
+              "0000000000000000"
+            ],
+            "typeArguments": []
+          },
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "isLong": "00",
+              "isStopOrder": "01",
+              "reduceOnly": "01",
+              "size": "e6dd597b020000000000000000000000",
+              "triggerPrice": "010084d717000000000000000000000000",
+              "linkedPositionId": "00",
+              "acceptablePrice": "00",
+              "collateralAmount": "0000000000000000"
+            },
+            "positions": [
+              "00",
+              "01",
+              "01",
+              "e6dd597b020000000000000000000000",
+              "010084d717000000000000000000000000",
+              "00",
+              "00",
+              "0000000000000000"
+            ],
+            "typeArguments": []
+          }
+        ],
+        "trading::close_position_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "positionId": "7d0c000000000000",
+              "acceptablePrice": "d0467f2a00000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "7d0c000000000000",
+              "d0467f2a00000000",
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::decrease_position_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "positionId": "7d0c000000000000",
+              "size": "e6dd597b020000000000000000000000",
+              "acceptablePrice": "d0467f2a00000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "7d0c000000000000",
+              "e6dd597b020000000000000000000000",
+              "d0467f2a00000000",
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::deposit_collateral_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "positionId": "7d0c000000000000",
+              "collateralAmount": "4b420f0000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "7d0c000000000000",
+              "4b420f0000000000",
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::increase_position_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "orderId": "00",
+              "positionId": "7d0c000000000000",
+              "collateralAmount": "49420f0000000000",
+              "size": "e6dd597b020000000000000000000000",
+              "acceptablePrice": "b076f82e00000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "00",
+              "7d0c000000000000",
+              "49420f0000000000",
+              "e6dd597b020000000000000000000000",
+              "b076f82e00000000",
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::place_order_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              null,
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::withdraw_collateral_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "positionId": "7d0c000000000000",
+              "amount": "4d420f0000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "79fa80146e3f239f8829c1c77a4620940f8c9c169fa1100ddec07146ea0541f7",
+              "7d0c000000000000",
+              "4d420f0000000000",
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
+          }
+        ],
+        "withdrawal_queue::enqueue": [
+          {
+            "package": "200752ac52233e07a8814d93d626bb88621f6c066e2252e5d77c9c0903aa0bcf",
+            "sent": {},
+            "positions": [
+              null,
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD"
+            ]
+          }
+        ],
+        "withdrawal_queue::route_native": [
+          {
+            "package": "200752ac52233e07a8814d93d626bb88621f6c066e2252e5d77c9c0903aa0bcf",
+            "sent": {},
+            "positions": [
+              "0000000000000000"
+            ],
+            "typeArguments": [
+              "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7::usdc::USDC"
+            ]
+          }
         ]
       },
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
-          "permissions": "01000000"
-        },
-        "positions": [
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "9999999999999999999999999999999999999999999999999999999999999999",
-          "01000000",
-          null
+      "uncaptured": {
+        "lp_pool::cancel_redeem": "requires a pending redeem request",
+        "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
+        "trading::cancel_order_request": "needs a resting order, and ORDER_ID named none",
+        "trading::update_order_request": "needs a resting order, and ORDER_ID named none",
+        "waterx_staking::claim": "requires claimable rewards",
+        "withdrawal_queue::route_wormhole": "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes"
+      }
+    },
+    "testnet": {
+      "capturedAt": "2026-09-10",
+      "network": "sui_testnet",
+      "sdkVersion": "4.3.3",
+      "packages": {
+        "bucket_framework": "63dc0d88e834716e564a6aaa1a893b6745f6cb1cb00d9d86a72208e02268873d",
+        "constant_rule": "b623f1243a990d892f6f5c9b3e336d86f27b3d6c1491e93a0e6cc4a55976caed",
+        "enclave": "28221bbe0ba9351b563d9911e828926e01783fc105870d57a02d73da79a874ae",
+        "mock_sui": "896e53015216c5034825c056bcde37a694263601df2534ae5c91b8a3d9150c78",
+        "mock_usdc": "7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a",
+        "mock_usdsui": "c0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016",
+        "native_custody": "45910f4c3ba9942c0e69bd81fba71d28a290950691a42baa96f82a8112ae44bd",
+        "pyth_rule": "907e3691cedbb44e2e5f823003446f4c8e3601bc47987f9e012e625353709e00",
+        "supra_rule": "30fbd5dfd842202829fae2a9a2d0a3dcab0f0b81183dff1543967c45d2a33578",
+        "testnet_faucet": "26ae20135e44ac79d75fa34f0425812fc148417225d5f4c451060fc7cc9b36dd",
+        "usd": "6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7",
+        "waterx_account": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+        "waterx_credit": "da82a19a2225291b5f25d29d58e4b1c943ca50901940e6eb528545f45da61c13",
+        "waterx_oracle": "3833ad543033a3efe82e88a252f6845f22944af42990591a143c1ae7faae7a67",
+        "waterx_perp": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+        "waterx_perp_view": "d01bf55e2c29abdc26caa377976f9e7cdc19964453db6e96ee3f6ac9ba99d37c",
+        "waterx_prediction": "0274cc0502d43d177d9422c0dc4bfa510da83789bfe10e86e73ae1bd04277290",
+        "waterx_prediction_gift": "a3fec380a480fefcda38c125af0e57b06e775f49568c88ecec960e263ec1f5d8",
+        "waterx_referral": "0ab918a0dd576e44b84f14ed4a2329030c6c07e09f44e82c544b23f3ddbf6b7f",
+        "waterx_rule": "9572f18cb21403340d21fce437a70411636b47015beda0f54f54dceb9a1d186d",
+        "waterx_staking": "60518e116d6b824a834a8ad4735f360095ea729fd88680a12670ef95db227aa2",
+        "withdrawal_queue": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
+        "wlp": "da92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9",
+        "wormhole_bridge": "5982b3b04d91160abe83aebe9b78e960a80c846dd0de72e5a44a88b339e434c5"
+      },
+      "captured": {
+        "account::add_delegate": [
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "00000000"
+            },
+            "positions": [
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "00",
+              "00000000",
+              "00",
+              null
+            ],
+            "typeArguments": []
+          }
         ],
-        "typeArguments": [
-          "0x505622c7f91372446d9bb5e0b874f3a0746e4abaafdaf8209962bcdb44af2b35::account_data::WaterXPerp"
+        "account::create_account": [
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "alias": "0570726f6265"
+            },
+            "positions": [
+              null,
+              null,
+              "0570726f6265"
+            ],
+            "typeArguments": []
+          }
+        ],
+        "account::remove_delegate": [
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "accountId": "a53a40904c4fb97672aee5532ddd5c1a1faf20aea890fa12a090b32c52bfa055",
+              "delegateAddress": "1d74ec9bc04ed750bd478f920b012a0a467ff3ee0af5300b4640957723780edd"
+            },
+            "positions": [
+              null,
+              null,
+              "a53a40904c4fb97672aee5532ddd5c1a1faf20aea890fa12a090b32c52bfa055",
+              "1d74ec9bc04ed750bd478f920b012a0a467ff3ee0af5300b4640957723780edd",
+              null
+            ],
+            "typeArguments": []
+          }
+        ],
+        "account::request": [
+          {
+            "package": "63dc0d88e834716e564a6aaa1a893b6745f6cb1cb00d9d86a72208e02268873d",
+            "sent": {},
+            "positions": [],
+            "typeArguments": []
+          }
+        ],
+        "account::request_withdraw": [
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "amount": "c1c62d0000000000",
+              "recipient": "b1428c767c4c11df019581b2ec6f702543240be4dd70eed91e097d2b66d9de6c"
+            },
+            "positions": [
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "c1c62d0000000000",
+              "b1428c767c4c11df019581b2ec6f702543240be4dd70eed91e097d2b66d9de6c",
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
+            ]
+          }
+        ],
+        "account::set_delegate_protocol_permission": [
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "01000000"
+            },
+            "positions": [
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "01000000",
+              null
+            ],
+            "typeArguments": [
+              "0x505622c7f91372446d9bb5e0b874f3a0746e4abaafdaf8209962bcdb44af2b35::request::TradingRequest<0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD>"
+            ]
+          },
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "01000000"
+            },
+            "positions": [
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "01000000",
+              null
+            ],
+            "typeArguments": [
+              "0x505622c7f91372446d9bb5e0b874f3a0746e4abaafdaf8209962bcdb44af2b35::account_data::WaterXPerp"
+            ]
+          },
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "02000000"
+            },
+            "positions": [
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "02000000",
+              null
+            ],
+            "typeArguments": [
+              "0x0274cc0502d43d177d9422c0dc4bfa510da83789bfe10e86e73ae1bd04277290::account_data::WaterXPrediction"
+            ]
+          },
+          {
+            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "permissions": "04000000"
+            },
+            "positions": [
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "9999999999999999999999999999999999999999999999999999999999999999",
+              "04000000",
+              null
+            ],
+            "typeArguments": [
+              "0xc82109e3e1fefff821c5637e857de66c95508c607277be84ee50f4067f1ec445::witness::WaterXStaking"
+            ]
+          }
+        ],
+        "custody_vault::mint": [
+          {
+            "package": "45910f4c3ba9942c0e69bd81fba71d28a290950691a42baa96f82a8112ae44bd",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              null,
+              "00"
+            ],
+            "typeArguments": [
+              "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a::mock_usdc::MOCK_USDC",
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
+            ]
+          }
+        ],
+        "lp_pool::mint_wlp": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "depositAmount": "47420f0000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              null,
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "47420f0000000000",
+              "0000000000000000",
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP",
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
+            ]
+          }
+        ],
+        "request::new_place_order_argument": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "isLong": "01",
+              "isStopOrder": "00",
+              "reduceOnly": "00",
+              "size": "3ffc0c70020000000000000000000000",
+              "triggerPrice": "00",
+              "linkedPositionId": "00",
+              "acceptablePrice": "01e833d22f00000000",
+              "collateralAmount": "00093d0000000000"
+            },
+            "positions": [
+              "01",
+              "00",
+              "00",
+              "3ffc0c70020000000000000000000000",
+              "00",
+              "00",
+              "01e833d22f00000000",
+              "00093d0000000000"
+            ],
+            "typeArguments": []
+          },
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "isLong": "00",
+              "isStopOrder": "00",
+              "reduceOnly": "01",
+              "size": "3ffc0c70020000000000000000000000",
+              "triggerPrice": "0100105e5f000000000000000000000000",
+              "linkedPositionId": "00",
+              "acceptablePrice": "00",
+              "collateralAmount": "0000000000000000"
+            },
+            "positions": [
+              "00",
+              "00",
+              "01",
+              "3ffc0c70020000000000000000000000",
+              "0100105e5f000000000000000000000000",
+              "00",
+              "00",
+              "0000000000000000"
+            ],
+            "typeArguments": []
+          },
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "isLong": "00",
+              "isStopOrder": "01",
+              "reduceOnly": "01",
+              "size": "3ffc0c70020000000000000000000000",
+              "triggerPrice": "010084d717000000000000000000000000",
+              "linkedPositionId": "00",
+              "acceptablePrice": "00",
+              "collateralAmount": "0000000000000000"
+            },
+            "positions": [
+              "00",
+              "01",
+              "01",
+              "3ffc0c70020000000000000000000000",
+              "010084d717000000000000000000000000",
+              "00",
+              "00",
+              "0000000000000000"
+            ],
+            "typeArguments": []
+          }
+        ],
+        "trading::cancel_order_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "orderId": "3e01000000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "3e01000000000000",
+              "00000000000000000000000000000000",
+              "ff",
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::close_position_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "positionId": "3400000000000000",
+              "acceptablePrice": "5847442b00000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "3400000000000000",
+              "5847442b00000000",
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::decrease_position_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "positionId": "3400000000000000",
+              "size": "3ffc0c70020000000000000000000000",
+              "acceptablePrice": "5847442b00000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "3400000000000000",
+              "3ffc0c70020000000000000000000000",
+              "5847442b00000000",
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::deposit_collateral_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "positionId": "3400000000000000",
+              "collateralAmount": "4b420f0000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "3400000000000000",
+              "4b420f0000000000",
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::increase_position_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "orderId": "00",
+              "positionId": "3400000000000000",
+              "collateralAmount": "49420f0000000000",
+              "size": "3ffc0c70020000000000000000000000",
+              "acceptablePrice": "e833d22f00000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "00",
+              "3400000000000000",
+              "49420f0000000000",
+              "3ffc0c70020000000000000000000000",
+              "e833d22f00000000",
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::place_order_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              null,
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::update_order_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "orderId": "3e01000000000000",
+              "currentTriggerPrice": "00000000000000000000000000000000",
+              "newSize": "03825484040000000000000000000000",
+              "newTriggerPrice": "07de391a000000000000000000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
+              "3e01000000000000",
+              "00000000000000000000000000000000",
+              "00",
+              "03825484040000000000000000000000",
+              "07de391a000000000000000000000000",
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::withdraw_collateral_request": [
+          {
+            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "positionId": "3400000000000000",
+              "amount": "4d420f0000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
+              "3400000000000000",
+              "4d420f0000000000",
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
+            ]
+          }
+        ],
+        "withdrawal_queue::enqueue": [
+          {
+            "package": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
+            "sent": {},
+            "positions": [
+              null,
+              null,
+              null
+            ],
+            "typeArguments": [
+              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
+            ]
+          }
+        ],
+        "withdrawal_queue::route_native": [
+          {
+            "package": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
+            "sent": {},
+            "positions": [
+              "0000000000000000"
+            ],
+            "typeArguments": [
+              "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a::mock_usdc::MOCK_USDC"
+            ]
+          }
         ]
       },
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
-          "permissions": "02000000"
-        },
-        "positions": [
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "9999999999999999999999999999999999999999999999999999999999999999",
-          "02000000",
-          null
-        ],
-        "typeArguments": [
-          "0x0274cc0502d43d177d9422c0dc4bfa510da83789bfe10e86e73ae1bd04277290::account_data::WaterXPrediction"
-        ]
-      },
-      {
-        "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
-          "permissions": "04000000"
-        },
-        "positions": [
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "9999999999999999999999999999999999999999999999999999999999999999",
-          "04000000",
-          null
-        ],
-        "typeArguments": [
-          "0xc82109e3e1fefff821c5637e857de66c95508c607277be84ee50f4067f1ec445::witness::WaterXStaking"
-        ]
+      "uncaptured": {
+        "lp_pool::cancel_redeem": "requires a pending redeem request",
+        "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
+        "waterx_staking::claim": "requires claimable rewards",
+        "withdrawal_queue::route_wormhole": "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes"
       }
-    ],
-    "custody_vault::mint": [
-      {
-        "package": "45910f4c3ba9942c0e69bd81fba71d28a290950691a42baa96f82a8112ae44bd",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          null,
-          "00"
-        ],
-        "typeArguments": [
-          "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a::mock_usdc::MOCK_USDC",
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
-        ]
-      }
-    ],
-    "lp_pool::mint_wlp": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "depositAmount": "47420f0000000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          null,
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "47420f0000000000",
-          "0000000000000000",
-          null,
-          null
-        ],
-        "typeArguments": [
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP",
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
-        ]
-      }
-    ],
-    "request::new_place_order_argument": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "isLong": "01",
-          "isStopOrder": "00",
-          "reduceOnly": "00",
-          "size": "3ffc0c70020000000000000000000000",
-          "triggerPrice": "00",
-          "linkedPositionId": "00",
-          "acceptablePrice": "01e833d22f00000000",
-          "collateralAmount": "00093d0000000000"
-        },
-        "positions": [
-          "01",
-          "00",
-          "00",
-          "3ffc0c70020000000000000000000000",
-          "00",
-          "00",
-          "01e833d22f00000000",
-          "00093d0000000000"
-        ],
-        "typeArguments": []
-      },
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "isLong": "00",
-          "isStopOrder": "00",
-          "reduceOnly": "01",
-          "size": "3ffc0c70020000000000000000000000",
-          "triggerPrice": "0100105e5f000000000000000000000000",
-          "linkedPositionId": "00",
-          "acceptablePrice": "00",
-          "collateralAmount": "0000000000000000"
-        },
-        "positions": [
-          "00",
-          "00",
-          "01",
-          "3ffc0c70020000000000000000000000",
-          "0100105e5f000000000000000000000000",
-          "00",
-          "00",
-          "0000000000000000"
-        ],
-        "typeArguments": []
-      },
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "isLong": "00",
-          "isStopOrder": "01",
-          "reduceOnly": "01",
-          "size": "3ffc0c70020000000000000000000000",
-          "triggerPrice": "010084d717000000000000000000000000",
-          "linkedPositionId": "00",
-          "acceptablePrice": "00",
-          "collateralAmount": "0000000000000000"
-        },
-        "positions": [
-          "00",
-          "01",
-          "01",
-          "3ffc0c70020000000000000000000000",
-          "010084d717000000000000000000000000",
-          "00",
-          "00",
-          "0000000000000000"
-        ],
-        "typeArguments": []
-      }
-    ],
-    "trading::cancel_order_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "orderId": "3e01000000000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "3e01000000000000",
-          "00000000000000000000000000000000",
-          "ff",
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "trading::close_position_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "positionId": "3400000000000000",
-          "acceptablePrice": "5847442b00000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "3400000000000000",
-          "5847442b00000000",
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "trading::decrease_position_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "positionId": "3400000000000000",
-          "size": "3ffc0c70020000000000000000000000",
-          "acceptablePrice": "5847442b00000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "3400000000000000",
-          "3ffc0c70020000000000000000000000",
-          "5847442b00000000",
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "trading::deposit_collateral_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "positionId": "3400000000000000",
-          "collateralAmount": "4b420f0000000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "3400000000000000",
-          "4b420f0000000000",
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "trading::increase_position_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "orderId": "00",
-          "positionId": "3400000000000000",
-          "collateralAmount": "49420f0000000000",
-          "size": "3ffc0c70020000000000000000000000",
-          "acceptablePrice": "e833d22f00000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "00",
-          "3400000000000000",
-          "49420f0000000000",
-          "3ffc0c70020000000000000000000000",
-          "e833d22f00000000",
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "trading::place_order_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          null,
-          null,
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "trading::update_order_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "orderId": "3e01000000000000",
-          "currentTriggerPrice": "00000000000000000000000000000000",
-          "newSize": "03825484040000000000000000000000",
-          "newTriggerPrice": "07de391a000000000000000000000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "a4a49c87792330387088470aa703dcc24275fc162f0e294f0abefcf775620af8",
-          "3e01000000000000",
-          "00000000000000000000000000000000",
-          "00",
-          "03825484040000000000000000000000",
-          "07de391a000000000000000000000000",
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "trading::withdraw_collateral_request": [
-      {
-        "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-        "sent": {
-          "ticker": "06535549555344",
-          "accountId": "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "positionId": "3400000000000000",
-          "amount": "4d420f0000000000"
-        },
-        "positions": [
-          null,
-          null,
-          null,
-          "06535549555344",
-          null,
-          "602bce5950460623ab406feed9e668196c2177c5dc97a781853a6589b2c3f471",
-          "3400000000000000",
-          "4d420f0000000000",
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-          "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-        ]
-      }
-    ],
-    "withdrawal_queue::enqueue": [
-      {
-        "package": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
-        "sent": {},
-        "positions": [
-          null,
-          null,
-          null
-        ],
-        "typeArguments": [
-          "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
-        ]
-      }
-    ],
-    "withdrawal_queue::route_native": [
-      {
-        "package": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
-        "sent": {},
-        "positions": [
-          "0000000000000000"
-        ],
-        "typeArguments": [
-          "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a::mock_usdc::MOCK_USDC"
-        ]
-      }
-    ]
-  },
-  "uncaptured": {
-    "lp_pool::cancel_redeem": "requires a pending redeem request",
-    "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
-    "waterx_staking::claim": "requires claimable rewards",
-    "withdrawal_queue::route_wormhole": "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes"
+    }
   }
 }

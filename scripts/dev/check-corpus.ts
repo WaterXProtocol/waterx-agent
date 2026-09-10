@@ -17,13 +17,22 @@
  *   3  it does not — re-run `pnpm run capture-corpus` and look at what changed
  *   7  the config document could not be read; this says nothing either way
  */
-import corpus from "../../src/chain/abi-corpus.json" with { type: "json" };
+import { corpusFor, hasCorpusFor, measuredNetworks } from "../../src/chain/corpus.ts";
 import { assertCorpusDescribes, loadDeployment } from "../../src/chain/deployment.ts";
 import { ACTION_RULES } from "../../src/chain/verify.ts";
 import { loadConfig } from "../../src/config.ts";
 import { EXIT } from "../../src/cli/contract.ts";
 
 const config = loadConfig();
+const corpus = corpusFor(config.network);
+
+if (!hasCorpusFor(config.network)) {
+  process.stderr.write(
+    `config: no argument layouts have ever been captured on ${config.network}; measured ` +
+      `networks are ${measuredNetworks().join(", ") || "none"}. Every write refuses there.\n`,
+  );
+  process.exit(EXIT.config);
+}
 
 let deployment;
 try {

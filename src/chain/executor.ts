@@ -45,7 +45,7 @@ import { TxExecutionError } from "../errors.ts";
 import type { Permit, PolicyGate, WriteIntent } from "../policy.ts";
 import type { SignerProvider } from "./signer.ts";
 import { assertCorpusDescribes, loadDeployment } from "./deployment.ts";
-import corpus from "./abi-corpus.json" with { type: "json" };
+import { corpusFor } from "./corpus.ts";
 import { assertLayoutConfirmed, assertTransactionMatches } from "./verify.ts";
 import type { TxResponse } from "../api/types.ts";
 
@@ -161,11 +161,16 @@ export class TxExecutor {
     // And that the layouts every positional check relies on still describe it.
     // Checking this only in `runDoctor` protected an operator who runs the
     // preflight and nobody else; a runner signs for weeks without one.
+    // Per network: testnet and mainnet publish different packages under the
+    // same names, so the record for the other one describes this deployment as
+    // entirely changed — and a fixture that held only one made the two networks
+    // mutually exclusive without saying so.
+    const corpus = corpusFor(this.config.network);
     assertCorpusDescribes(deployment, corpus.packages, corpus.capturedAt);
     // Before the fork, so both branches refuse identically — and so the
     // self-pay path does not rebuild through a fullnode to choose gas for an
     // action that will be refused either way.
-    assertLayoutConfirmed(intent, this.config.allowUnconfirmed);
+    assertLayoutConfirmed(intent, this.config.allowUnconfirmed, this.config.network);
 
     const action = intent.action;
 
@@ -178,6 +183,7 @@ export class TxExecutor {
         deployment,
         extraPackages: this.config.extraPackages,
         allowUnconfirmed: this.config.allowUnconfirmed,
+        network: this.config.network,
         sponsored: true,
       });
       // Already complete and gas-owned by the sponsor: sign exactly these bytes.
@@ -220,6 +226,7 @@ export class TxExecutor {
       deployment,
       extraPackages: this.config.extraPackages,
       allowUnconfirmed: this.config.allowUnconfirmed,
+      network: this.config.network,
       sponsored: false,
     });
     // Complete bytes, not kind bytes: a signer cannot tell the two apart, so

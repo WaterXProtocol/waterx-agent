@@ -30,7 +30,7 @@ import {
 } from "./chain/deployment.ts";
 import { ACTION_RULES, usesByPackage } from "./chain/verify.ts";
 import { KNOWN_FUNCTIONS } from "./chain/abi.generated.ts";
-import corpus from "./chain/abi-corpus.json" with { type: "json" };
+import { corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
 import { PolicyGate } from "./policy.ts";
 
 export interface DoctorCheck {
@@ -381,6 +381,12 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       const affected = [
         ...new Set(unlisted.flatMap((id) => [...(reachedBy.get(id) ?? [])])),
       ].sort();
+      // Packages whose exception cannot be qualified, because the SDK declares
+      // none of the modules they serve. Named so the widening is a stated fact
+      // rather than something an operator infers from a missing `=`.
+      const unqualified = unlisted.filter(
+        (id) => (uses.get(id)?.size ?? 0) > 0 && sdkPackageFor(uses.get(id)) === undefined,
+      );
       // Order matters: a standing exception stays visible even once nothing is
       // outright unlisted, because "accepted because someone said so" is not
       // the same state as "accounted for by the deployment".
@@ -400,7 +406,14 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
                 `        WATERX_EXTRA_PACKAGES=` +
                 `${[...unlisted, ...named]
                   .map((id) => narrowest(id, uses.get(id), sdkPackageFor(uses.get(id))))
-                  .join(",")}`,
+                  .join(",")}` +
+                (unqualified.length === 0
+                  ? ""
+                  : `\n        ${unqualified.map((id) => `0x${id.slice(0, 8)}…`).join(", ")} is ` +
+                    `accepted with \`=*\`, which runs its calls with nothing holding them to a ` +
+                    `shape. That is wider than the qualified form, and it is the only form ` +
+                    `available: the modules it calls belong to no package @waterx/sdk ` +
+                    `declares, so there is no declaration to check them against.`),
             )
           : named.length > 0
             ? warn(
@@ -439,6 +452,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // slots while appearing to work.
   if (deployment !== undefined) {
     const live = deployment;
+    const corpus = corpusFor(config.network);
     // Moved, gone and arrived — the same comparison `execute()` makes, so the
     // preflight and the signing path cannot disagree about whether the corpus
     // still describes the deployment.
@@ -472,7 +486,16 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       Object.values(ACTION_RULES).some((rule) => rule.entrypoint === entrypoint),
     );
     checks.push(
-      moved.length > 0
+      !hasCorpusFor(config.network)
+        ? fail(
+            "abi corpus",
+            `no argument layouts have ever been captured on ${config.network}. Every positional ` +
+              `check reads them, so no write can be signed here — this is "we have never ` +
+              `measured this deployment", not "there is nothing to measure". Measured: ` +
+              `${measuredNetworks().join(", ") || "none"}. Run \`pnpm run capture-corpus\` ` +
+              `against ${config.network}.`,
+          )
+        : moved.length > 0
         ? fail(
             "abi corpus",
             `the argument layouts were captured on ${corpus.capturedAt} against a deployment ` +
@@ -486,8 +509,12 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
             // agent that will refuse these actions at the first attempt.
             (refused.some((action) => CORE_ACTIONS.has(action)) ? fail : warn)(
               "abi corpus",
+              // Both counts are of entrypoints. They used to be mixed with a
+              // count of *actions*, which read as an arithmetic error to
+              // anyone who then counted the names in the list.
               `${String(Object.keys(corpus.captured).length)} entrypoints confirmed against this ` +
-                `deployment on ${corpus.capturedAt}; ${String(unchecked.length)} never were. ` +
+                `deployment on ${corpus.capturedAt}; ${String(unchecked.length)} never were ` +
+                `(${String(refused.length)} actions reach them). ` +
                 (refused.length > 0
                   ? `These actions refuse until they are: ${refused.join(", ")}` +
                     (refused.some((action) => CORE_ACTIONS.has(action))
@@ -496,9 +523,14 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
                     `Re-run ` +
                     `\`pnpm run capture-corpus\`, or accept them explicitly:\n` +
                     `        WATERX_ALLOW_UNCONFIRMED_ABI=` +
-                    `${refused
-                      .map((a) => ACTION_RULES[a]?.entrypoint ?? a)
-                      .join(",")}`
+                    // De-duplicated, because several actions share an
+                    // entrypoint — `openLong`, `openShort`, `placeLimitOrder`
+                    // and `placeTpSl` are all `place_order_request` — and the
+                    // setting is a SET. The line printed here was refused by
+                    // the very parser it was meant to be pasted into, which is
+                    // the worst kind of diagnostic: one that disagrees with the
+                    // check it mirrors.
+                    `${[...new Set(refused.map((a) => ACTION_RULES[a]?.entrypoint ?? a))].join(",")}`
                   : `No action refuses: every unconfirmed entrypoint is named in ` +
                     `WATERX_ALLOW_UNCONFIRMED_ABI.`),
             )
@@ -683,8 +715,23 @@ const narrowest = (
     // Named only in a type argument, so there is no call to qualify.
     return `0x${id}`;
   }
+  // A qualified exception holds the call to a package's *declared* functions,
+  // which means the SDK has to declare them. Mainnet's order path calls
+  // `pyth_lazer::parse_and_verify_le_ecdsa_update_v2` — Pyth's package, not
+  // WaterX's, so no SDK package will ever name it. This used to print
+  // `<sdk-package>` for that case: a placeholder nobody could fill, in a line
+  // whose only purpose is to be pasted.
+  //
+  // The bare id is wider than the qualified form and it is the only form that
+  // works here. `unqualified` below says so in words rather than leaving an
+  // operator to notice.
+  // `=*` rather than a bare id: a bare id covers no call at all, so suggesting
+  // one for a package the backend CALLS produced a line that looked like a fix
+  // and changed nothing. The starred form is the honest spelling of what is
+  // actually being granted.
+  if (sdkPackage === undefined) return `0x${id}=*`;
   const modules = new Set([...calls].map((c) => c.split("::")[0] ?? ""));
-  return [...modules].map((m) => `0x${id}=${sdkPackage ?? "<sdk-package>"}::${m}`).join(",");
+  return [...modules].map((m) => `0x${id}=${sdkPackage}::${m}`).join(",");
 };
 
 /**

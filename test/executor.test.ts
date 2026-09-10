@@ -18,7 +18,12 @@ import { TxExecutor } from "../src/chain/executor.ts";
 import { ABI } from "../src/chain/abi.generated.ts";
 import { ACTION_RULES, BINDINGS, TYPE_ROLES } from "../src/chain/verify.ts";
 import { normalizePackage, seedDeployment } from "../src/chain/deployment.ts";
-import corpus from "../src/chain/abi-corpus.json" with { type: "json" };
+import { corpusFor } from "../src/chain/corpus.ts";
+
+/** The suite runs with no `WATERX_NETWORK`, which is testnet — the fixture the
+ *  committed captures describe. Named rather than inferred, so a change to the
+ *  default network fails here instead of silently testing the other one. */
+const corpus = corpusFor("testnet");
 import { KeypairSigner } from "../src/chain/signer.ts";
 import { loadConfig } from "../src/config.ts";
 import { ExecutionPolicyError, TxExecutionError } from "../src/errors.ts";

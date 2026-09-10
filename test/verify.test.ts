@@ -83,6 +83,9 @@ const roleRef = (tx: Transaction, role: string) =>
   });
 
 const DEPLOYMENT = {
+  // The layouts are recorded per network, so the verifier has to be told which
+  // deployment these bytes are for. The fixtures describe testnet.
+  network: "testnet" as const,
   deployment: {
     callable: new Set([normalizePackage(`0x${"c".repeat(64)}`), normalizePackage("0x2")]),
     typeable: new Set([normalizePackage(`0x${"c".repeat(64)}`), normalizePackage("0x2")]),
@@ -1810,6 +1813,7 @@ describe("a real deposit, as the deployment built it", () => {
         },
       },
       allowUnconfirmed: [] as readonly string[],
+      network: "testnet" as const,
     };
   };
 

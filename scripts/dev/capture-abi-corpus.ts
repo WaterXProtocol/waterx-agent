@@ -40,7 +40,7 @@
  * reason, and the test fails if one is neither captured nor excused.
  */
 import { randomBytes } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 
 import { Transaction } from "@mysten/sui/transactions";
 import { fromBase64 } from "@mysten/sui/utils";
@@ -447,24 +447,68 @@ if (POSITION_ID !== undefined) {
   );
 }
 
-/** Why an entrypoint has no capture, when the run itself did not say. */
+/**
+ * Why an entrypoint has no capture, when the run itself did not say.
+ *
+ * The reason is the useful half of an uncaptured entry — it is what tells the
+ * next person whether to go and arrange the missing condition or to leave it
+ * alone. So it has to be *true*, and truth here depends on how the capture was
+ * invoked. A blanket "the testnet keeper was not filling orders" was written
+ * once and then applied to a mainnet run with no account configured, where it
+ * described nothing that had happened.
+ */
 const REASONS: Record<string, string> = {
-  "account::create_account": "can only be built for an address that has no account yet",
   "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
   "lp_pool::cancel_redeem": "requires a pending redeem request",
   "waterx_staking::claim": "requires claimable rewards",
   "withdrawal_queue::route_wormhole":
     "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes",
 };
-const POSITION_REASON =
-  "needs an open position, and none could be opened — the testnet keeper was not filling market orders when this was captured";
 
+/** Entrypoints that cannot be built without an account to build them against. */
+const NEEDS_ACCOUNT = "no account was configured for this capture (ACCT), so no account-scoped shape could be built";
+/** …and, among those, the ones that additionally need an open position. */
+const NEEDS_POSITION =
+  "needs an open position, and POSITION_ID named none — on testnet the keeper was not filling market orders, so use POSITION_ACCT to point at an account that already has one";
+const POSITION_ENTRYPOINTS = new Set([
+  "trading::close_position_request",
+  "trading::decrease_position_request",
+  "trading::increase_position_request",
+  "trading::deposit_collateral_request",
+  "trading::withdraw_collateral_request",
+]);
+const NEEDS_ORDER = "needs a resting order, and ORDER_ID named none";
+const ORDER_ENTRYPOINTS = new Set([
+  "trading::cancel_order_request",
+  "trading::update_order_request",
+]);
+
+const noAccount = accountId.trim() === "";
 for (const entrypoint of Object.keys(ABI)) {
-  if (corpus.has(entrypoint) || skipped.has(entrypoint)) continue;
-  skipped.set(
-    entrypoint,
-    REASONS[entrypoint] ?? (POSITION_ID === undefined ? POSITION_REASON : "no capture is written"),
-  );
+  if (corpus.has(entrypoint)) continue;
+  const stated = REASONS[entrypoint];
+  if (stated !== undefined) {
+    skipped.set(entrypoint, stated);
+    continue;
+  }
+  // An error the backend gave is only meaningful when the request was
+  // well-formed. Without an account it is a complaint about the missing id,
+  // not about the entrypoint, and recording it would put "Internal server
+  // error" in a committed fixture as though the deployment were broken.
+  if (noAccount) {
+    skipped.set(entrypoint, NEEDS_ACCOUNT);
+    continue;
+  }
+  if (skipped.has(entrypoint)) continue;
+  if (POSITION_ENTRYPOINTS.has(entrypoint) && POSITION_ID === undefined) {
+    skipped.set(entrypoint, NEEDS_POSITION);
+    continue;
+  }
+  if (ORDER_ENTRYPOINTS.has(entrypoint) && ORDER_ID === undefined) {
+    skipped.set(entrypoint, NEEDS_ORDER);
+    continue;
+  }
+  skipped.set(entrypoint, "no capture is written");
 }
 
 // The deployment this was captured against, package by package. Without it the
@@ -478,10 +522,21 @@ const packages = Object.fromEntries(
   [...deployment.byName.entries()].sort(([a], [b]) => a.localeCompare(b)),
 );
 
-writeFileSync(
-  "src/chain/abi-corpus.json",
-  `${JSON.stringify(
-    {
+// Merged into the existing file, never over it. The record is keyed by network
+// — testnet and mainnet publish different packages under the same names, so a
+// capture of one describes the other as entirely changed — and a whole-file
+// write would have made capturing mainnet the act of un-capturing testnet.
+const CORPUS_PATH = "src/chain/abi-corpus.json";
+const network = info.network.replace(/^sui_/, "");
+const existing = JSON.parse(readFileSync(CORPUS_PATH, "utf8")) as {
+  version?: number;
+  networks?: Record<string, unknown>;
+};
+const merged = {
+  version: 2,
+  networks: {
+    ...(existing.networks ?? {}),
+    [network]: {
       capturedAt: new Date().toISOString().slice(0, 10),
       network: info.network,
       sdkVersion: SDK_VERSION,
@@ -489,10 +544,16 @@ writeFileSync(
       captured: Object.fromEntries([...corpus.entries()].sort(([a], [b]) => a.localeCompare(b))),
       uncaptured: Object.fromEntries([...skipped.entries()].sort(([a], [b]) => a.localeCompare(b))),
     },
-    null,
-    2,
-  )}\n`,
+  },
+};
+// Sorted, so a capture of one network does not reorder the other and turn a
+// two-line change into a whole-file diff nobody will read.
+merged.networks = Object.fromEntries(
+  Object.entries(merged.networks).sort(([a], [b]) => a.localeCompare(b)),
 );
+writeFileSync(CORPUS_PATH, `${JSON.stringify(merged, null, 2)}\n`);
 
-console.log(`captured ${String(corpus.size)} of ${String(Object.keys(ABI).length)} entrypoints`);
+console.log(
+  `captured ${String(corpus.size)} of ${String(Object.keys(ABI).length)} entrypoints on ${network}`,
+);
 for (const [entrypoint, why] of skipped) console.log(`  uncaptured ${entrypoint} — ${why}`);

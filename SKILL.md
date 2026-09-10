@@ -63,7 +63,8 @@ agreeing to it.
 3. **Never open a position on mainnet on your own initiative.** Mainnet
    defaults to `read-only`, and it stays that way unless a person has
    deliberately changed `WATERX_EXECUTION_POLICY`. If a preview reports
-   `"network": "mainnet"`, say so prominently before asking for approval.
+   `"network": "mainnet"`, say so prominently before asking for approval — that
+   is real money, and the person approving must know which network they are on.
 4. **On `status: "ambiguous"`, reconcile. Never retry.** The transaction may
    already have executed. Retrying places the trade twice. Run the
    `nextCommand` the envelope gives you.
@@ -143,10 +144,15 @@ approving.
 - **Collateral is not gas.** `fund-sui` gets testnet gas. Trading collateral is
   a backing asset the wallet must already hold; on testnet the credit faucet is
   whitelist-gated, so a fresh wallet needs an operator.
-- **WLP actions (`burnWlp`, `cancelWlpBurn`, `claimWlpRewards`) refuse under
-  default settings** on testnet, because their argument layouts have never been
-  confirmed against the deployment. `doctor` says so. This is expected and is
-  not a fault you should work around.
+- **Some actions refuse under default settings, by design.** Their argument
+  layouts have never been confirmed against that deployment, and the verifier
+  will not read positions nobody measured. On testnet that is `burnWlp`,
+  `cancelWlpBurn` and `claimWlpRewards`; on mainnet it is also `cancelOrder` and
+  `updateOrder`. `doctor` names them for the network you are on. This is
+  expected and is not a fault to work around.
+- **Mainnet needs setup that testnet does not** — a policy someone typed, and
+  package exceptions `doctor` prints. Run `pnpm --silent run doctor --json`
+  first and report what it says rather than trying to trade through it.
 - **A stale oracle price refuses rather than being used.** A slippage bound
   computed off a stale price is a bound that does not bind.
 

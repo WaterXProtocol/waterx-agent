@@ -152,6 +152,46 @@ touches onboarding or perp trading. `doctor` prints the exact
 `WATERX_ALLOW_UNCONFIRMED_ABI` / `WATERX_EXTRA_PACKAGES` line if you need those
 paths anyway.
 
+### Mainnet
+
+Mainnet is live and this agent reaches it — `WATERX_NETWORK=mainnet` switches
+the backend, the fullnode and the deployment document together. Reads work with
+no further setup. Writes need three deliberate acts, and the default is that
+none of them has happened.
+
+1. **A policy.** Mainnet defaults to `read-only`. Writing there has to be
+   something someone typed, so `WATERX_EXECUTION_POLICY=interactive` is the
+   decision, not an oversight to fix.
+2. **The package exceptions.** Mainnet's config document does not list three
+   packages the backend reaches: the Pyth Lazer oracle, which **every order**
+   calls, and the USDC and reward coin types, which appear as type arguments.
+   `pnpm run doctor` prints the exact `WATERX_EXTRA_PACKAGES` line. The Lazer
+   one needs the `=*` form — see `.env.example` for what each form grants and
+   why that one is the ugliest.
+3. **A corpus for the actions you use.** The recorded argument layouts are
+   **per network**: testnet and mainnet publish different packages under the
+   same names, so a capture of one describes the other as entirely changed.
+   `src/chain/abi-corpus.json` holds a record per network, and a network with
+   no record refuses every write rather than reading positions nobody confirmed.
+
+As committed, mainnet has 17 of 23 entrypoints confirmed. `cancelOrder` and
+`updateOrder` are not among them — capturing those needs a resting mainnet
+order, which costs real money to create — so they refuse until someone captures
+them or names them in `WATERX_ALLOW_UNCONFIRMED_ABI`. Everything else in the
+perp and account flow is confirmed.
+
+To check the whole path without signing anything:
+
+```bash
+WATERX_NETWORK=mainnet pnpm run doctor          # what is ready, what is not
+WATERX_NETWORK=mainnet pnpm run check-verifier  # real bytes, verified, never signed
+```
+
+`check-verifier` asks the live backend for a bracket order, checks that the
+correct one passes verification, then asks for variants that differ from what
+the intent authorizes and checks that each is refused. It stops at
+verification — nothing is signed and nothing is submitted.
+
 ### An order is a request, not a fill
 
 A write returns when the request is on chain. A keeper fills it afterwards, and

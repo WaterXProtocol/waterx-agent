@@ -21,12 +21,27 @@ import type { WriteIntent } from "../../src/policy.ts";
 
 const agent = initAgent();
 const deployment = await loadDeployment(agent.config.configUrl);
-const signer = agent.executor.senderAddress;
+
+/**
+ * Whose account these shapes are built for.
+ *
+ * `SENDER` overrides it, and exists because the thing under test is the
+ * *verifier* — not who holds a key. Verifying against an account this process
+ * cannot sign for is exactly as meaningful, and it is the only way to check the
+ * decode against a deployment where the only account with an open position
+ * belongs to someone else. Without it the agent adds `delegateSender`, the
+ * backend refuses to build anything, and every case reports as "not built".
+ *
+ * Nothing here is signed either way.
+ */
+const sender = process.env.SENDER?.trim();
+const signer = sender ?? agent.executor.senderAddress;
 const account = agent.accountId;
+const who = sender === undefined ? agent.executor.txBody() : { sender };
 
 const SIZE = "13000000000";      // 13 SUI, 1e9
 const COLL = "5000000";          // 5 USD, 1e6
-const TRIGGER = "600000000";     // 0.60
+const TRIGGER = process.env.TRIGGER ?? "600000000"; // 0.60, or a price that does not cross
 const TP = "1000000000";         // 1.00
 const SL = "500000000";          // 0.50
 
@@ -52,7 +67,7 @@ const intent: WriteIntent = {
 
 const build = async (over: Record<string, unknown>) => {
   const r: any = await (agent as any).tx.limitOrder({
-    ...agent.executor.txBody(),
+    ...who,
     accountId: account,
     ticker: "SUIUSD",
     isLong: true,
@@ -77,7 +92,19 @@ const check = async (label: string, over: Record<string, unknown>, expectPass: b
     return;
   }
   try {
-    assertTransactionMatches(bytes, intent, signer, { deployment, sponsored: true });
+    // The process's OWN configuration, not a bare context. `extraPackages` and
+    // `allowUnconfirmed` are what `TxExecutor.execute()` passes, and a check
+    // that omitted them was not checking the signing path: on mainnet, where
+    // the config document does not list the Pyth Lazer package every order
+    // calls, it refused the correct bracket and reported the verifier as
+    // broken.
+    assertTransactionMatches(bytes, intent, signer, {
+      deployment,
+      network: agent.config.network,
+      extraPackages: agent.config.extraPackages,
+      allowUnconfirmed: agent.config.allowUnconfirmed,
+      sponsored: true,
+    });
     if (!expectPass) failures++;
     console.log(`  ${expectPass ? "✓" : "✗ NOT REFUSED"}  ${label}${expectPass ? "" : "  <-- would have been signed"}`);
   } catch (e) {

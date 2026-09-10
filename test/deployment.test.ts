@@ -11,7 +11,15 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { forgetDeployments, loadDeployment, manifestAgeMs } from "../src/chain/deployment.ts";
+import {
+  exceptionCovers,
+  forgetDeployments,
+  loadDeployment,
+  manifestAgeMs,
+  normalizePackage,
+  type PackageException,
+  parseExceptions,
+} from "../src/chain/deployment.ts";
 
 const URL = "https://example.invalid/testnet.json";
 
@@ -108,5 +116,53 @@ describe("the deployment manifest", () => {
     served = dead;
     await expect(loadDeployment(URL)).rejects.toThrow(/network down/);
     expect(manifestAgeMs(URL)).toBeUndefined();
+  });
+});
+
+/**
+ * Standing package exceptions, and the three things they can say.
+ *
+ * `WATERX_EXTRA_PACKAGES` is how an operator accepts a package the deployment
+ * document does not list. The grammar matters because the forms grant
+ * different amounts, and until mainnet there was no way to write down the one
+ * mainnet needs.
+ */
+describe("package exceptions", () => {
+  const PKG = normalizePackage(`0x${"e".repeat(64)}`);
+
+  it("covers no call when only the id is given", () => {
+    // The type-argument form. A package named only as a type never executes,
+    // so a bare id must not be readable as permission to run code.
+    const [bare] = parseExceptions([`0x${"e".repeat(64)}`]);
+    expect(bare).toBeDefined();
+    expect(exceptionCovers(bare as PackageException, PKG, "oracle", "aggregate")).toBe(false);
+  });
+
+  it("covers the calls a qualified exception names, and no others", () => {
+    const [scoped] = parseExceptions([`0x${"e".repeat(64)}=@waterx/perp::trading`]);
+    expect(exceptionCovers(scoped as PackageException, PKG, "trading", "place_order_request")).toBe(
+      true,
+    );
+    expect(exceptionCovers(scoped as PackageException, PKG, "lp_pool", "mint_wlp")).toBe(false);
+  });
+
+  it("covers every call when spelled `=*`, and says so in its own shape", () => {
+    // The form mainnet needs. Its order path calls
+    // `pyth_lazer::parse_and_verify_le_ecdsa_update_v2` — Pyth's code, which no
+    // @waterx/sdk release declares — so a qualified exception would have to
+    // name a package that does not exist, and a bare id covers no call. The
+    // grammar could not express the case at all, which did not make it safer:
+    // it made the only options "refuse every mainnet order" or "edit the check".
+    const [star] = parseExceptions([`0x${"e".repeat(64)}=*`]);
+    expect(star?.unchecked).toBe(true);
+    expect(star?.sdkPackage, "nothing is claimed about what it is").toBeUndefined();
+    expect(exceptionCovers(star as PackageException, PKG, "pyth_lazer", "parse_and_verify")).toBe(
+      true,
+    );
+    // Still only that package. Wider about what a package may do, never about
+    // which package it is.
+    expect(
+      exceptionCovers(star as PackageException, normalizePackage(`0x${"f".repeat(64)}`), "x", "y"),
+    ).toBe(false);
   });
 });

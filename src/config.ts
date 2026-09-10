@@ -9,11 +9,8 @@
 
 import { readFileSync } from "node:fs";
 
-import corpus from "./chain/abi-corpus.json" with { type: "json" };
+import { corpusFor } from "./chain/corpus.ts";
 import { ACTION_RULES } from "./chain/verify.ts";
-
-/** Entrypoints the corpus has never captured, and why. */
-const UNCONFIRMED_ENTRYPOINTS: Readonly<Record<string, string>> = corpus.uncaptured;
 import { manifestGraceMs } from "./chain/deployment.ts";
 import { ConfigError, ExecutionPolicyError } from "./errors.ts";
 import type { PolicyMode, PolicyScope } from "./policy.ts";
@@ -131,7 +128,7 @@ export interface AgentConfig {
  * for a safety setting to fail.
  */
 /** The same rule the string form is held to, applied to a list from any source. */
-function checkAllowUnconfirmed(named: readonly string[]): readonly string[] {
+function checkAllowUnconfirmed(named: readonly string[], network: Network): readonly string[] {
   // A repeat is a typo or a merge artifact, not an instruction. Silently
   // collapsing it would hide the mistake; this is a set, so say so.
   const repeated = named.filter((e, i) => named.indexOf(e) !== i);
@@ -141,7 +138,7 @@ function checkAllowUnconfirmed(named: readonly string[]): readonly string[] {
         `of entrypoints; a repeat means something was pasted twice.`,
     );
   }
-  const unusable = named.filter((e) => !isRefusableEntrypoint(e));
+  const unusable = named.filter((e) => !isRefusableEntrypoint(e, network));
   if (unusable.length === 0) return named;
   throw new Error(
     `allowUnconfirmed names ${unusable.join(", ")}, which no allowance can apply to — each is ` +
@@ -149,7 +146,7 @@ function checkAllowUnconfirmed(named: readonly string[]): readonly string[] {
   );
 }
 
-function parseAllowUnconfirmed(raw: string | undefined): string[] {
+function parseAllowUnconfirmed(raw: string | undefined, network: Network): string[] {
   const value = (raw ?? "").trim();
   // Unset means strict: an action whose layout this deployment has never been
   // seen to emit is refused until someone names it.
@@ -159,7 +156,11 @@ function parseAllowUnconfirmed(raw: string | undefined): string[] {
   // `",,,"` used to parse as "nothing named" and pass silently — a value that
   // looks like a setting and is not one. Same for a name that is merely
   // misspelt: it validated, matched no entrypoint, and quietly allowed nothing.
-  if (named.length > 0 && named.length === parts.length && named.every(isRefusableEntrypoint)) {
+  if (
+    named.length > 0 &&
+    named.length === parts.length &&
+    named.every((e) => isRefusableEntrypoint(e, network))
+  ) {
     return named;
   }
   // No boolean form. `=1` read as "accept every unconfirmed layout", which put
@@ -167,7 +168,7 @@ function parseAllowUnconfirmed(raw: string | undefined): string[] {
   // ones that are merely uncaptured — an escape hatch far wider than the thing
   // it was opened for. Naming them keeps the exception the size of the problem,
   // and `pnpm run doctor` prints the list to paste.
-  const unknown = named.filter((e) => !isRefusableEntrypoint(e));
+  const unknown = named.filter((e) => !isRefusableEntrypoint(e, network));
   throw new Error(
     `Invalid WATERX_ALLOW_UNCONFIRMED_ABI "${raw}". ` +
       (unknown.length > 0
@@ -189,8 +190,12 @@ function parseAllowUnconfirmed(raw: string | undefined): string[] {
  * action reaches, produced a setting that reads as meaningful and does nothing
  * — the same silent no-op as a misspelling, wearing a valid name.
  */
-function isRefusableEntrypoint(name: string): boolean {
-  if (!Object.hasOwn(UNCONFIRMED_ENTRYPOINTS, name)) return false;
+function isRefusableEntrypoint(name: string, network: Network): boolean {
+  // Per network, because the answer is. An entrypoint confirmed on testnet and
+  // never measured on mainnet is refusable on one and a no-op setting on the
+  // other, and a check that answered for the wrong deployment would accept a
+  // line that does nothing.
+  if (!Object.hasOwn(corpusFor(network).uncaptured, name)) return false;
   return Object.values(ACTION_RULES).some((rule) => rule.entrypoint === name);
 }
 
@@ -248,16 +253,33 @@ function loadScope(): PolicyScope | undefined {
 
 const trimTrailingSlash = (url: string): string => url.replace(/\/+$/, "");
 
+/**
+ * An environment variable's value, or `undefined` when it says nothing.
+ *
+ * Empty is not a value. `.env.example` ships these commented out, and the
+ * obvious way to "turn one off" is to uncomment it and delete the text — which
+ * left `WATERX_API_URL=""`, and `?? DEFAULT` does not catch an empty string. The
+ * result was `Invalid URL` from deep inside a fetch, reported as an unreachable
+ * backend: a configuration mistake wearing the costume of an outage.
+ */
+const stated = (raw: string | undefined): string | undefined => {
+  const value = raw?.trim();
+  return value === undefined || value === "" ? undefined : value;
+};
+
 export function loadConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
-  const network = overrides.network ?? parseNetwork(process.env.WATERX_NETWORK ?? process.env.SUI_NETWORK);
+  const network =
+    overrides.network ??
+    parseNetwork(stated(process.env.WATERX_NETWORK) ?? stated(process.env.SUI_NETWORK));
 
   const config: AgentConfig = {
     network,
     apiUrl: trimTrailingSlash(
-      overrides.apiUrl ?? process.env.WATERX_API_URL?.trim() ?? DEFAULT_API_URL[network],
+      overrides.apiUrl ?? stated(process.env.WATERX_API_URL) ?? DEFAULT_API_URL[network],
     ),
-    grpcUrl: overrides.grpcUrl ?? process.env.SUI_GRPC_URL?.trim() ?? DEFAULT_GRPC_URL[network],
-    configUrl: overrides.configUrl ?? process.env.WATERX_CONFIG_URL?.trim() ?? DEFAULT_CONFIG_URL[network],
+    grpcUrl: overrides.grpcUrl ?? stated(process.env.SUI_GRPC_URL) ?? DEFAULT_GRPC_URL[network],
+    configUrl:
+      overrides.configUrl ?? stated(process.env.WATERX_CONFIG_URL) ?? DEFAULT_CONFIG_URL[network],
     extraPackages:
       overrides.extraPackages ??
       (process.env.WATERX_EXTRA_PACKAGES ?? "")
@@ -270,7 +292,9 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     // meaningful and does nothing — the same silent no-op the environment form
     // was hardened against, reachable one layer in.
     allowUnconfirmed: checkAllowUnconfirmed(
-      overrides.allowUnconfirmed ?? parseAllowUnconfirmed(process.env.WATERX_ALLOW_UNCONFIRMED_ABI),
+      overrides.allowUnconfirmed ??
+        parseAllowUnconfirmed(process.env.WATERX_ALLOW_UNCONFIRMED_ABI, network),
+      network,
     ),
     executionPolicy: overrides.executionPolicy ?? parsePolicy(process.env.WATERX_EXECUTION_POLICY, network),
   };

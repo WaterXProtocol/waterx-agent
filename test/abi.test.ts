@@ -14,7 +14,13 @@ import { describe, expect, it } from "vitest";
 
 import { ABI, SDK_VERSION } from "../src/chain/abi.generated.ts";
 import { SDK_VERSION_INSTALLED, extractAbi } from "../scripts/dev/generate-abi.ts";
-import corpus from "../src/chain/abi-corpus.json" with { type: "json" };
+import { corpusFor, hasCorpusFor, measuredNetworks } from "../src/chain/corpus.ts";
+import { assertCorpusDescribes, normalizePackage } from "../src/chain/deployment.ts";
+
+/** The suite runs with no `WATERX_NETWORK`, which is testnet — the fixture the
+ *  committed captures describe. Named rather than inferred, so a change to the
+ *  default network fails here instead of silently testing the other one. */
+const corpus = corpusFor("testnet");
 
 describe("the generated ABI is current", () => {
   it("was generated from the installed @waterx/sdk", () => {
@@ -161,5 +167,48 @@ describe("the generated ABI matches the deployment", () => {
     const protocols = grants.map((g) => g.typeArguments[0] ?? "");
     expect(new Set(protocols).size, "every grant named the same protocol").toBeGreaterThan(1);
     for (const p of protocols) expect(p).toMatch(/::/);
+  });
+});
+
+/**
+ * The fixture holds one record per network, and that is load-bearing.
+ *
+ * It held a single deployment until it had to hold two. Pointing the agent at
+ * mainnet made every package read as moved, `execute()` refused every write,
+ * and the remedy the message gave — re-run the capture — would have replaced
+ * the testnet record with a mainnet one and moved the same failure to the other
+ * network. The two were mutually exclusive and nothing said so.
+ */
+describe("the corpus is per network", () => {
+  it("keeps each network's record separate", () => {
+    for (const network of measuredNetworks()) {
+      const record = corpusFor(network as "testnet" | "mainnet");
+      expect(record.network, `${network}'s record names a different network`).toContain(network);
+      expect(Object.keys(record.packages).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("treats a network it has never measured as a refusal, not an allowance", () => {
+    // `packages: {}` makes every live package read as newly published, so
+    // `assertCorpusDescribes` throws — which is the right answer to "we have
+    // never measured this deployment". An empty record that passed would be a
+    // verifier checking positions nobody confirmed, while appearing to work.
+    const unmeasured = (["testnet", "mainnet"] as const).find((n) => !hasCorpusFor(n));
+    if (unmeasured === undefined) return; // both measured; nothing to assert
+    expect(corpusFor(unmeasured).packages).toEqual({});
+    expect(() =>
+      assertCorpusDescribes(
+        {
+          callable: new Set<string>(),
+          typeable: new Set<string>(),
+          byName: new Map([["waterx_perp", normalizePackage(`0x${"c".repeat(64)}`)]]),
+          objects: new Set<string>(),
+          objectFor: () => undefined,
+          idsFor: () => [],
+        },
+        corpusFor(unmeasured).packages,
+        corpusFor(unmeasured).capturedAt,
+      ),
+    ).toThrow(/newly published/);
   });
 });
