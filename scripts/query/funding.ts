@@ -1,33 +1,21 @@
 /**
- * Fetch funding rate info and history.
- * Usage: npx tsx scripts/query/funding.ts --symbol BTC [--history] [--limit 10]
+ * Funding-rate history for a market.
+ *
+ * The *live* rate is a field on the ticker (`npm run ticker`); there is no
+ * separate funding-info route.
  */
-import { initApiClient, parseArgs } from "../lib/init.ts";
+import { asNumber, initAgent, parseArgs, run, show } from "../lib/cli.ts";
 
-const api = initApiClient();
 const args = parseArgs(
   {
-    symbol: { required: true, desc: "Market symbol" },
-    history: { flag: true, desc: "Show funding history instead of current" },
-    limit: { default: "10", desc: "History entries (with --history)" },
+    ticker: { desc: "Market, e.g. BTC", required: true },
+    limit: { desc: "Number of intervals", default: "48" },
   },
-  "scripts/query/funding.ts",
+  "funding",
 );
 
-if (args.history === "true") {
-  const records = await api.getFundingHistory(args.symbol, Number(args.limit));
-  console.log(`\n=== ${args.symbol} Funding History (${records.length}) ===\n`);
-  for (const r of records) {
-    const time = new Date(r.timestamp).toISOString().replace("T", " ").slice(0, 19);
-    console.log(
-      `  ${time}  rate=${(r.fundingRate * 100).toFixed(6)}%  ann=${(r.annualizedRate * 100).toFixed(2)}%`,
-    );
-  }
-} else {
-  const info = await api.getFundingInfo(args.symbol);
-  console.log(`\n=== ${args.symbol} Funding Info ===\n`);
-  console.log(`  Current Rate:    ${(info.currentRate * 100).toFixed(6)}%`);
-  console.log(`  Annualized:      ${(info.annualizedRate * 100).toFixed(2)}%`);
-  console.log(`  Interval:        ${info.interval}`);
-  console.log(`  Next Settlement: ${new Date(info.nextFundingTime).toISOString()}`);
-}
+await run(async () => {
+  const agent = initAgent();
+  const ticker = await agent.markets.resolveTicker(args.ticker ?? "");
+  show(await agent.read.fundingHistory(ticker, asNumber(args.limit)));
+});

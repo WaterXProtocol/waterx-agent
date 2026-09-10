@@ -11,10 +11,18 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "rootDir": ".",
     "baseUrl": "./"
   },
-  "include": ["src", "scripts"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src",
+    "scripts",
+    "test"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

@@ -1,32 +1,23 @@
-/**
- * Fetch trade/order history for the current account.
- * Usage: npx tsx scripts/query/history.ts [--category trade] [--limit 20] [--cursor ...]
- */
-import { initApiClient, parseArgs, requireAccountId } from "../lib/init.ts";
+/** Trade or order history for the account. */
+import { asNumber, initAgent, parseArgs, run, show } from "../lib/cli.ts";
 
-const api = initApiClient();
-const accountId = requireAccountId();
 const args = parseArgs(
   {
-    category: { desc: "Filter: trade or order" },
-    limit: { default: "20", desc: "Number of entries (max 100)" },
-    cursor: { desc: "Pagination cursor from previous response" },
+    category: { desc: "trade | order", default: "trade" },
+    limit: { desc: "Page size", default: "20" },
+    cursor: { desc: "Opaque cursor from a previous page" },
   },
-  "scripts/query/history.ts",
+  "history",
 );
 
-const result = await api.getHistory({
-  account: accountId,
-  category: args.category as "trade" | "order" | undefined,
-  limit: Number(args.limit),
-  cursor: args.cursor || undefined,
+await run(async () => {
+  const agent = initAgent();
+  show(
+    await agent.read.history({
+      account: agent.accountId,
+      category: (args.category ?? "trade") as "trade" | "order",
+      ...(args.cursor !== undefined ? { cursor: args.cursor } : {}),
+      limit: asNumber(args.limit) ?? 20,
+    }),
+  );
 });
-
-console.log(`\n=== History (${result.items.length} entries, hasMore=${result.hasMore}) ===\n`);
-for (const e of result.items) {
-  const pnl = e.realizedPnL !== undefined ? ` pnl=$${e.realizedPnL.toFixed(2)}` : "";
-  console.log(`  ${e.timestamp}  ${e.action} ${e.symbol} ${e.side ?? ""} size=${e.size ?? "-"}${pnl}`);
-}
-if (result.cursor) {
-  console.log(`\nNext cursor: ${result.cursor}`);
-}

@@ -1,0 +1,10 @@
+{
+  "accounts": ["0x0000000000000000000000000000000000000000000000000000000000000000"],
+  "markets": ["BTCUSD", "ETHUSD"],
+  "sides": ["long"],
+  "maxCollateralPerOrder": 50,
+  "maxCumulativeCollateral": 200,
+  "maxLeverage": 5,
+  "maxSlippagePercent": 1,
+  "notAfter": "2026-12-31T00:00:00Z"
+}

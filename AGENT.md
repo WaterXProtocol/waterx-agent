@@ -1,168 +1,203 @@
-# WaterX Agent — Quick Reference for AI Agents
+# WaterX Agent — command reference
 
-## Setup (run once)
+The agent asks the WaterX backend to build each transaction, signs the bytes
+locally, and submits them. It never composes a PTB itself. See
+[README](README.md) for why, and [docs/integration.md](docs/integration.md) for
+the programmatic surface.
 
-```bash
-npm install
-npm run setup
-```
-
-This generates a SUI wallet, funds it with testnet SUI + USDC, creates a WaterX account, and deposits USDC. All credentials are saved to `.env`.
-
-You can also run each step individually:
+## Before anything else
 
 ```bash
-npm run generate-wallet    # Generate wallet -> .env
-npm run fund-sui           # Request testnet SUI from faucet
-npm run mint-usdc          # Mint 100 testnet USDC
-npm run create-account     # Create WaterX account -> .env
-npm run deposit -- --amount 50   # Deposit 50 USDC
+pnpm install
+pnpm run doctor        # preflight — signs nothing, safe on any network
 ```
 
-## Script Commands
+`doctor` verifies the backend's network matches yours, reports the deployment's
+package versions and market list, and fails on a stale `WATERX_ACCOUNT_ID`. Run
+it first, and whenever a command fails in a way that does not name its own fix.
 
-All arguments use `--key value` format. Use `--help` on any script for usage info.
+## Writes need confirmation
 
-### Setup
-| Command | Description |
-|---------|-------------|
-| `npm run setup` | Full bootstrap (wallet + fund + account + deposit) |
-| `npm run generate-wallet` | Generate or load SUI wallet |
-| `npm run fund-sui` | Request testnet SUI from faucet |
-| `npm run mint-usdc [-- --amount 100]` | Mint testnet USDC |
-| `npm run create-account` | Create WaterX trading account |
-| `npm run deposit -- --amount 50 [--collateral USDC]` | Deposit to account |
+`WATERX_EXECUTION_POLICY` gates every write routed through
+`TxExecutor.execute()`. Not every signature this package can produce:
+`SignerProvider` is a public export and signs opaque bytes without consulting
+the gate.
 
-### Trading
-| Command | Description |
-|---------|-------------|
-| `npm run open-long -- --base BTC --collateral 10 --leverage 5 [--tp 70000] [--sl 60000]` | Open long |
-| `npm run open-short -- --base ETH --collateral 10 --leverage 3` | Open short |
-| `npm run close-position -- --base BTC --position-id 0` | Close position |
-| `npm run increase-position -- --base BTC --position-id 0 --collateral 5` | Add size |
-| `npm run decrease-position -- --base BTC --position-id 0 --size 1000000000` | Reduce size |
-| `npm run add-collateral -- --base BTC --position-id 0 --amount 5` | Add margin |
-| `npm run remove-collateral -- --base BTC --position-id 0 --amount 2` | Remove margin |
+| Policy | CLI behaviour |
+|---|---|
+| `read-only` | writes refuse |
+| `interactive` (testnet default) | writes need `--yes` |
+| `delegated-auto` | writes proceed unattended, inside `WATERX_POLICY_SCOPE_FILE` — delegate wallets only |
 
-### Orders
-| Command | Description |
-|---------|-------------|
-| `npm run place-order -- --base BTC --long --collateral 10 --leverage 5 --trigger-price 60000` | Limit order |
-| `npm run place-order -- --base BTC --short --collateral 10 --trigger-price 70000 --stop` | Stop order |
-| `npm run place-tp -- --base BTC --position-id 0 --long --trigger-price 70000` | Take-profit |
-| `npm run place-sl -- --base BTC --position-id 0 --long --trigger-price 58000` | Stop-loss |
-| `npm run cancel-order -- --base BTC --order-id 0` | Cancel order |
+Mainnet defaults to `read-only`. Every write example below carries `--yes`.
+`--policy <mode>` narrows one invocation and can never widen.
 
-### WLP & Rewards
-| Command | Description |
-|---------|-------------|
-| `npm run mint-wlp -- --deposit-coin <objectId>` | Mint WLP |
-| `npm run redeem-wlp -- --lp-coin <objectId>` | Redeem WLP |
-| `npm run stake -- --stake-coin <objectId>` | Stake WLP |
-| `npm run unstake -- --amount 1000000` | Unstake |
-| `npm run claim-rewards` | Claim rewards |
+By default the key is read from `SUI_PRIVATE_KEY` into this process. Set
+`WATERX_SIGNER_COMMAND` (plus `WATERX_AGENT_WALLET`) and it moves into a child
+process instead — required in practice for `delegated-auto`, which `doctor`
+warns about otherwise. `pnpm run doctor` reports which provider is in use.
 
-### Queries (on-chain)
-| Command | Description |
-|---------|-------------|
-| `npm run accounts` | List WaterX accounts |
-| `npm run balances` | Wallet + account balances |
-| `npm run positions -- --base BTC --price 65000` | Open positions |
-| `npm run orders [-- --base BTC]` | Open orders |
-| `npm run market-info -- --base BTC` | Market summary |
-| `npm run pool-info` | WLP pool info |
-| `npm run summary` | Full account summary |
+## Setup
 
-### Queries (API — requires `WATERX_API_URL`)
-| Command | Description |
-|---------|-------------|
-| `npm run tickers [-- --symbol BTC]` | Market tickers (all or specific) |
-| `npm run candles -- --symbol BTC --tf 1h [--limit 20]` | Candlestick data |
-| `npm run trades -- --symbol BTC [--limit 20]` | Recent trades |
-| `npm run funding -- --symbol BTC [--history --limit 10]` | Funding rate info/history |
-| `npm run history [-- --category trade --limit 20]` | Trade/order history |
-| `npm run pnl` | PnL summary (today/7d/30d/all) |
-| `npm run wlp-apy [-- --period 7d]` | WLP APY + fee stats |
-| `npm run wlp-stats [-- --user 0x...]` | WLP pool utilization & staking |
-| `npm run prices -- --coins bitcoin,ethereum,sui` | Coin prices (CoinGecko) |
-| `npm run fear-greed [-- --days 7]` | Fear & Greed Index |
-| `npm run referral [-- --codes --referrer --stats]` | Referral info |
+| Command | What it does |
+|---|---|
+| `pnpm run doctor` | Preflight against the live deployment |
+| `pnpm run generate-wallet` | Generate or load the wallet, saving the key to `.env` |
+| `pnpm run fund-sui` | Testnet **gas** from the public Sui faucet |
+| `pnpm run create-account -- --name my-agent --yes` | Create a trading account |
+| `pnpm run accounts` | List accounts — copy the id into `WATERX_ACCOUNT_ID` |
+| `pnpm run deposit -- --amount 50 --yes` | Mint wxUSD credit against a backing asset |
+| `pnpm run withdraw -- --amount 25 --yes` | Withdraw to a backing stablecoin (owner-only) |
 
-## Programmatic Usage
+Collateral is a backing asset the wallet already holds — mock USDC or mock
+USDsui on testnet (`pnpm run info` lists them). `fund-sui` covers **gas only**;
+the credit faucet is whitelist-gated, so a fresh wallet needs an operator to
+whitelist it or send it funds.
 
-```typescript
-import dotenv from "dotenv";
-dotenv.config();
+**An order is a request, not a fill.** A write returns when the request is on
+chain; the keeper's `match_orders` sweep fills it — measured between ~2 and ~7
+minutes on testnet, for identical orders. Check
+`pnpm run positions` — an unfilled market order shows in `pnpm run orders` with
+`triggerPrice: 0`. `pnpm run trades` reads an indexer view that can be days
+stale; it is not evidence about your order.
 
-import {
-  loadWallet,
-  AgentSigner,
-  openLong,
-  closePosition,
-  getPositions,
-  getAccountBalances,
-} from "./src/agent/index.ts";
+## Trading
 
-const { keypair } = loadWallet();
-const signer = new AgentSigner(keypair, "TESTNET");
-const accountId = process.env.WATERX_ACCOUNT_ID!;
+| Command | Notes |
+|---|---|
+| `pnpm run open-long -- --ticker BTC --collateral 10 --leverage 5 --yes` | Add `--tp` / `--sl` to bracket it |
+| `pnpm run open-short -- --ticker ETH --collateral 10 --leverage 3 --yes` | |
+| `pnpm run close-position -- --ticker BTC --position-id 0 --yes` | |
+| `pnpm run reduce-position -- --ticker BTC --position-id 0 --percent 50 --yes` | Or `--size` in base-asset units |
+| `pnpm run increase-position -- --ticker BTC --position-id 0 --collateral 5 --leverage 5 --yes` | |
+| `pnpm run margin -- --ticker BTC --position-id 0 --amount 5 --yes` | `--remove` to withdraw margin |
 
-// Open a 5x long BTC position with 10 USDC
-await openLong(signer, {
-  accountId,
-  base: "BTC",
-  collateralAmount: 10_000_000, // 10 USDC (6 decimals)
-  leverage: 5,
-  takeProfitPrice: 70000,
-  stopLossPrice: 60000,
-});
+`--slippage` (percent, default `0.5`) bounds every market-priced action. The
+bound is derived from the live oracle price and refuses to compute from a stale
+one.
+
+## Orders
+
+| Command | Notes |
+|---|---|
+| `pnpm run place-order -- --ticker BTC --collateral 10 --leverage 5 --trigger-price 60000 --yes` | Long limit; add `--short`, `--stop`, `--reduce-only` |
+| `pnpm run place-tpsl -- --ticker BTC --position-id 0 --tp 90000 --sl 70000 --yes` | Attach to an open position |
+| `pnpm run update-order -- --ticker BTC --order-id 0 --trigger-price 61000 --size 0.01 --yes` | Re-price and re-size |
+| `pnpm run cancel-order -- --ticker BTC --order-id 0 --yes` | |
+
+**A crossing limit is refused before the request is sent** — a long above market
+or a short below it would fill immediately, and the contract aborts it
+(`ECrossingLimitOrder`). Send a market order when that is what you meant. A
+limit exactly at market is allowed.
+
+## WLP
+
+```bash
+pnpm run wlp -- --action mint --amount 100 --yes
+pnpm run wlp -- --action burn --amount 50 --yes          # queued for settlement
+pnpm run wlp -- --action cancel-burn --request-id 3 --yes
+pnpm run wlp -- --action claim --yes
 ```
 
-## API Client (REST Backend)
+Minting stakes in the same step and burning redeems from the staked balance;
+there is no separate stake/unstake action.
 
-Set `WATERX_API_URL` in `.env` to enable market data, analytics, and more. The API client is optional — the agent works without it in on-chain-only mode.
+## Delegates
 
-```typescript
-import dotenv from "dotenv";
-dotenv.config();
-
-import { WaterXApiClient } from "./src/agent/index.ts";
-
-const api = new WaterXApiClient(); // reads WATERX_API_URL from env
-
-// Market data
-const ticker = await api.getTicker("BTC");
-console.log(`BTC: $${ticker.spotPrice} (${ticker.changePercent24h.toFixed(2)}%)`);
-
-const candles = await api.getCandles("ETH", { tf: "1h", limit: 10 });
-const funding = await api.getFundingInfo("BTC");
-
-// Account analytics
-const pnl = await api.getPnlSummary(process.env.WATERX_ACCOUNT_ID!);
-const history = await api.getHistory({ account: process.env.WATERX_ACCOUNT_ID!, limit: 10 });
-
-// Market intelligence
-const prices = await api.getCoinPrices("bitcoin,ethereum,sui");
-const fearGreed = await api.getFearGreed();
-
-// WLP analytics
-const apy = await api.getWlpApy("7d");
-const utilization = await api.getUtilization();
+```bash
+pnpm run add-delegate -- --delegate 0x… --yes           # defaults to PERM_ALL_TRADING
+pnpm run remove-delegate -- --delegate 0x… --yes
+pnpm run remove-delegate -- --all --yes                 # every delegate, all accounts
+pnpm run delegates
 ```
 
-## SDK
+Four independent masks — perp, predict, staking, WLP. None of them grants a
+funds-out path: a delegate can trade the account and cannot withdraw from it.
 
-This project uses `@waterx/perp-sdk` (v0.6.1+) as a dependency. The full SDK API is re-exported from `src/index.ts` for advanced usage.
+## Long-running use
 
-## Markets
+| Command | What it does |
+|---|---|
+| `pnpm run queue -- --kind open --ticker SUI --collateral 10 --leverage 2` | Queue a market order. Signs nothing. |
+| `pnpm run queue -- --kind limit --ticker SUI --collateral 10 --leverage 2 --trigger-price 0.7` | Queue a resting limit order (add `--stop` for a stop). |
+| `… --after 300 --expires-in 3600` | Defer it 5 minutes. An expiry is required with `--after`. |
 
-Crypto: `BTC`, `ETH`, `SOL`, `SUI`, `DEEP`, `WAL`
+Intent kinds: `open` · `limit` · `close` · `cancel` · `reduce` · `increase` ·
+`add-margin` · `remove-margin` · `wlp-mint` · `wlp-burn` · `wlp-cancel-burn` ·
+`wlp-claim`. `--help` lists the arguments each one needs.
 
-xStocks: `AAPLX`, `GOOGLX`, `METAX`, `NVDAX`, `QQQX`, `SPYX`, `TSLAX`
+What a job waits for depends on what it leaves behind: `open`/`limit` wait for
+the order's terminal status, `close`/`cancel` for the thing they named to be
+gone, and everything else finishes when the transaction lands — a
+keeper-executed reduce fills under the keeper's digest, so "the request is on
+chain" is all this can honestly attest.
+| `pnpm run runner` | Drive queued intents until stopped. Needs `delegated-auto`. |
+| `pnpm run runner -- --once` | One pass, then exit. |
+| `pnpm run jobs [-- --verbose]` | What the runner believes, and why. Read-only; safe while it runs. |
+
+Pass a `key` when the same condition can fire repeatedly — `enqueue(intent,
+{ key, cooldownMs })` returns `undefined` instead of queuing a duplicate. It
+guards the *decision*; checking whether you already hold the position guards the
+*world*, and both are needed.
+
+For keeping it alive across reboots see `examples/deploy/` (launchd, systemd).
+Restarting is safe: anything ambiguous is reconciled before new work goes out.
+
+The runner submits each intent **at most once**, across crashes: it records the
+transaction digest before sending, and on restart resolves anything ambiguous
+against the chain before submitting anything new. A job it cannot resolve ends
+as `unresolved` and waits for a person rather than being retried.
+
+## Reads
+
+| Command | Returns |
+|---|---|
+| `pnpm run info` | Network, collateral, backing assets, market list |
+| `pnpm run markets` | Every market and which are tradeable |
+| `pnpm run ticker [-- --ticker BTC]` | Price, 24h stats, OI, funding |
+| `pnpm run positions` | Open positions with PnL and liquidation estimates |
+| `pnpm run orders` | Resting orders with TP/SL legs nested |
+| `pnpm run accounts` / `pnpm run delegates` | Account and delegate state |
+| `pnpm run candles -- --ticker BTC --tf 1h --limit 50` | Candlestick history |
+| `pnpm run trades -- --ticker BTC` | Recent trades |
+| `pnpm run funding -- --ticker BTC` | Funding history (live rate is on `ticker`) |
+| `pnpm run history [-- --category order]` | Trade / order history |
+| `pnpm run funds` | Deposit and withdrawal history (keyed on the wallet) |
+| `pnpm run pnl` | PnL summary and equity curve |
+| `pnpm run wlp-info` | Pool overview, APY, this account's stake |
+| `pnpm run market-data` | Coin prices, trending, fear & greed |
+| `pnpm run referral` | Codes, referrer, stats |
+
+## Reading position output
+
+- `estLiqPrice: 0` = **cannot estimate**, never "no liquidation risk".
+- `maintenanceMarginRatio: 0` = unknown. There is no fallback value on purpose.
+- `priceStale: true` = `spotPrice` is not live, and every field derived from it
+  is stale too.
 
 ## Amounts
 
-- Collateral: 6 decimals (`1_000_000` = 1 USDC). Scripts accept human units (`--collateral 10` = 10 USDC).
-- Prices: USD (`65000` = $65,000)
-- Leverage: multiplier (`10` = 10x)
-- Size: 1e9-scaled on-chain units (used in decrease-position)
+Everything on the CLI is in display units.
+
+- Collateral and margin: USD — `--collateral 10` is 10 USD.
+- Prices: USD — `--trigger-price 65000` is $65,000.
+- Size: base-asset units — `--size 0.15` is 0.15 BTC.
+- Leverage: a multiplier — `--leverage 5` is 5×.
+
+Scaling to the chain's `u64`/`u128` integers happens once, in `src/units.ts`,
+which refuses precision it cannot represent rather than rounding it away.
+
+## Markets
+
+Read them from the deployment (`pnpm run markets`) rather than assuming a list.
+There are 30 on testnet today — crypto, tokenized equities, FX, metals and
+energy — and the set changes.
+
+## Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Success |
+| `1` | Argument or client-side error (the message names the fix) |
+| `2` | Refused by the execution policy — pass `--yes`, or change the policy |
+| `3` | Backend rejected the request — the error code and message are printed |

@@ -1,18 +1,14 @@
-/**
- * Generate a new SUI wallet and save to .env.
- * Usage: npx tsx scripts/setup/generate-wallet.ts
- */
+/** Generate (or load) the agent's Ed25519 wallet, persisting the key to .env. */
 import dotenv from "dotenv";
 dotenv.config();
 
-import { getOrCreateWallet } from "../../src/agent/index.ts";
+import { getOrCreateWallet } from "../../src/chain/wallet.ts";
+import { run } from "../lib/cli.ts";
 
-const { address, secretKey, isNew } = getOrCreateWallet();
-
-if (isNew) {
-  console.log("Generated new wallet:");
-} else {
-  console.log("Loaded existing wallet:");
-}
-console.log(`  Address:    ${address}`);
-console.log(`  Secret key: ${secretKey.slice(0, 20)}...`);
+await run(async () => {
+  const wallet = getOrCreateWallet();
+  console.log(wallet.isNew ? "Generated a new wallet:" : "Loaded the existing wallet:");
+  console.log(`  address: ${wallet.address}`);
+  if (wallet.isNew) console.log("  secret key saved to .env as SUI_PRIVATE_KEY");
+  await Promise.resolve();
+});

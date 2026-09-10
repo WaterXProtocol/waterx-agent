@@ -1,27 +1,24 @@
-/**
- * Close a position entirely.
- * Usage: npx tsx scripts/trading/close-position.ts --base BTC --position-id 0
- */
-import { initSigner, requireAccountId, parseArgs, fmtTx } from "../lib/init.ts";
-import { closePosition } from "../../src/agent/index.ts";
-import type { BaseAsset } from "../../src/agent/index.ts";
+/** Close a position in full, bounded by `--slippage`. */
+import { asNumber, confirmed, initAgent, parseArgs, reportTx, run } from "../lib/cli.ts";
 
-const signer = initSigner();
-const accountId = requireAccountId();
 const args = parseArgs(
   {
-    base: { required: true, desc: "Market: BTC, ETH, SOL, SUI, etc." },
-    positionId: { required: true, desc: "Position ID to close" },
+    ticker: { desc: "Market, e.g. BTC", required: true },
+    positionId: { desc: "Position id (see `npm run positions`)", required: true },
+    slippage: { desc: "Slippage bound in percent", default: "0.5" },
+    yes: { desc: "Confirm this write", flag: true },
+    policy: { desc: "Narrow the execution policy for this invocation" },
   },
-  "scripts/trading/close-position.ts",
+  "close-position",
 );
 
-console.log(`Closing position #${args.positionId} on ${args.base}...`);
-
-const result = await closePosition(signer, {
-  accountId,
-  positionId: Number(args.positionId),
-  base: args.base as BaseAsset,
+await run(async () => {
+  const agent = initAgent();
+  const result = await agent.closePosition({
+    ticker: args.ticker ?? "",
+    positionId: Number(args.positionId),
+    slippagePercent: asNumber(args.slippage) ?? 0.5,
+    confirm: confirmed(),
+  });
+  reportTx(agent, "close-position", result);
 });
-
-console.log(`Position closed: ${fmtTx(result.digest)}`);
