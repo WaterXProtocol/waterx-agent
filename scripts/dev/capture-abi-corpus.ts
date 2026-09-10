@@ -23,9 +23,23 @@
  *
  *   OWNER=0x… ACCT=0x… ORDER_ID=… POSITION_ID=… pnpm run capture-corpus
  *
+ * The position entrypoints need an account with an OPEN position, which is not
+ * the same account as the rest of the capture whenever the testnet keeper is
+ * not filling market orders — an order can be placed, and then simply never
+ * becomes a position. `POSITION_OWNER` / `POSITION_ACCT` let the position
+ * shapes be built against an account that already has one:
+ *
+ *   OWNER=0x… ACCT=0x… POSITION_OWNER=0x… POSITION_ACCT=0x… POSITION_ID=…
+ *
+ * Nothing is signed or submitted by any of this. Every call is *built* and
+ * read, so building against an account this process cannot sign for is exactly
+ * as safe as building against one it can — and it is what keeps five of the
+ * core perp entrypoints confirmed while the keeper is down.
+ *
  * Entrypoints that could not be built are written to the fixture with the
  * reason, and the test fails if one is neither captured nor excused.
  */
+import { randomBytes } from "node:crypto";
 import { writeFileSync } from "node:fs";
 
 import { Transaction } from "@mysten/sui/transactions";
@@ -80,9 +94,28 @@ interface Instance {
 const corpus = new Map<string, Instance[]>();
 const skipped = new Map<string, string>();
 
+/**
+ * Decode built bytes, whichever of the two shapes they are.
+ *
+ * The backend returns complete `TransactionData` when Enoki sponsors the build
+ * and transaction *kind* bytes when it does not — the same fork `TxExecutor`
+ * narrows before signing. `Transaction.from` throws on a kind (it reads the
+ * kind tag as a `TransactionKind` variant and finds no such variant), so the
+ * two are told apart by trying. It surfaced on `create_account`, which is built
+ * for an address with no gas and is therefore never the sponsored shape.
+ */
+function decode(txBytes: string): Transaction {
+  const bytes = fromBase64(txBytes);
+  try {
+    return Transaction.from(bytes);
+  } catch {
+    return Transaction.fromKind(bytes);
+  }
+}
+
 /** Pull every instance of `entrypoint` out of a built transaction. */
 function record(entrypoint: string, txBytes: string, sent: Record<string, string>[]): void {
-  const data = Transaction.from(fromBase64(txBytes)).getData();
+  const data = decode(txBytes).getData();
   const found: Instance[] = [];
   for (const command of data.commands) {
     const call = command.MoveCall;
@@ -158,6 +191,13 @@ const spot = (await read.ticker("SUIUSD")).spotPrice;
 const COLLATERAL = 4_000_000n;
 const SIZE = BigInt(Math.floor((8 / spot) * 1e9));
 const ACCEPTABLE = BigInt(Math.floor(spot * 1.05 * 1e9));
+// Exits need the bound on the OTHER side. Closing or reducing a long is a sell,
+// so an acceptable price above market is a bound the fill can never satisfy —
+// the backend dry-runs it, the abort comes back as a generic 6002, and the
+// entrypoint is recorded as uncapturable for a reason that is really an
+// argument error. Distinct from `ACCEPTABLE` so a swap between the two is still
+// visible in the fixture.
+const ACCEPTABLE_EXIT = BigInt(Math.floor(spot * 0.95 * 1e9));
 const TP = 1_600_000_000n;
 const SL = 400_000_000n;
 const DELEGATE = `0x${"9".repeat(64)}`;
@@ -263,13 +303,39 @@ await capture(
   DELEGATE_BUILD,
 );
 
+// A removal only builds for an address that IS a delegate, so this needs a real
+// grant. `DELEGATE_ACCT` / `DELEGATE_OWNER` let it be captured against an
+// account that has one, the same way the position shapes can be.
+const delegateAccount = process.env.DELEGATE_ACCT ?? accountId;
+const delegateAddress = process.env.DELEGATE ?? DELEGATE;
 await capture(
   {
     "account::remove_delegate": [
-      { accountId: addr(accountId), delegateAddress: addr(process.env.DELEGATE ?? DELEGATE) },
+      { accountId: addr(delegateAccount), delegateAddress: addr(delegateAddress) },
     ],
   },
-  () => tx.removeDelegate({ ...body, delegate: process.env.DELEGATE ?? DELEGATE }),
+  () =>
+    tx.removeDelegate({
+      sender: process.env.DELEGATE_OWNER ?? sender,
+      accountId: delegateAccount,
+      delegate: delegateAddress,
+    }),
+);
+
+// `create_account` can only be built for an address that has no account yet,
+// which is why it went uncaptured for so long — every account this repo has is,
+// by definition, one that already exists. A freshly generated address has none,
+// costs nothing, and needs no key: the call is built and read, never signed.
+//
+// It matters more than its size suggests. `createAccount` is the first write a
+// new user makes, and an unconfirmed layout means the agent refuses it — so the
+// onboarding path ended at step one under default settings.
+const FRESH = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
+await capture(
+  // `alias` is the ABI's name for it; the request body calls it `name`. The
+  // fixture is keyed by ABI parameter, so it uses the contract's word.
+  { "account::create_account": [{ alias: str("probe") }] },
+  () => tx.createAccount({ sender: FRESH, name: "probe" }),
 );
 
 const ORDER_ID = process.env.ORDER_ID;
@@ -311,29 +377,39 @@ if (ORDER_ID !== undefined) {
 }
 
 const POSITION_ID = process.env.POSITION_ID;
+// Defaults to the main account, so the single-account invocation is unchanged.
+const positionAccount = process.env.POSITION_ACCT ?? accountId;
+const positionBody = { sender: process.env.POSITION_OWNER ?? sender, accountId: positionAccount };
 if (POSITION_ID !== undefined) {
   const P = BigInt(POSITION_ID);
   const T = str("SUIUSD");
-  const A = addr(accountId);
+  const A = addr(positionAccount);
   await capture(
     {
       "trading::close_position_request": [
-        { ticker: T, accountId: A, positionId: u64(P), acceptablePrice: u64(ACCEPTABLE) },
+        { ticker: T, accountId: A, positionId: u64(P), acceptablePrice: u64(ACCEPTABLE_EXIT) },
       ],
     },
-    () => tx.closePosition("SUIUSD", Number(P), { ...body, acceptablePrice: String(ACCEPTABLE) }),
+    () =>
+      tx.closePosition("SUIUSD", Number(P), {
+        ...positionBody,
+        acceptablePrice: String(ACCEPTABLE_EXIT),
+      }),
   );
   await capture(
     {
       "trading::decrease_position_request": [
-        { ticker: T, accountId: A, positionId: u64(P), size: u128(SIZE), acceptablePrice: u64(ACCEPTABLE) },
+        {
+          ticker: T, accountId: A, positionId: u64(P),
+          size: u128(SIZE), acceptablePrice: u64(ACCEPTABLE_EXIT),
+        },
       ],
     },
     () =>
       tx.reducePosition("SUIUSD", Number(P), {
-        ...body,
+        ...positionBody,
         size: String(SIZE),
-        acceptablePrice: String(ACCEPTABLE),
+        acceptablePrice: String(ACCEPTABLE_EXIT),
       }),
   );
   await capture(
@@ -347,7 +423,7 @@ if (POSITION_ID !== undefined) {
     },
     () =>
       tx.increasePosition("SUIUSD", Number(P), {
-        ...body,
+        ...positionBody,
         collateralAmount: "1000009",
         size: String(SIZE),
         acceptablePrice: String(ACCEPTABLE),
@@ -359,7 +435,7 @@ if (POSITION_ID !== undefined) {
         { ticker: T, accountId: A, positionId: u64(P), collateralAmount: u64(1_000_011n) },
       ],
     },
-    () => tx.depositMargin("SUIUSD", Number(P), { ...body, collateralAmount: "1000011" }),
+    () => tx.depositMargin("SUIUSD", Number(P), { ...positionBody, collateralAmount: "1000011" }),
   );
   await capture(
     {
@@ -367,7 +443,7 @@ if (POSITION_ID !== undefined) {
         { ticker: T, accountId: A, positionId: u64(P), amount: u64(1_000_013n) },
       ],
     },
-    () => tx.withdrawMargin("SUIUSD", Number(P), { ...body, amount: "1000013" }),
+    () => tx.withdrawMargin("SUIUSD", Number(P), { ...positionBody, amount: "1000013" }),
   );
 }
 

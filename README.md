@@ -33,41 +33,131 @@ Concretely, that leaves three things here:
 `@waterx/sdk` is a dependency for its permission and order-type constants — the
 on-chain source of truth for those bitmasks — not for transaction building.
 
+## Driving it from an agent
+
+[SKILL.md](SKILL.md) is the entry point, and it installs into Claude Code,
+Codex, an `AGENTS.md`, or any runtime with a shell tool — see *Installing this
+skill* at the end of it. [AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md) is the
+full contract: the required **read → preview → approve → execute** loop, the
+stable exit codes, and what to do with the one outcome that costs money if you
+handle it wrong.
+
+Every command takes `--json` and writes exactly one JSON document to stdout —
+nothing else, ever, for the life of the process. The envelope answers five
+questions without any English being parsed: did it work, may I retry, did a
+transaction leave, must I reconcile, and am I waiting on a person.
+
 ## Quick start
 
+Nine steps, from a clean checkout to a trade you can account for. Every command
+here exists in `package.json`; if one fails, it names the fix.
+
 ```bash
+# 1. install
 pnpm install
 cp .env.example .env
 
+# 2. preflight — needs no key, signs nothing, safe on any network
+pnpm run doctor
+
+# 3. a wallet
 pnpm run generate-wallet    # writes SUI_PRIVATE_KEY to .env
-pnpm run fund-sui           # testnet gas
-pnpm run doctor             # preflight — signs nothing
+
+# 4. GAS — not collateral (see below)
+pnpm run fund-sui
+
+# 5. an account
 pnpm run create-account -- --name my-agent --yes
-pnpm run accounts           # copy the id into WATERX_ACCOUNT_ID
+pnpm run accounts           # copy the id into WATERX_ACCOUNT_ID in .env
+
+# 6. collateral — a backing asset the wallet already holds
 pnpm run deposit -- --amount 100 --yes
+
+# 7. preview a trade. Derives it exactly, authorizes nothing.
+pnpm run preview -- --action open-long --ticker SUI \
+    --collateral 10 --leverage 2 --slippage 0.5
+
+# 8. a person approves it, then it is sent
+pnpm run approve -- --id apr_… --approver "your name"
+pnpm run execute -- --id apr_…
+
+# 9. settle anything whose result you did not see
+pnpm run reconcile -- --all
 ```
 
-Collateral is a **backing asset** the wallet already holds — on testnet, mock
-USDC or mock USDsui (`pnpm run info` lists what this deployment accepts).
-`fund-sui` covers gas only; there is no self-service faucet for collateral, as
-the credit faucet is whitelist-gated. Ask an operator, or use a wallet that
-already holds some.
+Steps 2–6 are a one-off. Steps 7–9 are the loop, and they are the whole
+interface an automated caller gets — see [SKILL.md](SKILL.md) and
+[AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md).
+
+### Gas is not collateral
+
+Two different things, and conflating them is the most common way a fresh setup
+stalls.
+
+| | What it is | How to get it |
+|---|---|---|
+| **Gas** | SUI, to pay for transactions | `pnpm run fund-sui` — the public testnet faucet |
+| **Collateral** | A **backing asset** the wallet holds: mock USDC or mock USDsui on testnet | No self-service faucet. The credit faucet is whitelist-gated |
+
+`pnpm run info` lists what this deployment accepts. `pnpm run deposit` mints
+wxUSD credit against one of them — it is a credit mint, not a transfer, so a
+wallet with gas and no backing asset can pay for a deposit it cannot make. Ask
+an operator to whitelist the address, or use a wallet that already holds some.
+
+### Reads need no key
+
+`markets`, `ticker`, `positions`, `orders`, `info` and `doctor` all run in a
+process that never loads `SUI_PRIVATE_KEY`:
+
+```bash
+env -u SUI_PRIVATE_KEY pnpm run markets      # works
+```
+
+The signer is built on the first *write*. That is what lets an operator hand an
+agent read access without handing it the ability to sign, and it is why the
+first command on a fresh clone does not fail with a message about wallets.
+
+### When something is missing
 
 `doctor` is the command to run first and whenever something looks wrong. It
-checks the backend's network against yours, reports the deployment's package
-versions and market list, and fails loudly on a stale `WATERX_ACCOUNT_ID` —
-each of which was, at some point, a silent failure that surfaced as an on-chain
-abort.
+reports **read readiness** and **write readiness** separately, because they
+fail independently — a missing key blocks nothing you can read, and a stale
+`WATERX_ACCOUNT_ID` blocks everything you can write. Each failing check names
+the setting to change.
 
 ```
-✓  execution policy   confirm on testnet (https://api-testnet.waterx.app)
-✓  wallet             0xb142…de6c (owner key)
+✓  signer             0xb142…de6c — in-process keypair (SUI_PRIVATE_KEY), owner key
+✓  execution policy   interactive on testnet (https://api-testnet.waterx.app)
 ✓  backend            https://api-testnet.waterx.app → sui_testnet
 ✓  markets            30 listed — SUI, BTC, ETH, SOL, DEEP, WAL, HYPE, XRP, …
 ✓  collateral         USD (6 dp); backing assets: USDC, USDsui
-✓  deployment config  waterx_perp=v3 waterx_account=v2 waterx_oracle=v1 waterx_rule=v2
-✓  account            0x6a6b…0e84 owned by 0xb142…de6c
+✓  deployment config  waterx_perp=v3 waterx_account=v2 waterx_oracle=v1 waterx_rule=v4
+✓  manifest           24 packages, 157 objects, read just now
+!  packages           …a WLP mint will be refused before signing. Nothing in the
+                      onboarding or perp trading flow reaches them.
+!  abi corpus         19 entrypoints confirmed on 2026-09-10; 3 never were.
+                      These actions refuse until they are: burnWlp, cancelWlpBurn,
+                      claimWlpRewards — none of which is part of onboarding or
+                      perp trading.
+✓  account            0xa4a4…0af8 owned by 0xb142…de6c
+✓  read readiness     markets, tickers, positions and orders are available
+✓  write readiness    interactive on testnet — writes can be signed
 ```
+
+Those two `!` lines are the current, expected state of testnet: three WLP and
+staking entrypoints whose argument layouts cannot be captured without conditions
+that do not exist (a pending redemption, an unstaked balance, claimable
+rewards), and one reward-coin package the config document does not list. Neither
+touches onboarding or perp trading. `doctor` prints the exact
+`WATERX_ALLOW_UNCONFIRMED_ABI` / `WATERX_EXTRA_PACKAGES` line if you need those
+paths anyway.
+
+### An order is a request, not a fill
+
+A write returns when the request is on chain. A keeper fills it afterwards, and
+on testnet that sweep is sometimes not running at all. `pnpm run orders` shows
+the resting request; `pnpm run positions` shows what was actually filled. Do not
+read a successful `execute` as a position.
 
 ## Execution policy
 
@@ -161,8 +251,13 @@ signer's coins to a call that rode along.
 transaction carried at each position and the package it was called on. The
 executor refuses to sign when a package in that record has since moved: nothing
 in CI can notice a fixture going stale, so the check runs where the signature is
-produced. Twelve of twenty-two entrypoints are confirmed this way; `npm run
-doctor` names the rest, whose layouts rest on the SDK alone.
+produced. Nineteen of twenty-three entrypoints are confirmed this way; `pnpm run
+doctor` names the rest, whose layouts rest on the SDK alone. The remaining four
+are WLP and staking calls that need conditions a capture cannot manufacture — a
+pending redemption, an unstaked balance, claimable rewards — plus the bridged
+withdrawal route this agent never takes. Nothing in the onboarding or perp
+trading flow is among them, and `pnpm run check-corpus` re-asks the deployment
+daily in CI.
 
 **What it does not prove.** The derived position size, which the backend
 computes from collateral and leverage — reproducing it here would be a second
@@ -377,7 +472,7 @@ The signer exited with status 1; its output was not used.
 ```
 
 `examples/keypair-signer.mjs` is the smallest provider that satisfies the wire —
-enough to exercise the boundary, not a deployment. `npm run doctor` reports
+enough to exercise the boundary, not a deployment. `pnpm run doctor` reports
 which provider is in use, and warns when `delegated-auto` is signing from a key
 held in this process.
 
@@ -420,7 +515,13 @@ rather than rounding it away.
 
 ## Commands
 
-Every write takes `--yes` under the `confirm` policy. `--help` on any command.
+Every command takes `--json` (one JSON document on stdout, nothing else) and
+`--help`. Writes take `--yes` under the `interactive` policy — that is the
+*human* shortcut; an automated caller goes through `preview` → `approve` →
+`execute` instead, and never passes `--yes`.
+
+**The agent path** — `preview` · `approve` · `execute` · `reconcile` ·
+`approvals` · `limits`
 
 **Setup** — `doctor` · `generate-wallet` · `fund-sui` · `create-account` ·
 `deposit` · `withdraw` · `add-delegate` · `remove-delegate`
@@ -463,10 +564,10 @@ pnpm run margin -- --ticker BTC --position-id 0 --amount 5 --yes
   `account_data::WaterXPerp`. `addDelegate` writes both today, so a delegate
   added through the current backend works — but one added earlier reads as fully
   authorised and still aborts `EUnauthorized`, surfacing as a generic
-  `6002 Transaction would fail on-chain`. `npm run doctor` warns about this
+  `6002 Transaction would fail on-chain`. `pnpm run doctor` warns about this
   whenever a delegate key is loaded.
 - **Deposit mints wxUSD credit** against a registered backing asset, so it names
-  a Move coin type rather than transferring a fixed collateral coin. `npm run
+  a Move coin type rather than transferring a fixed collateral coin. `pnpm run
   info` lists what the deployment accepts; `deposit` defaults to the first.
 - **WLP mint stakes in the same step** and burn redeems from the staked balance,
   so there is no separate stake/unstake action. A burn is queued and settled by
@@ -712,22 +813,40 @@ src/
 ├── doctor.ts        preflight
 ├── api/             http envelope · read plane · tx-build plane · wire types
 ├── chain/           signer providers · SIGNER_PROTOCOL · the executor
-├── agent/           WaterXAgent · market resolution and guards
+├── cli/             the outcome contract: statuses, exit codes, error mapping
+├── agent/           WaterXAgent · plans · market guards · approval + submission ledgers
 └── runner/          durable job store · reconciliation · the loop
 ```
+
+A write is a **plan** before it is a transaction: `agent/plan.ts` holds the
+intent the gate will authorize and a serializable description of the build call,
+so the same value can be shown to a person, written to the approval ledger, read
+back by a different process minutes later, and submitted — with the guarantee
+that all four describe the same order. The preview a person reads is *derived
+from* that intent rather than written beside it, so it cannot describe a
+different one.
 
 ## Development
 
 ```bash
 pnpm run typecheck
 pnpm test
+pnpm run check-corpus   # is the ABI fixture still a description of the deployment?
 ```
+
+`check-corpus` needs the network and runs as its own CI job, daily. The suite
+above does not: it is hermetic, and `test/setup.ts` clears every `WATERX_*` /
+`SUI_*` variable before any file loads.
 
 ## Docs
 
 - **[Integration guide](docs/integration.md)** — the request/sign/submit flow,
   the delegate model, error handling, and what changed from the SDK-composed
   design.
+- **[SKILL.md](SKILL.md)** — the installable skill: the loop, the rules, and how
+  to load it into Claude Code, Codex, an `AGENTS.md`, or any shell-tool runtime.
+- **[AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md)** — the full agent contract:
+  statuses, exit codes, the ambiguous case, and setting up limits.
 - **[AGENT.md](AGENT.md)** — command reference for an AI agent driving the CLI.
 
 ## License

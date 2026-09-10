@@ -1,5 +1,5 @@
 /** Create a WaterX trading account. The account id is indexed asynchronously. */
-import { confirmed, initAgent, parseArgs, reportTx, run, show } from "../lib/cli.ts";
+import { confirmed, initAgent, note, parseArgs, reportTx, run, show } from "../lib/cli.ts";
 
 const args = parseArgs(
   {
@@ -15,7 +15,7 @@ await run(async () => {
   const agent = initAgent();
   const existing = await agent.accounts();
   if (existing.length > 0) {
-    console.log("This wallet already owns:");
+    note("This wallet already owns:");
     show(existing);
   }
 
@@ -25,6 +25,6 @@ await run(async () => {
     confirm: confirmed(),
   });
   reportTx(agent, "create-account", result);
-  console.log("\nThe indexer assigns the account id; re-run `npm run accounts` in a moment,");
-  console.log("then set WATERX_ACCOUNT_ID in .env.");
+  note("\nThe indexer assigns the account id; re-run `npm run accounts` in a moment,");
+  note("then set WATERX_ACCOUNT_ID in .env.");
 });

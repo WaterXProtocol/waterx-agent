@@ -1403,17 +1403,22 @@ describe("the shape of the transaction itself", () => {
   });
 
   it("refuses an unconfirmed layout, and accepts the entrypoint by name", async () => {
+    // `burnWlp` rather than a position action. The set of unconfirmed
+    // entrypoints shrinks whenever `capture-corpus` finds conditions it could
+    // not build before — these tests named `increasePosition`, it became
+    // capturable, and three assertions about a refusal quietly stopped
+    // exercising one. A redemption needs an unstaked WLP balance, which minting
+    // never leaves, so it is the durable example.
     const tx = newTx();
     tx.moveCall({
-      target: `${PKG}::trading::increase_position_request`,
-      typeArguments: typeArgsFor("trading::increase_position_request"),
-      arguments: callArgs(tx, "trading::increase_position_request", {
-        accountId: ACCOUNT, ticker: "SUIUSD", positionId: 0n, collateralRaw: 0n,
-        sizeRaw: 0n, acceptablePriceRaw: 0n,
+      target: `${PKG}::lp_pool::request_redeem`,
+      typeArguments: typeArgsFor("lp_pool::request_redeem"),
+      arguments: callArgs(tx, "lp_pool::request_redeem", {
+        accountId: ACCOUNT, amountRaw: 0n,
       }) as never,
     });
     const bytes = toBase64(await tx.build());
-    const authorized: WriteIntent = { ...intent("increasePosition"), increasesExposure: true };
+    const authorized: WriteIntent = { ...intent("burnWlp"), increasesExposure: true };
     // There is no switch to turn this off — only a list, and only of
     // entrypoints an allowance could actually apply to.
     expect(() => assertTransactionMatches(bytes, authorized, SIGNER, DEPLOYMENT)).toThrow(
@@ -1422,7 +1427,7 @@ describe("the shape of the transaction itself", () => {
     expect(() =>
       assertTransactionMatches(bytes, authorized, SIGNER, {
         ...DEPLOYMENT,
-        allowUnconfirmed: ["trading::increase_position_request"],
+        allowUnconfirmed: ["lp_pool::request_redeem"],
       }),
     ).not.toThrow();
   });
@@ -1434,15 +1439,14 @@ describe("the shape of the transaction itself", () => {
     // action now, which the transaction has to match to be accepted as it.
     const tx = newTx();
     tx.moveCall({
-      target: `${PKG}::trading::increase_position_request`,
-      typeArguments: typeArgsFor("trading::increase_position_request"),
-      arguments: callArgs(tx, "trading::increase_position_request", {
-        accountId: ACCOUNT, ticker: "SUIUSD", positionId: 0n, collateralRaw: 0n,
-        sizeRaw: 0n, acceptablePriceRaw: 0n,
+      target: `${PKG}::lp_pool::request_redeem`,
+      typeArguments: typeArgsFor("lp_pool::request_redeem"),
+      arguments: callArgs(tx, "lp_pool::request_redeem", {
+        accountId: ACCOUNT, amountRaw: 0n,
       }) as never,
     });
     const bytes = toBase64(await tx.build());
-    const lying: WriteIntent = { ...intent("increasePosition"), increasesExposure: false };
+    const lying: WriteIntent = { ...intent("burnWlp"), increasesExposure: false };
     expect(() =>
       assertTransactionMatches(bytes, lying, SIGNER, {
         ...DEPLOYMENT,
@@ -1460,24 +1464,28 @@ describe("the shape of the transaction itself", () => {
     // Whether an argument can be read from the right slot has nothing to do
     // with whether the action reduces risk. An exit appearing in the refused
     // list is urgent, and the answer is to capture it or name it.
+    // `cancelWlpBurn` is the exit that is still unconfirmed. `closePosition`
+    // used to be, and stopped being one the day a capture could finally reach
+    // an open position — which is the good outcome, and would have left this
+    // test asserting nothing had it kept the old name.
     const tx = newTx();
     tx.moveCall({
-      target: `${PKG}::trading::close_position_request`,
-      typeArguments: typeArgsFor("trading::close_position_request"),
-      arguments: callArgs(tx, "trading::close_position_request", {
-        accountId: ACCOUNT, ticker: "SUIUSD", positionId: 0n, acceptablePriceRaw: 0n,
+      target: `${PKG}::lp_pool::cancel_redeem`,
+      typeArguments: typeArgsFor("lp_pool::cancel_redeem"),
+      arguments: callArgs(tx, "lp_pool::cancel_redeem", {
+        accountId: ACCOUNT, requestId: 0n,
       }) as never,
     });
     const bytes = toBase64(await tx.build());
     expect(() =>
-      assertTransactionMatches(bytes, intent("closePosition"), SIGNER, {
+      assertTransactionMatches(bytes, intent("cancelWlpBurn"), SIGNER, {
         ...DEPLOYMENT,
       }),
     ).toThrow(/never been confirmed against this deployment/);
     expect(() =>
-      assertTransactionMatches(bytes, intent("closePosition"), SIGNER, {
+      assertTransactionMatches(bytes, intent("cancelWlpBurn"), SIGNER, {
         ...DEPLOYMENT,
-        allowUnconfirmed: ["trading::close_position_request"],
+        allowUnconfirmed: ["lp_pool::cancel_redeem"],
       }),
     ).not.toThrow();
   });

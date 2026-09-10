@@ -11,14 +11,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { loadConfig } from "../src/config.ts";
+import { ACTION_RULES } from "../src/chain/verify.ts";
+import corpus from "../src/chain/abi-corpus.json" with { type: "json" };
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
 describe("WATERX_ALLOW_UNCONFIRMED_ABI", () => {
-  const CLOSE = "trading::close_position_request";
-  const REDEEM = "lp_pool::request_redeem";
+  // Taken from the corpus, not named. The set of unconfirmed entrypoints
+  // shrinks every time `capture-corpus` finds conditions it could not build
+  // before, and a test that hard-codes one of them starts failing on the day
+  // the fixture gets better — which is the wrong day to be reading a red suite.
+  const UNCONFIRMED = Object.keys(ACTION_RULES)
+    .map((action) => ACTION_RULES[action]?.entrypoint ?? "")
+    .filter((entrypoint) => Object.hasOwn(corpus.uncaptured, entrypoint));
+  const [CLOSE, REDEEM] = [...new Set(UNCONFIRMED)];
 
   const fromEnv = (value: string) => {
     vi.stubEnv("WATERX_ALLOW_UNCONFIRMED_ABI", value);

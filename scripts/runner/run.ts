@@ -18,7 +18,7 @@ import { Inbox } from "../../src/runner/inbox.ts";
 import { Reconciler } from "../../src/runner/reconcile.ts";
 import { Runner } from "../../src/runner/runner.ts";
 import { JobStore } from "../../src/runner/store.ts";
-import { asNumber, initAgent, parseArgs, run } from "../lib/cli.ts";
+import { asNumber, initAgent, note, parseArgs, run } from "../lib/cli.ts";
 
 const args = parseArgs(
   {
@@ -52,12 +52,12 @@ await run(async () => {
     runner.assertCanRunUnattended();
 
     const pending = runner.pending();
-    console.log(
+    note(
       `runner  account=${agent.accountId.slice(0, 10)}…  signer=${agent.executor.signerDescription}`,
     );
-    console.log(`store   ${storePath}  (${String(pending.length)} unfinished)`);
+    note(`store   ${storePath}  (${String(pending.length)} unfinished)`);
     for (const job of pending) {
-      console.log(`  recovered ${job.id.slice(0, 8)} in "${job.state}"`);
+      note(`  recovered ${job.id.slice(0, 8)} in "${job.state}"`);
     }
 
     if (args.once === "true") {
@@ -69,14 +69,14 @@ await run(async () => {
     let stopping = false;
     for (const signal of ["SIGINT", "SIGTERM"] as const) {
       process.once(signal, () => {
-        console.log(`\n${signal} — finishing the pass in flight, then stopping.`);
+        note(`\n${signal} — finishing the pass in flight, then stopping.`);
         stopping = true;
       });
     }
 
     while (!stopping) {
       await runner.tick();
-      if (runner.pending().length === 0) console.log("idle    nothing left to drive");
+      if (runner.pending().length === 0) note("idle    nothing left to drive");
       // Sleep in slices so a signal is honoured promptly without ever cutting
       // a pass short.
       for (let waited = 0; waited < intervalMs && !stopping; waited += 500) {
@@ -84,7 +84,7 @@ await run(async () => {
       }
     }
 
-    console.log(
+    note(
       `stopped with ${String(runner.pending().length)} unfinished job(s); they resume on restart.`,
     );
   } finally {

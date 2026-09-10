@@ -16,7 +16,7 @@ import type { TxApi } from "../src/api/tx.ts";
 import type { SponsoredTxResponse, TxResponse } from "../src/api/types.ts";
 import { TxExecutor } from "../src/chain/executor.ts";
 import { ABI } from "../src/chain/abi.generated.ts";
-import { BINDINGS, TYPE_ROLES } from "../src/chain/verify.ts";
+import { ACTION_RULES, BINDINGS, TYPE_ROLES } from "../src/chain/verify.ts";
 import { normalizePackage, seedDeployment } from "../src/chain/deployment.ts";
 import corpus from "../src/chain/abi-corpus.json" with { type: "json" };
 import { KeypairSigner } from "../src/chain/signer.ts";
@@ -38,11 +38,25 @@ const owner = keypair.getPublicKey().toSuiAddress();
  * executor now verifies the transaction does what it is presented as, so a
  * contentless transaction is correctly refused.
  */
-const DEFINING: Record<string, string> = {
-  openLong: "trading::place_order_request",
-  closePosition: "trading::close_position_request",
-  cancelOrder: "trading::cancel_order_request",
-};
+const DEFINING: Record<string, string> = Object.fromEntries(
+  Object.entries(ACTION_RULES).map(([action, rule]) => [action, rule.entrypoint]),
+);
+
+/**
+ * An action whose argument layout this deployment has never been seen to emit.
+ *
+ * Chosen from the corpus rather than named. `capture-corpus` moves entrypoints
+ * out of `uncaptured` the moment the conditions to build one finally exist — a
+ * position to close, a redemption to cancel — so a test that hard-codes today's
+ * example asserts nothing the day the fixture improves, and that is exactly how
+ * this one broke: it named `closePosition`, which became capturable and left
+ * the refusal untested while still passing.
+ */
+const UNCONFIRMED_ACTION =
+  Object.keys(ACTION_RULES).find((action) =>
+    Object.hasOwn(corpus.uncaptured, DEFINING[action] ?? ""),
+  ) ?? "";
+const UNCONFIRMED_ENTRYPOINT = DEFINING[UNCONFIRMED_ACTION] ?? "";
 
 let txBytes: string;
 
@@ -285,6 +299,8 @@ const intentFor = (action: string): WriteIntent => {
     isStopOrder: false,
     sizeRaw: "0",
     collateralRaw: "0",
+    amountRaw: "0",
+    requestId: 0,
     legs: [],
   };
   // An order's position and price bounds live in the constructor as Options,
@@ -328,13 +344,17 @@ describe("the production default", () => {
   it("refuses before signing when the layout is unconfirmed", async () => {
     // The previous version of this test used `openLong`, whose layout IS
     // captured, and asserted it succeeded — it named a refusal and exercised
-    // none. `closePosition` is uncaptured, and being an exit no longer exempts
-    // it: whether an argument can be read has nothing to do with whether the
+    // none. The action is now taken from the corpus, so this keeps testing a
+    // refusal rather than whichever entrypoint happened to be unconfirmed on
+    // the day it was written. Being an exit does not exempt one either:
+    // whether an argument can be read has nothing to do with whether the
     // action reduces risk.
+    expect(UNCONFIRMED_ACTION, "every entrypoint is captured; this test has nothing to assert")
+      .not.toBe("");
     const { executor: exec, gate, executeSponsored, signTransaction } = executor("interactive");
-    const permit = await permitFor(gate, "closePosition", true);
+    const permit = await permitFor(gate, UNCONFIRMED_ACTION, true);
     await expect(
-      exec.execute(sponsored("closePosition"), intentFor("closePosition"), permit),
+      exec.execute(sponsored(UNCONFIRMED_ACTION), intentFor(UNCONFIRMED_ACTION), permit),
     ).rejects.toThrow(/never been confirmed against this deployment/);
     // Before the SIGNATURE, not merely before the submission. "No API call"
     // would also hold if the bytes had been signed and the send had failed.
@@ -344,11 +364,11 @@ describe("the production default", () => {
 
   it("signs it once the operator names that entrypoint", async () => {
     const { executor: exec, gate } = executor("interactive", {
-      allowUnconfirmed: ["trading::close_position_request"],
+      allowUnconfirmed: [UNCONFIRMED_ENTRYPOINT],
     });
-    const permit = await permitFor(gate, "closePosition", true);
+    const permit = await permitFor(gate, UNCONFIRMED_ACTION, true);
     await expect(
-      exec.execute(sponsored("closePosition"), intentFor("closePosition"), permit),
+      exec.execute(sponsored(UNCONFIRMED_ACTION), intentFor(UNCONFIRMED_ACTION), permit),
     ).resolves.toMatchObject({ sponsored: true });
   });
 
@@ -357,7 +377,7 @@ describe("the production default", () => {
     // is the ONLY thing that was stopping it — without it the branch would be
     // asserted by nothing, and a check that lived only here could break
     // unnoticed. The fullnode is injected rather than opened.
-    const built = byteCache.get("closePosition") ?? "";
+    const built = byteCache.get(UNCONFIRMED_ACTION) ?? "";
     const kind = toBase64(
       Transaction.from(fromBase64(built)).getData().commands.length > 0
         ? await Transaction.from(fromBase64(built)).build({ onlyTransactionKind: true })
@@ -402,10 +422,10 @@ describe("the production default", () => {
     } as unknown as SuiGrpcClient;
     const { executor: exec, gate, signTransaction } = executor(
       "interactive",
-      { allowUnconfirmed: ["trading::close_position_request"] },
+      { allowUnconfirmed: [UNCONFIRMED_ENTRYPOINT] },
       client,
     );
-    const permit = await permitFor(gate, "closePosition", true, kind);
+    const permit = await permitFor(gate, UNCONFIRMED_ACTION, true, kind);
 
     // The digest has to be durable BEFORE the submission leaves, or a crash in
     // the window between them leaves nothing to ask the chain about.
@@ -419,7 +439,7 @@ describe("the production default", () => {
     await expect(
       exec.execute(
         { sponsored: false, txBytes: kind } as TxResponse,
-        intentFor("closePosition"),
+        intentFor(UNCONFIRMED_ACTION),
         permit,
         { onSubmitting },
       ),
@@ -436,11 +456,11 @@ describe("the production default", () => {
     // check runs before the fork, so this refuses without a network round trip
     // — and this branch had no test of the rule at all.
     const { executor: exec, gate, signTransaction } = executor("interactive");
-    const permit = await permitFor(gate, "closePosition", true, byteCache.get("closePosition"));
+    const permit = await permitFor(gate, UNCONFIRMED_ACTION, true, byteCache.get(UNCONFIRMED_ACTION));
     await expect(
       exec.execute(
-        { sponsored: false, txBytes: byteCache.get("closePosition") ?? "" } as TxResponse,
-        intentFor("closePosition"),
+        { sponsored: false, txBytes: byteCache.get(UNCONFIRMED_ACTION) ?? "" } as TxResponse,
+        intentFor(UNCONFIRMED_ACTION),
         permit,
       ),
     ).rejects.toThrow(/never been confirmed against this deployment/);

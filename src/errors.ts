@@ -46,6 +46,52 @@ export class ExecutionPolicyError extends Error {
 }
 
 /**
+ * The caller asked for something that cannot be done as asked — a market that
+ * is not listed, a position id that does not exist, a size expressed neither as
+ * `size` nor as `leverage`.
+ *
+ * Distinct from `ConfigError` because the remedy is different and an automated
+ * caller has to tell them apart: this one is fixed by changing the arguments of
+ * the next call, and is never worth retrying unchanged.
+ */
+export class UsageError extends Error {
+  readonly name = "UsageError";
+}
+
+/**
+ * The process is not set up to do this — no account id, no key, a scope file
+ * that will not parse.
+ *
+ * Fixed by changing the environment, not the arguments. An agent that receives
+ * this should stop and report rather than try a different call.
+ */
+export class ConfigError extends Error {
+  readonly name = "ConfigError";
+}
+
+/**
+ * A transaction may or may not have been submitted, and nothing local can say
+ * which.
+ *
+ * The one outcome that must never be retried blindly: the honest answer is
+ * "ask the chain", so this carries the digest to ask about and the command that
+ * asks. See `AGENT_INSTRUCTIONS.md`.
+ */
+export class AmbiguousSubmissionError extends Error {
+  readonly name = "AmbiguousSubmissionError";
+
+  constructor(
+    message: string,
+    /** The digest that was recorded before the submission left this process. */
+    readonly digest: string | undefined,
+    /** The submission-ledger id to reconcile. */
+    readonly submissionId: string | undefined,
+  ) {
+    super(message);
+  }
+}
+
+/**
  * The backend error codes the agent acts on. Mirrors
  * `apps/waterx/src/core/error-codes.ts` — a subset, kept to the ones a caller
  * can do something about. Values are the on-the-wire numbers.

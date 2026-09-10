@@ -18,9 +18,9 @@ import { TxApi } from "../api/tx.ts";
 import type { AccountData, DelegateData, OrderResponse, Position, TxResponse } from "../api/types.ts";
 import { type AgentConfig, loadConfig, requireAccountId, signsAsDelegate } from "../config.ts";
 import { type ExecuteResult, TxExecutor } from "../chain/executor.ts";
-import { createSigner } from "../chain/create-signer.ts";
+import { createSigner, signerReadiness } from "../chain/create-signer.ts";
 import type { SignerProvider } from "../chain/signer.ts";
-import { type Permit, PolicyGate, type WriteIntent } from "../policy.ts";
+import { PolicyGate, type WriteIntent } from "../policy.ts";
 import {
   acceptablePriceFor,
   toRawCollateral,
@@ -28,7 +28,9 @@ import {
   toRawSize,
   toRawTokenAmount,
 } from "../units.ts";
+import { ExecutionPolicyError, UsageError } from "../errors.ts";
 import { assertNotCrossing, MarketRegistry } from "./markets.ts";
+import { type BuildRequest, buildTx, type PlanContext, type TradePlan } from "./plan.ts";
 
 /** Default slippage bound on market-priced actions, in percent. */
 const DEFAULT_SLIPPAGE_PERCENT = 0.5;
@@ -103,31 +105,102 @@ export class WaterXAgent {
   readonly read: ReadApi;
   readonly tx: TxApi;
   readonly markets: MarketRegistry;
-  readonly executor: TxExecutor;
-  readonly gate: PolicyGate;
 
+  /** Supplied by the caller, if any. Held rather than used, so reads stay key-free. */
+  readonly #supplied: SignerProvider | undefined;
+  #signer: SignerProvider | undefined;
+  #writer: { gate: PolicyGate; executor: TxExecutor } | undefined;
+
+  /**
+   * Nothing about signing happens here.
+   *
+   * The signer used to be built in this constructor, which meant every
+   * invocation loaded the key — `markets`, `ticker`, `positions` included. A
+   * read that needs a private key to run is a read nobody can grant an agent
+   * safely, and it made the obvious first command an external user types
+   * (`pnpm run markets`) fail on a fresh clone with a message about wallets.
+   *
+   * So the read plane is built eagerly and the write plane on first use. The
+   * seam is deliberate and narrow: `gate` and `executor` are the only two
+   * things behind it, and reaching either is exactly what "this invocation
+   * intends to sign" means.
+   */
   constructor(options: AgentOptions = {}) {
     this.config = loadConfig(options.config);
     const http = new HttpClient({ baseUrl: this.config.apiUrl });
     this.read = new ReadApi(http);
     this.tx = new TxApi(http);
     this.markets = new MarketRegistry(this.read);
-    // The gate has to know whether this process holds a delegate key, because
-    // `delegated-auto`'s whole safety argument rests on it.
-    // The signer is built first: whether this is a delegate is a comparison
-    // against its address, not a question about which variables are set.
-    const signer = options.signer ?? createSigner(this.config);
-    this.gate = new PolicyGate(
-      this.config.executionPolicy,
-      this.config.policyScope,
-      signsAsDelegate(this.config, signer.address),
-    );
-    this.executor = new TxExecutor(signer, this.config, this.tx, this.gate);
+    this.#supplied = options.signer;
+  }
+
+  /**
+   * The signer, built on demand.
+   *
+   * Memoised, because `signsAsDelegate` compares against its address and the
+   * executor signs with it — two callers must not get two different keys.
+   */
+  get signer(): SignerProvider {
+    this.#signer ??= this.#supplied ?? createSigner(this.config);
+    return this.#signer;
+  }
+
+  /** Whether the signer has actually been constructed. A read path leaves this false. */
+  get signerLoaded(): boolean {
+    return this.#signer !== undefined;
+  }
+
+  /** Whether a signer *could* be built, without building one. See `signerReadiness`. */
+  get signerReady(): boolean {
+    return this.#supplied !== undefined || signerReadiness(this.config).ready;
+  }
+
+  /**
+   * The write plane: the gate that authorizes and the executor that signs.
+   *
+   * Built together and once. The gate has to know whether this process holds a
+   * delegate key, because `delegated-auto`'s whole safety argument rests on it
+   * — and that is a comparison against the signer's address, not a question
+   * about which variables are set. So the signer comes first, here, at the
+   * moment a write is actually intended.
+   */
+  #write(): { gate: PolicyGate; executor: TxExecutor } {
+    if (this.#writer === undefined) {
+      const signer = this.signer;
+      const gate = new PolicyGate(
+        this.config.executionPolicy,
+        this.config.policyScope,
+        signsAsDelegate(this.config, signer.address),
+      );
+      this.#writer = { gate, executor: new TxExecutor(signer, this.config, this.tx, gate) };
+    }
+    return this.#writer;
+  }
+
+  /** Authorizes writes. Touching it loads the key. */
+  get gate(): PolicyGate {
+    return this.#write().gate;
+  }
+
+  /** Signs and submits. Touching it loads the key. */
+  get executor(): TxExecutor {
+    return this.#write().executor;
   }
 
   /** The address that signs. Equals the owner unless a delegate key is loaded. */
   get address(): string {
     return this.executor.address;
+  }
+
+  /**
+   * The address the backend treats as the authorisation subject.
+   *
+   * Takes the configured owner when there is one, so an account lookup on a
+   * machine with no key still works — `WATERX_OWNER_ADDRESS=0x… pnpm run accounts`
+   * is a read, and reads do not need to sign.
+   */
+  get ownerAddress(): string {
+    return this.config.ownerAddress ?? this.signer.address;
   }
 
   /** The account this agent trades. Throws when `WATERX_ACCOUNT_ID` is unset. */
@@ -136,42 +209,38 @@ export class WaterXAgent {
   }
 
   /**
-   * Decide before building. An out-of-scope action is refused here, so it costs
-   * no request at all — and the permit it returns is what `execute()` requires
-   * before it will sign. Every write this class exposes goes through that; the
-   * signer itself is reachable without one, which is the threat model in
-   * `chain/verify.ts` rather than a gap here.
-   */
-  private authorize(intent: WriteIntent, options: WriteOptions): Permit {
-    return this.gate.authorize(intent, { confirm: options.confirm });
-  }
-
-  /**
-   * Authorize, build, and submit — as one step, because the seam between them
-   * is where an unbound permit and a substitutable transaction would coexist.
+   * Authorize, build, and submit a plan — as one step, because the seam between
+   * them is where an unbound permit and a substitutable transaction would
+   * coexist.
    *
    * The builder is handed to the gate rather than called here, so nothing in
    * this class ever holds bytes it could swap before they are bound. See
    * `PolicyGate.authorizeAndBuild` for what that does and does not guarantee.
+   *
+   * It takes a {@link TradePlan} rather than an intent and a closure because a
+   * plan is *data*: the same value can be shown to a person, written to the
+   * approval ledger, read back by a different process minutes later, and
+   * submitted here — with the guarantee that all four describe the same order.
+   * A closure could not leave the process it was made in, which is why the
+   * preview path could not exist before this.
    */
-  private async run(
-    intent: WriteIntent,
-    options: WriteOptions,
-    build: () => Promise<TxResponse>,
-  ): Promise<ExecuteResult> {
+  async submit(plan: TradePlan, options: WriteOptions = {}): Promise<ExecuteResult> {
+    // Resolved once, before the gate runs: reaching `executor` is what loads
+    // the key, and doing it inside the build closure would put that after the
+    // authorization decision rather than before it.
+    const executor = this.executor;
     const { built, permit } = await this.gate.authorizeAndBuild(
-      intent,
+      plan.intent,
       options.confirm === undefined ? {} : { confirm: options.confirm },
-      build,
+      () => buildTx(this.tx, plan.request, executor.txBody()),
     );
-    return this.executor.execute(
+    return executor.execute(
       built,
-      intent,
+      plan.intent,
       permit,
       options.onSubmitting === undefined ? {} : { onSubmitting: options.onSubmitting },
     );
   }
-
 
   // ─── Positions ──────────────────────────────────────────────────────────
 
@@ -192,9 +261,16 @@ export class WaterXAgent {
    * pass `size`. Deriving size once and sending it on both makes the match a
    * fact rather than a coincidence of two independent roundings.
    */
-  async openPosition(
+  openPosition(
     params: OpenPositionParams & { isLong: boolean },
   ): Promise<ExecuteResult> {
+    return this.planOpenPosition(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan openPosition submits. Derives everything; authorizes and builds nothing. */
+  async planOpenPosition(
+    params: OpenPositionParams & { isLong: boolean },
+  ): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     const spot = await this.markets.spotPrice(ticker);
     const wantsBracket =
@@ -221,54 +297,63 @@ export class WaterXAgent {
     const legs = wantsBracket && size !== undefined ? bracketLegs(params, params.isLong, size) : [];
 
     const action = params.isLong ? "openLong" : "openShort";
-    return this.run(
-      {
-        action,
-        accountId: this.accountId,
-        increasesExposure: true,
-        ticker,
-        side: params.isLong ? "long" : "short",
-        reduceOnly: false,
-        collateral: Number(params.collateral),
-        collateralRaw: toRawCollateral(params.collateral),
-        sizeRaw: size,
-        // Derived, not copied: an order sized directly carries leverage the
-        // caller never named, and the ceiling must see it either way.
-        leverage: effectiveLeverage(
-          Number(params.collateral),
-          params.size ?? Number(size) / 1e9,
-          params.leverage,
-          spot,
-        ),
-        slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
-        acceptablePriceRaw: acceptablePrice,
-        // A market order is never a stop. Stated rather than left absent so the
-        // verifier compares it: unbound, the backend could return the resting
-        // stop this is not.
-        isStopOrder: false,
-        // Derived from the same call that builds them, so the authorization and
-        // the transaction cannot describe different legs.
-        legs: legs.map((leg) => ({
-          triggerPriceRaw: leg.triggerPrice,
-          isStopOrder: leg.isStopOrder,
-          isLong: leg.isLong,
-        })),
-      },
-      params,
-      () => this.tx.marketOrder({
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action,
       accountId: this.accountId,
+      increasesExposure: true,
       ticker,
-      isLong: params.isLong,
-      collateralAmount: toRawCollateral(params.collateral),
-      size,
-      acceptablePrice,
-      ...(legs.length > 0 ? { preOrders: legs } : {}),
-    }),
-    );
+      side: params.isLong ? "long" : "short",
+      reduceOnly: false,
+      collateral: Number(params.collateral),
+      collateralRaw: toRawCollateral(params.collateral),
+      sizeRaw: size,
+      // Derived, not copied: an order sized directly carries leverage the
+      // caller never named, and the ceiling must see it either way.
+      leverage: effectiveLeverage(
+        Number(params.collateral),
+        params.size ?? Number(size) / 1e9,
+        params.leverage,
+        spot,
+      ),
+      slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
+      acceptablePriceRaw: acceptablePrice,
+      // A market order is never a stop. Stated rather than left absent so the
+      // verifier compares it: unbound, the backend could return the resting
+      // stop this is not.
+      isStopOrder: false,
+      // Derived from the same call that builds them, so the authorization and
+      // the transaction cannot describe different legs.
+      legs: legs.map((leg) => ({
+        triggerPriceRaw: leg.triggerPrice,
+        isStopOrder: leg.isStopOrder,
+        isLong: leg.isLong,
+      })),
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "marketOrder",
+        body: {
+          accountId: this.accountId,
+          ticker,
+          isLong: params.isLong,
+          collateralAmount: toRawCollateral(params.collateral),
+          size,
+          acceptablePrice,
+          ...(legs.length > 0 ? { preOrders: legs } : {}),
+        },
+      },
+      context: { referencePrice: spot, boundKind: params.isLong ? "max" : "min", fill: params.isLong ? "buy" : "sell" },
+    };
   }
 
-  async closePosition(params: ClosePositionParams): Promise<ExecuteResult> {
+  closePosition(params: ClosePositionParams): Promise<ExecuteResult> {
+    return this.planClosePosition(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan closePosition submits. Derives everything; authorizes and builds nothing. */
+  async planClosePosition(params: ClosePositionParams): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     const position = await this.requirePosition(ticker, params.positionId);
     const spot = await this.markets.spotPrice(ticker);
@@ -279,26 +364,37 @@ export class WaterXAgent {
       position.side === "long" ? "sell" : "buy",
       params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
     );
-    return this.run(
-      {
-        action: "closePosition",
-        accountId: this.accountId,
-        increasesExposure: false,
-        ticker,
-        slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
-        positionId: params.positionId,
-        acceptablePriceRaw: acceptablePrice,
-      },
-      params,
-      () => this.tx.closePosition(ticker, params.positionId, {
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "closePosition",
       accountId: this.accountId,
-      acceptablePrice,
-    }),
-    );
+      increasesExposure: false,
+      ticker,
+      slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
+      positionId: params.positionId,
+      acceptablePriceRaw: acceptablePrice,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "closePosition",
+        ticker,
+        positionId: params.positionId,
+        body: {
+          accountId: this.accountId,
+          acceptablePrice,
+        },
+      },
+      context: { referencePrice: spot, boundKind: position.side === "long" ? "min" : "max", fill: position.side === "long" ? "sell" : "buy" },
+    };
   }
 
-  async reducePosition(params: ReducePositionParams): Promise<ExecuteResult> {
+  reducePosition(params: ReducePositionParams): Promise<ExecuteResult> {
+    return this.planReducePosition(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan reducePosition submits. Derives everything; authorizes and builds nothing. */
+  async planReducePosition(params: ReducePositionParams): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     const position = await this.requirePosition(ticker, params.positionId);
     const spot = await this.markets.spotPrice(ticker);
@@ -312,34 +408,51 @@ export class WaterXAgent {
       position.side === "long" ? "sell" : "buy",
       params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
     );
-    return this.run(
-      {
-        action: "reducePosition",
-        accountId: this.accountId,
-        increasesExposure: false,
-        ticker,
-        slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
-        positionId: params.positionId,
-        sizeRaw: size,
-        acceptablePriceRaw: acceptablePrice,
-      },
-      params,
-      () => this.tx.reducePosition(ticker, params.positionId, {
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "reducePosition",
       accountId: this.accountId,
-      size,
-      acceptablePrice,
-    }),
-    );
+      increasesExposure: false,
+      ticker,
+      slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
+      positionId: params.positionId,
+      sizeRaw: size,
+      acceptablePriceRaw: acceptablePrice,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "reducePosition",
+        ticker,
+        positionId: params.positionId,
+        body: {
+          accountId: this.accountId,
+          size,
+          acceptablePrice,
+        },
+      },
+      context: { referencePrice: spot, boundKind: position.side === "long" ? "min" : "max", fill: position.side === "long" ? "sell" : "buy" },
+    };
   }
 
-  async increasePosition(
+  increasePosition(
     params: ClosePositionParams & {
       collateral: string | number;
       leverage?: number;
       size?: string | number;
     },
   ): Promise<ExecuteResult> {
+    return this.planIncreasePosition(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan increasePosition submits. Derives everything; authorizes and builds nothing. */
+  async planIncreasePosition(
+    params: ClosePositionParams & {
+      collateral: string | number;
+      leverage?: number;
+      size?: string | number;
+    },
+  ): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     const position = await this.requirePosition(ticker, params.positionId);
     const spot = await this.markets.spotPrice(ticker);
@@ -357,91 +470,123 @@ export class WaterXAgent {
       params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
     );
 
-    return this.run(
-      {
-        action: "increasePosition",
-        accountId: this.accountId,
-        increasesExposure: true,
-        ticker,
-        side: position.side,
-        collateral: Number(params.collateral),
-        collateralRaw: toRawCollateral(params.collateral),
-        leverage: effectiveLeverage(
-          Number(params.collateral),
-          params.size ?? Number(size) / 1e9,
-          params.leverage,
-          spot,
-        ),
-        slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
-        positionId: params.positionId,
-        sizeRaw: size,
-        acceptablePriceRaw: acceptablePrice,
-      },
-      params,
-      () => this.tx.increasePosition(ticker, params.positionId, {
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "increasePosition",
       accountId: this.accountId,
-      collateralAmount: toRawCollateral(params.collateral),
-      size,
-      acceptablePrice,
-    }),
-    );
+      increasesExposure: true,
+      ticker,
+      side: position.side,
+      collateral: Number(params.collateral),
+      collateralRaw: toRawCollateral(params.collateral),
+      leverage: effectiveLeverage(
+        Number(params.collateral),
+        params.size ?? Number(size) / 1e9,
+        params.leverage,
+        spot,
+      ),
+      slippagePercent: params.slippagePercent ?? DEFAULT_SLIPPAGE_PERCENT,
+      positionId: params.positionId,
+      sizeRaw: size,
+      acceptablePriceRaw: acceptablePrice,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "increasePosition",
+        ticker,
+        positionId: params.positionId,
+        body: {
+          accountId: this.accountId,
+          collateralAmount: toRawCollateral(params.collateral),
+          size,
+          acceptablePrice,
+        },
+      },
+      context: { referencePrice: spot, boundKind: position.side === "long" ? "max" : "min", fill: position.side === "long" ? "buy" : "sell" },
+    };
   }
 
   /** Add margin to an open position, lowering its leverage. */
-  async addMargin(
+  addMargin(
     params: WriteOptions & { ticker: string; positionId: number; amount: string | number },
   ): Promise<ExecuteResult> {
+    return this.planAddMargin(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan addMargin submits. Derives everything; authorizes and builds nothing. */
+  async planAddMargin(
+    params: WriteOptions & { ticker: string; positionId: number; amount: string | number },
+  ): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     // Adding margin lowers leverage; it is not metered as new exposure.
-    return this.run(
-      {
-        action: "addMargin",
-        accountId: this.accountId,
-        increasesExposure: false,
+    const intent: WriteIntent = {
+      action: "addMargin",
+      accountId: this.accountId,
+      increasesExposure: false,
+      ticker,
+      positionId: params.positionId,
+      collateralRaw: toRawCollateral(params.amount),
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "depositMargin",
         ticker,
         positionId: params.positionId,
-        collateralRaw: toRawCollateral(params.amount),
+        body: {
+          accountId: this.accountId,
+          collateralAmount: toRawCollateral(params.amount),
+        },
       },
-      params,
-      () => this.tx.depositMargin(ticker, params.positionId, {
-      ...this.executor.txBody(),
-      accountId: this.accountId,
-      collateralAmount: toRawCollateral(params.amount),
-    }),
-    );
+      context: { note: "adds margin to an open position, lowering its leverage" },
+    };
   }
 
   /** Withdraw margin from an open position, raising its leverage. */
-  async removeMargin(
+  removeMargin(
     params: WriteOptions & { ticker: string; positionId: number; amount: string | number },
   ): Promise<ExecuteResult> {
+    return this.planRemoveMargin(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan removeMargin submits. Derives everything; authorizes and builds nothing. */
+  async planRemoveMargin(
+    params: WriteOptions & { ticker: string; positionId: number; amount: string | number },
+  ): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     // Removing margin raises leverage on a live position, so the ceiling has to
     // see the leverage that results — metering the withdrawn amount alone would
     // let a position be levered arbitrarily high one small withdrawal at a time.
     const position = await this.requirePosition(ticker, params.positionId);
     const remaining = position.collateral - Number(params.amount);
-    return this.run(
-      {
-        action: "removeMargin",
-        accountId: this.accountId,
-        increasesExposure: true,
-        ticker,
-        collateral: Number(params.amount),
-        collateralRaw: toRawCollateral(params.amount),
-        // Non-positive remaining margin is not a leverage figure, it is a
-        // liquidation; NaN reaches the gate's own refusal.
-        leverage: remaining > 0 ? position.size / remaining : Number.NaN,
-        positionId: params.positionId,
-      },
-      params,
-      () => this.tx.withdrawMargin(ticker, params.positionId, {
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "removeMargin",
       accountId: this.accountId,
-      amount: toRawCollateral(params.amount),
-    }),
-    );
+      increasesExposure: true,
+      ticker,
+      collateral: Number(params.amount),
+      collateralRaw: toRawCollateral(params.amount),
+      // Non-positive remaining margin is not a leverage figure, it is a
+      // liquidation; NaN reaches the gate's own refusal.
+      leverage: remaining > 0 ? position.size / remaining : Number.NaN,
+      positionId: params.positionId,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "withdrawMargin",
+        ticker,
+        positionId: params.positionId,
+        body: {
+          accountId: this.accountId,
+          amount: toRawCollateral(params.amount),
+        },
+      },
+      context: { note: "withdraws margin from an open position, raising its leverage" },
+    };
   }
 
   // ─── Orders ─────────────────────────────────────────────────────────────
@@ -452,7 +597,12 @@ export class WaterXAgent {
    * A crossing limit is refused before the request is sent — see
    * `assertNotCrossing`.
    */
-  async placeLimitOrder(params: LimitOrderParams): Promise<ExecuteResult> {
+  placeLimitOrder(params: LimitOrderParams): Promise<ExecuteResult> {
+    return this.planPlaceLimitOrder(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan placeLimitOrder submits. Derives everything; authorizes and builds nothing. */
+  async planPlaceLimitOrder(params: LimitOrderParams): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     const triggerPrice = Number(params.triggerPrice);
     const spot = await this.markets.spotPrice(ticker);
@@ -476,67 +626,71 @@ export class WaterXAgent {
         : deriveSize(params.collateral, requireLeverage(params), triggerPrice);
     const legs = wantsBracket && size !== undefined ? bracketLegs(params, params.isLong, size) : [];
 
-    return this.run(
-      {
-        action: "placeLimitOrder",
-        accountId: this.accountId,
-        // A reduce-only leg lowers exposure; anything else commits collateral.
-        increasesExposure: params.reduceOnly !== true,
-        ticker,
-        side: params.isLong ? "long" : "short",
-        collateral: Number(params.collateral),
-        collateralRaw: toRawCollateral(params.collateral),
-        sizeRaw: size,
-        triggerPriceRaw: toRawPrice(params.triggerPrice),
-        // Sized against the order's own trigger price, which is where it fills.
-        leverage: effectiveLeverage(
-          Number(params.collateral),
-          params.size ?? Number(size) / 1e9,
-          params.leverage,
-          triggerPrice,
-        ),
-        // A resting order fills at its own trigger, so it carries no
-        // acceptable-price bound — and `acceptablePriceRaw` left unset is what
-        // requires the transaction to carry none either.
-        legs: legs.map((leg) => ({
-          triggerPriceRaw: leg.triggerPrice,
-          isStopOrder: leg.isStopOrder,
-          isLong: leg.isLong,
-        })),
-        // The caller's own choice, carried into the authorization so the bytes
-        // can be held to it. A limit and a stop at the same price are opposite
-        // instructions, and `assertNotCrossing` above only cleared this price
-        // for the one the caller asked for.
-        isStopOrder: params.isStopOrder ?? false,
-        // Stated rather than left absent: an unstated reduce-only is a
-        // parameter the verifier refuses to check, and the default the backend
-        // applies is "false" anyway.
-        reduceOnly: params.reduceOnly ?? false,
-        ...(params.linkedPositionId !== undefined
-          ? { positionId: params.linkedPositionId }
-          : {}),
-      },
-      params,
-      () => this.tx.limitOrder({
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "placeLimitOrder",
       accountId: this.accountId,
+      // A reduce-only leg lowers exposure; anything else commits collateral.
+      increasesExposure: params.reduceOnly !== true,
       ticker,
-      isLong: params.isLong,
-      collateralAmount: toRawCollateral(params.collateral),
-      size,
-      triggerPrice: toRawPrice(params.triggerPrice),
-      ...(params.isStopOrder !== undefined ? { isStopOrder: params.isStopOrder } : {}),
-      ...(params.reduceOnly !== undefined ? { reduceOnly: params.reduceOnly } : {}),
+      side: params.isLong ? "long" : "short",
+      collateral: Number(params.collateral),
+      collateralRaw: toRawCollateral(params.collateral),
+      sizeRaw: size,
+      triggerPriceRaw: toRawPrice(params.triggerPrice),
+      // Sized against the order's own trigger price, which is where it fills.
+      leverage: effectiveLeverage(
+        Number(params.collateral),
+        params.size ?? Number(size) / 1e9,
+        params.leverage,
+        triggerPrice,
+      ),
+      // A resting order fills at its own trigger, so it carries no
+      // acceptable-price bound — and `acceptablePriceRaw` left unset is what
+      // requires the transaction to carry none either.
+      legs: legs.map((leg) => ({
+        triggerPriceRaw: leg.triggerPrice,
+        isStopOrder: leg.isStopOrder,
+        isLong: leg.isLong,
+      })),
+      // The caller's own choice, carried into the authorization so the bytes
+      // can be held to it. A limit and a stop at the same price are opposite
+      // instructions, and `assertNotCrossing` above only cleared this price
+      // for the one the caller asked for.
+      isStopOrder: params.isStopOrder ?? false,
+      // Stated rather than left absent: an unstated reduce-only is a
+      // parameter the verifier refuses to check, and the default the backend
+      // applies is "false" anyway.
+      reduceOnly: params.reduceOnly ?? false,
       ...(params.linkedPositionId !== undefined
-        ? { linkedPositionId: params.linkedPositionId }
+        ? { positionId: params.linkedPositionId }
         : {}),
-      ...(legs.length > 0 ? { preOrders: legs } : {}),
-    }),
-    );
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "limitOrder",
+        body: {
+          accountId: this.accountId,
+          ticker,
+          isLong: params.isLong,
+          collateralAmount: toRawCollateral(params.collateral),
+          size,
+          triggerPrice: toRawPrice(params.triggerPrice),
+          ...(params.isStopOrder !== undefined ? { isStopOrder: params.isStopOrder } : {}),
+          ...(params.reduceOnly !== undefined ? { reduceOnly: params.reduceOnly } : {}),
+          ...(params.linkedPositionId !== undefined
+            ? { linkedPositionId: params.linkedPositionId }
+            : {}),
+          ...(legs.length > 0 ? { preOrders: legs } : {}),
+        },
+      },
+      context: { referencePrice: spot, fill: params.isLong ? "buy" : "sell" },
+    };
   }
 
   /** Attach TP and/or SL to an already-open position. */
-  async placeTpSl(
+  placeTpSl(
     params: WriteOptions & {
       ticker: string;
       positionId: number;
@@ -546,8 +700,22 @@ export class WaterXAgent {
       size?: string | number;
     },
   ): Promise<ExecuteResult> {
+    return this.planPlaceTpSl(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan placeTpSl submits. Derives everything; authorizes and builds nothing. */
+  async planPlaceTpSl(
+    params: WriteOptions & {
+      ticker: string;
+      positionId: number;
+      takeProfitPrice?: string | number;
+      stopLossPrice?: string | number;
+      /** Base-asset size. Defaults to the position's full size. */
+      size?: string | number;
+    },
+  ): Promise<TradePlan> {
     if (params.takeProfitPrice === undefined && params.stopLossPrice === undefined) {
-      throw new Error("placeTpSl: pass takeProfitPrice, stopLossPrice, or both.");
+      throw new UsageError("placeTpSl: pass takeProfitPrice, stopLossPrice, or both.");
     }
     const ticker = await this.markets.resolveTicker(params.ticker);
     const position = await this.requirePosition(ticker, params.positionId);
@@ -556,49 +724,56 @@ export class WaterXAgent {
     // describe a different set of legs than the transaction carries.
     const legs = bracketLegs(params, position.side === "long", size);
 
-    return this.run(
-      // No `side` on purpose: a bracket leg is reduce-only and takes the
-      // OPPOSITE side of the position it protects — the backend stamps
-      // `isLong: !position.isLong` — so the position's side here would make the
-      // verifier refuse every bracket. `reduceOnly` is what distinguishes this
-      // from an opening order, which shares its entrypoint, account and market.
-      {
-        action: "placeTpSl",
-        accountId: this.accountId,
-        increasesExposure: false,
-        ticker,
-        reduceOnly: true,
-        // Which position the bracket protects. Without it, a bracket authorized
-        // for one position could be attached to another in the same market —
-        // same entrypoint, same account, same ticker, nothing else to tell them
-        // apart.
-        positionId: params.positionId,
-        sizeRaw: size,
-        // The full descriptor of each leg and, by their count, how many may be
-        // attached. No `isStopOrder` on the intent itself: this action places
-        // no main order, so there is nothing for one to describe.
-        legs: legs.map((leg) => ({
-          triggerPriceRaw: leg.triggerPrice,
-          isStopOrder: leg.isStopOrder,
-          isLong: leg.isLong,
-        })),
-      },
-      params,
-      () => this.tx.placeTpSl({
-      ...this.executor.txBody(),
+    // No `side` on purpose: a bracket leg is reduce-only and takes the
+    // OPPOSITE side of the position it protects — the backend stamps
+    // `isLong: !position.isLong` — so the position's side here would make the
+    // verifier refuse every bracket. `reduceOnly` is what distinguishes this
+    // from an opening order, which shares its entrypoint, account and market.
+    const intent: WriteIntent = {
+      action: "placeTpSl",
       accountId: this.accountId,
+      increasesExposure: false,
       ticker,
-      isLong: position.side === "long",
-      size,
-      linkedPositionId: params.positionId,
-      ...(params.takeProfitPrice !== undefined
-        ? { takeProfitPrice: toRawPrice(params.takeProfitPrice) }
-        : {}),
-      ...(params.stopLossPrice !== undefined
-        ? { stopLossPrice: toRawPrice(params.stopLossPrice) }
-        : {}),
-    }),
-    );
+      reduceOnly: true,
+      // Which position the bracket protects. Without it, a bracket authorized
+      // for one position could be attached to another in the same market —
+      // same entrypoint, same account, same ticker, nothing else to tell them
+      // apart.
+      positionId: params.positionId,
+      sizeRaw: size,
+      // The full descriptor of each leg and, by their count, how many may be
+      // attached. No `isStopOrder` on the intent itself: this action places
+      // no main order, so there is nothing for one to describe.
+      legs: legs.map((leg) => ({
+        triggerPriceRaw: leg.triggerPrice,
+        isStopOrder: leg.isStopOrder,
+        isLong: leg.isLong,
+      })),
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "placeTpSl",
+        body: {
+          accountId: this.accountId,
+          ticker,
+          isLong: position.side === "long",
+          size,
+          linkedPositionId: params.positionId,
+          ...(params.takeProfitPrice !== undefined
+            ? { takeProfitPrice: toRawPrice(params.takeProfitPrice) }
+            : {}),
+          ...(params.stopLossPrice !== undefined
+            ? { stopLossPrice: toRawPrice(params.stopLossPrice) }
+            : {}),
+        },
+      },
+      context: {
+        fill: position.side === "long" ? "sell" : "buy",
+        note: "reduce-only legs attached to an open position",
+      },
+    };
   }
 
   /**
@@ -608,7 +783,7 @@ export class WaterXAgent {
    * both are read from the live order rather than taken from the caller — a
    * mismatch there is not found, not corrected.
    */
-  async updateOrder(
+  updateOrder(
     params: WriteOptions & {
       ticker: string;
       orderId: number;
@@ -616,6 +791,18 @@ export class WaterXAgent {
       newSize: string | number;
     },
   ): Promise<ExecuteResult> {
+    return this.planUpdateOrder(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan updateOrder submits. Derives everything; authorizes and builds nothing. */
+  async planUpdateOrder(
+    params: WriteOptions & {
+      ticker: string;
+      orderId: number;
+      newTriggerPrice: string | number;
+      newSize: string | number;
+    },
+  ): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
     const order = await this.requireOrder(ticker, params.orderId);
     const spot = await this.markets.spotPrice(ticker);
@@ -633,66 +820,101 @@ export class WaterXAgent {
     // and the new size is what the ceilings must judge, not the old one. Without
     // this, an order could be placed inside the scope and then grown past it.
     const newNotional = Number(params.newSize) * Number(params.newTriggerPrice);
-    return this.run(
-      {
-        action: "updateOrder",
-        accountId: this.accountId,
-        increasesExposure: !order.reduceOnly,
-        ticker,
-        side: order.side,
-        collateral: order.collateral,
-        leverage: order.collateral > 0 ? newNotional / order.collateral : Number.NaN,
-        orderId: params.orderId,
-        sizeRaw: toRawSize(params.newSize),
-        triggerPriceRaw: toRawPrice(params.newTriggerPrice),
-      },
-      params,
-      () => this.tx.updateOrder(ticker, params.orderId, {
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "updateOrder",
       accountId: this.accountId,
-      currentTriggerPrice: toRawPrice(order.triggerPrice),
-      orderTypeTag: order.orderTypeTag,
-      newTriggerPrice: toRawPrice(params.newTriggerPrice),
-      newSize: toRawSize(params.newSize),
-    }),
-    );
+      increasesExposure: !order.reduceOnly,
+      ticker,
+      side: order.side,
+      collateral: order.collateral,
+      leverage: order.collateral > 0 ? newNotional / order.collateral : Number.NaN,
+      orderId: params.orderId,
+      sizeRaw: toRawSize(params.newSize),
+      triggerPriceRaw: toRawPrice(params.newTriggerPrice),
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "updateOrder",
+        ticker,
+        orderId: params.orderId,
+        body: {
+          accountId: this.accountId,
+          currentTriggerPrice: toRawPrice(order.triggerPrice),
+          orderTypeTag: order.orderTypeTag,
+          newTriggerPrice: toRawPrice(params.newTriggerPrice),
+          newSize: toRawSize(params.newSize),
+        },
+      },
+      context: { referencePrice: spot, fill: order.side === "long" ? "buy" : "sell" },
+    };
   }
 
-  async cancelOrder(
+  cancelOrder(
     params: WriteOptions & { ticker: string; orderId: number },
   ): Promise<ExecuteResult> {
+    return this.planCancelOrder(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan cancelOrder submits. Derives everything; authorizes and builds nothing. */
+  async planCancelOrder(
+    params: WriteOptions & { ticker: string; orderId: number },
+  ): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
-    return this.run(
-      {
-        action: "cancelOrder",
-        accountId: this.accountId,
-        increasesExposure: false,
+    const intent: WriteIntent = {
+      action: "cancelOrder",
+      accountId: this.accountId,
+      increasesExposure: false,
+      ticker,
+      orderId: params.orderId,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "cancelOrder",
         ticker,
         orderId: params.orderId,
+        body: {
+          accountId: this.accountId,
+        },
       },
-      params,
-      () => this.tx.cancelOrder(ticker, params.orderId, {
-      ...this.executor.txBody(),
-      accountId: this.accountId,
-    }),
-    );
+      context: { note: "cancels a resting order" },
+    };
   }
 
   // ─── Account ────────────────────────────────────────────────────────────
 
   /** Create a WaterX trading account. The id is emitted by the indexer, not returned here. */
-  async createAccount(
+  createAccount(
     params: WriteOptions & { name: string; referralCode?: string },
   ): Promise<ExecuteResult> {
-    return this.run(
-      { action: "createAccount", accountId: "", increasesExposure: false, alias: params.name },
-      params,
-      () => this.tx.createAccount({
-      ...this.executor.txBody(),
-      name: params.name,
-      ...(params.referralCode !== undefined ? { referralCode: params.referralCode } : {}),
-    }),
-    );
+    return this.planCreateAccount(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan createAccount submits. Derives everything; authorizes and builds nothing. */
+  async planCreateAccount(
+    params: WriteOptions & { name: string; referralCode?: string },
+  ): Promise<TradePlan> {
+    const intent: WriteIntent = {
+      action: "createAccount",
+      accountId: "",
+      increasesExposure: false,
+      alias: params.name,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "createAccount",
+        body: {
+          name: params.name,
+          ...(params.referralCode !== undefined ? { referralCode: params.referralCode } : {}),
+        },
+      },
+      context: { note: "creates a WaterX trading account; the indexer assigns its id" },
+    };
   }
 
   /**
@@ -702,28 +924,39 @@ export class WaterXAgent {
    * deposit is a credit mint against the custody vault now, not a transfer of
    * a fixed collateral coin.
    */
-  async deposit(
+  deposit(
     params: WriteOptions & { assetType: string; amount: string | number },
   ): Promise<ExecuteResult> {
-    return this.run(
-      {
-        action: "deposit",
-        accountId: this.accountId,
-        increasesExposure: false,
-        // A deposit is paid from the signer's own balance, and the amount and
-        // asset live in that reservation rather than in any call argument.
-        movesFundsIn: true,
-        collateralRaw: toRawTokenAmount(params.amount),
-        assetType: params.assetType,
-      },
-      params,
-      () => this.tx.deposit({
-      ...this.executor.txBody(),
+    return this.planDeposit(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan deposit submits. Derives everything; authorizes and builds nothing. */
+  async planDeposit(
+    params: WriteOptions & { assetType: string; amount: string | number },
+  ): Promise<TradePlan> {
+    const intent: WriteIntent = {
+      action: "deposit",
       accountId: this.accountId,
+      increasesExposure: false,
+      // A deposit is paid from the signer's own balance, and the amount and
+      // asset live in that reservation rather than in any call argument.
+      movesFundsIn: true,
+      collateralRaw: toRawTokenAmount(params.amount),
       assetType: params.assetType,
-      amount: toRawTokenAmount(params.amount),
-    }),
-    );
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "deposit",
+        body: {
+          accountId: this.accountId,
+          assetType: params.assetType,
+          amount: toRawTokenAmount(params.amount),
+        },
+      },
+      context: { note: "mints wxUSD credit against a backing asset the wallet already holds" },
+    };
   }
 
   /**
@@ -732,33 +965,44 @@ export class WaterXAgent {
    * Funds-out is **owner-only** on chain, so this refuses up front when the
    * process holds a delegate key rather than letting the chain abort.
    */
-  async withdraw(
+  withdraw(
     params: WriteOptions & { assetType: string; amount: string | number; toAddress?: string },
   ): Promise<ExecuteResult> {
+    return this.planWithdraw(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan withdraw submits. Derives everything; authorizes and builds nothing. */
+  async planWithdraw(
+    params: WriteOptions & { assetType: string; amount: string | number; toAddress?: string },
+  ): Promise<TradePlan> {
     this.assertOwnerSigned("withdraw");
-    return this.run(
-      {
-        action: "withdraw",
-        accountId: this.accountId,
-        increasesExposure: false,
-        collateralRaw: toRawCollateral(params.amount),
-        // Where the money lands. The contract takes this as an argument, so it
-        // is the agent's to state rather than the contract's to be trusted on.
-        recipient: params.toAddress ?? this.executor.senderAddress,
-        // Which coin comes out. It is the route call's type argument, and
-        // appears nowhere in `request_withdraw` itself.
-        assetType: params.assetType,
-      },
-      params,
-      () => this.tx.withdraw({
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "withdraw",
       accountId: this.accountId,
-      route: "native",
+      increasesExposure: false,
+      collateralRaw: toRawCollateral(params.amount),
+      // Where the money lands. The contract takes this as an argument, so it
+      // is the agent's to state rather than the contract's to be trusted on.
+      recipient: params.toAddress ?? this.ownerAddress,
+      // Which coin comes out. It is the route call's type argument, and
+      // appears nowhere in `request_withdraw` itself.
       assetType: params.assetType,
-      amount: toRawTokenAmount(params.amount),
-      ...(params.toAddress !== undefined ? { toAddress: params.toAddress } : {}),
-    }),
-    );
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "withdraw",
+        body: {
+          accountId: this.accountId,
+          route: "native",
+          assetType: params.assetType,
+          amount: toRawTokenAmount(params.amount),
+          ...(params.toAddress !== undefined ? { toAddress: params.toAddress } : {}),
+        },
+      },
+      context: { note: "moves funds out of the account — owner-only on chain" },
+    };
   }
 
   /**
@@ -769,7 +1013,7 @@ export class WaterXAgent {
    * funds-out path — that stayed owner-only after the delegate-phishing
    * hardening. Use `PERM_*` from `@waterx/sdk` rather than literals.
    */
-  async addDelegate(
+  addDelegate(
     params: WriteOptions & {
       delegate: string;
       perpPermissions?: number;
@@ -777,6 +1021,18 @@ export class WaterXAgent {
       stakingPermissions?: number;
     },
   ): Promise<ExecuteResult> {
+    return this.planAddDelegate(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan addDelegate submits. Derives everything; authorizes and builds nothing. */
+  async planAddDelegate(
+    params: WriteOptions & {
+      delegate: string;
+      perpPermissions?: number;
+      predictPermissions?: number;
+      stakingPermissions?: number;
+    },
+  ): Promise<TradePlan> {
     this.assertOwnerSigned("addDelegate");
     // Sent explicitly rather than left to the backend's default: a mask the
     // agent did not choose is one it cannot bound, and the grant would then be
@@ -784,143 +1040,210 @@ export class WaterXAgent {
     const perpPermissions = params.perpPermissions ?? PERM_ALL_TRADING;
     const predictPermissions = params.predictPermissions ?? 0;
     const stakingPermissions = params.stakingPermissions ?? 0;
-    return this.run(
-      {
-        action: "addDelegate",
-        accountId: this.accountId,
-        increasesExposure: false,
-        delegateAddress: params.delegate,
-        // The ceiling on what the grant may confer, across however many calls
-        // the backend splits it into. The union rather than any single mask,
-        // because `add_delegate` itself carries almost nothing — in a live
-        // grant of every trading permission its own argument was zero, and the
-        // authority arrived in a separate call.
-        // Kept apart, not merged. Which protocol a grant applies to is the
-        // Move type the call is parameterised with, so a single union ceiling
-        // let a perp grant carry a bit only ever asked for on staking.
-        delegatePermissions: {
-          perp: perpPermissions,
-          predict: predictPermissions,
-          staking: stakingPermissions,
-        },
-        // `add_delegate`'s own mask, which every observed grant carried as zero.
-        delegateBasePermissions: 0,
-      },
-      params,
-      () => this.tx.addDelegate({
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "addDelegate",
       accountId: this.accountId,
-      delegate: params.delegate,
-      perpPermissions,
-      predictPermissions,
-      stakingPermissions,
-    }),
-    );
+      increasesExposure: false,
+      delegateAddress: params.delegate,
+      // The ceiling on what the grant may confer, across however many calls
+      // the backend splits it into. The union rather than any single mask,
+      // because `add_delegate` itself carries almost nothing — in a live
+      // grant of every trading permission its own argument was zero, and the
+      // authority arrived in a separate call.
+      // Kept apart, not merged. Which protocol a grant applies to is the
+      // Move type the call is parameterised with, so a single union ceiling
+      // let a perp grant carry a bit only ever asked for on staking.
+      delegatePermissions: {
+        perp: perpPermissions,
+        predict: predictPermissions,
+        staking: stakingPermissions,
+      },
+      // `add_delegate`'s own mask, which every observed grant carried as zero.
+      delegateBasePermissions: 0,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "addDelegate",
+        body: {
+          accountId: this.accountId,
+          delegate: params.delegate,
+          perpPermissions,
+          predictPermissions,
+          stakingPermissions,
+        },
+      },
+      context: { note: "grants a delegate authority over this account" },
+    };
   }
 
-  async removeDelegate(params: WriteOptions & { delegate: string }): Promise<ExecuteResult> {
+  removeDelegate(params: WriteOptions & { delegate: string }): Promise<ExecuteResult> {
+    return this.planRemoveDelegate(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan removeDelegate submits. Derives everything; authorizes and builds nothing. */
+  async planRemoveDelegate(params: WriteOptions & { delegate: string }): Promise<TradePlan> {
     this.assertOwnerSigned("removeDelegate");
-    return this.run(
-      {
-        action: "removeDelegate",
-        accountId: this.accountId,
-        increasesExposure: false,
-        delegateAddress: params.delegate,
-      },
-      params,
-      () => this.tx.removeDelegate({
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "removeDelegate",
       accountId: this.accountId,
-      delegate: params.delegate,
-    }),
-    );
+      increasesExposure: false,
+      delegateAddress: params.delegate,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "removeDelegate",
+        body: {
+          accountId: this.accountId,
+          delegate: params.delegate,
+        },
+      },
+      context: { note: "revokes a delegate" },
+    };
   }
 
   /** Revoke every delegate across all of the owner's accounts, in one transaction. */
-  async removeAllDelegates(params: WriteOptions = {}): Promise<ExecuteResult> {
+  removeAllDelegates(params: WriteOptions = {}): Promise<ExecuteResult> {
+    return this.planRemoveAllDelegates(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan removeAllDelegates submits. Derives everything; authorizes and builds nothing. */
+  async planRemoveAllDelegates(params: WriteOptions = {}): Promise<TradePlan> {
     this.assertOwnerSigned("removeAllDelegates");
-    return this.run(
-      { action: "removeAllDelegates", accountId: this.accountId, increasesExposure: false },
-      params,
-      () => this.tx.removeAllDelegates(this.executor.txBody()),
-    );
+    const intent: WriteIntent = {
+      action: "removeAllDelegates",
+      accountId: this.accountId,
+      increasesExposure: false,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: { kind: "removeAllDelegates" },
+      context: { note: "revokes every delegate across all of the owner\u2019s accounts" },
+    };
   }
 
   // ─── WLP ────────────────────────────────────────────────────────────────
 
-  async mintWlp(params: WriteOptions & { amount: string | number }): Promise<ExecuteResult> {
+  mintWlp(params: WriteOptions & { amount: string | number }): Promise<ExecuteResult> {
+    return this.planMintWlp(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan mintWlp submits. Derives everything; authorizes and builds nothing. */
+  async planMintWlp(params: WriteOptions & { amount: string | number }): Promise<TradePlan> {
     // Minting commits capital to the pool, so it is metered against the same
     // ceilings an opening order is — a bounded agent that could mint without
     // limit would be bounded only on paper.
-    return this.run(
-      {
-        action: "mintWlp",
-        accountId: this.accountId,
-        increasesExposure: true,
-        collateral: Number(params.amount),
-        collateralRaw: toRawCollateral(params.amount),
-      },
-      params,
-      () => this.tx.mintWlp({
-      ...this.executor.txBody(),
+    const intent: WriteIntent = {
+      action: "mintWlp",
       accountId: this.accountId,
-      amount: toRawTokenAmount(params.amount),
-    }),
-    );
+      increasesExposure: true,
+      collateral: Number(params.amount),
+      collateralRaw: toRawCollateral(params.amount),
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "mintWlp",
+        body: {
+          accountId: this.accountId,
+          amount: toRawTokenAmount(params.amount),
+        },
+      },
+      context: { note: "commits capital to the liquidity pool" },
+    };
   }
 
   /** Queue a WLP redemption. Settlement runs through the withdrawal queue. */
-  async burnWlp(params: WriteOptions & { amount: string | number }): Promise<ExecuteResult> {
-    return this.run(
-      {
-        action: "burnWlp",
-        accountId: this.accountId,
-        increasesExposure: false,
-        amountRaw: toRawTokenAmount(params.amount),
-      },
-      params,
-      () => this.tx.burnWlp({
-      ...this.executor.txBody(),
-      accountId: this.accountId,
-      amount: toRawTokenAmount(params.amount),
-    }),
-    );
+  burnWlp(params: WriteOptions & { amount: string | number }): Promise<ExecuteResult> {
+    return this.planBurnWlp(params).then((plan) => this.submit(plan, params));
   }
 
-  async cancelWlpBurn(
+  /** The plan burnWlp submits. Derives everything; authorizes and builds nothing. */
+  async planBurnWlp(params: WriteOptions & { amount: string | number }): Promise<TradePlan> {
+    const intent: WriteIntent = {
+      action: "burnWlp",
+      accountId: this.accountId,
+      increasesExposure: false,
+      amountRaw: toRawTokenAmount(params.amount),
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "burnWlp",
+        body: {
+          accountId: this.accountId,
+          amount: toRawTokenAmount(params.amount),
+        },
+      },
+      context: { note: "queues a WLP redemption through the withdrawal queue" },
+    };
+  }
+
+  cancelWlpBurn(
     params: WriteOptions & { requestId: string | number },
   ): Promise<ExecuteResult> {
-    return this.run(
-      {
-        action: "cancelWlpBurn",
-        accountId: this.accountId,
-        increasesExposure: false,
-        requestId: Number(params.requestId),
-      },
-      params,
-      () => this.tx.cancelWlpBurn({
-      ...this.executor.txBody(),
-      accountId: this.accountId,
-      requestId: String(params.requestId),
-    }),
-    );
+    return this.planCancelWlpBurn(params).then((plan) => this.submit(plan, params));
   }
 
-  async claimWlpRewards(params: WriteOptions = {}): Promise<ExecuteResult> {
-    return this.run(
-      { action: "claimWlpRewards", accountId: this.accountId, increasesExposure: false },
-      params,
-      () => this.tx.claimWlpRewards({
-      ...this.executor.txBody(),
+  /** The plan cancelWlpBurn submits. Derives everything; authorizes and builds nothing. */
+  async planCancelWlpBurn(
+    params: WriteOptions & { requestId: string | number },
+  ): Promise<TradePlan> {
+    const intent: WriteIntent = {
+      action: "cancelWlpBurn",
       accountId: this.accountId,
-    }),
-    );
+      increasesExposure: false,
+      requestId: Number(params.requestId),
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: {
+        kind: "cancelWlpBurn",
+        body: {
+          accountId: this.accountId,
+          requestId: String(params.requestId),
+        },
+      },
+      context: { note: "cancels a queued WLP redemption" },
+    };
+  }
+
+  claimWlpRewards(params: WriteOptions = {}): Promise<ExecuteResult> {
+    return this.planClaimWlpRewards(params).then((plan) => this.submit(plan, params));
+  }
+
+  /** The plan claimWlpRewards submits. Derives everything; authorizes and builds nothing. */
+  async planClaimWlpRewards(params: WriteOptions = {}): Promise<TradePlan> {
+    const intent: WriteIntent = {
+      action: "claimWlpRewards",
+      accountId: this.accountId,
+      increasesExposure: false,
+    };
+    return {
+      action: intent.action,
+      intent,
+      request: { kind: "claimWlpRewards", body: { accountId: this.accountId } },
+      context: { note: "claims accrued WLP rewards" },
+    };
   }
 
   // ─── Convenience reads ──────────────────────────────────────────────────
 
-  accounts(): Promise<AccountData[]> {
-    return this.read.accounts(this.executor.senderAddress);
+  /**
+   * The WaterX accounts an owner holds.
+   *
+   * `owner` is a parameter so this stays a read: without one it falls back to
+   * `ownerAddress`, which loads the key only when no owner was configured.
+   */
+  accounts(owner?: string): Promise<AccountData[]> {
+    return this.read.accounts(owner ?? this.ownerAddress);
   }
 
   positions(): Promise<Position[]> {
@@ -939,7 +1262,7 @@ export class WaterXAgent {
 
   private assertOwnerSigned(intent: string): void {
     if (this.executor.delegateSender !== undefined) {
-      throw new Error(
+      throw new ExecutionPolicyError(
         `${intent} is owner-only on chain; this process is signing as a delegate ` +
           `(WATERX_OWNER_ADDRESS is set). Run it with the owner key.`,
       );
@@ -952,7 +1275,9 @@ export class WaterXAgent {
     const match = positions.find((p) => p.ticker === ticker && p.id === String(positionId));
     if (match === undefined) {
       const open = positions.map((p) => `${p.ticker}#${p.id}`).join(", ") || "none";
-      throw new Error(`No open position ${ticker}#${String(positionId)}. Open positions: ${open}`);
+      throw new UsageError(
+        `No open position ${ticker}#${String(positionId)}. Open positions: ${open}`,
+      );
     }
     return match;
   }
@@ -962,7 +1287,7 @@ export class WaterXAgent {
     const match = orders.find((o) => o.ticker === ticker && o.id === String(orderId));
     if (match === undefined) {
       const open = orders.map((o) => `${o.ticker}#${o.id}`).join(", ") || "none";
-      throw new Error(`No resting order ${ticker}#${String(orderId)}. Open orders: ${open}`);
+      throw new UsageError(`No resting order ${ticker}#${String(orderId)}. Open orders: ${open}`);
     }
     return match;
   }
@@ -995,10 +1320,12 @@ function effectiveLeverage(
 
 function requireLeverage(params: { leverage?: number; size?: string | number }): number {
   if (params.leverage === undefined) {
-    throw new Error("Pass either `leverage` or `size` — the position cannot be sized without one.");
+    throw new UsageError(
+      "Pass either `leverage` or `size` — the position cannot be sized without one.",
+    );
   }
   if (!Number.isFinite(params.leverage) || params.leverage < 1) {
-    throw new Error(`Leverage ${String(params.leverage)} must be at least 1.`);
+    throw new UsageError(`Leverage ${String(params.leverage)} must be at least 1.`);
   }
   return params.leverage;
 }
@@ -1011,7 +1338,9 @@ function requireLeverage(params: { leverage?: number; size?: string | number }):
 function deriveSize(collateral: string | number, leverage: number, price: number): string {
   const notional = Number(collateral) * leverage;
   if (!Number.isFinite(notional) || notional <= 0) {
-    throw new Error(`Cannot size an order from collateral ${String(collateral)} at ${String(leverage)}x.`);
+    throw new UsageError(
+      `Cannot size an order from collateral ${String(collateral)} at ${String(leverage)}x.`,
+    );
   }
   return toRawSize((notional / price).toFixed(9));
 }
@@ -1062,7 +1391,7 @@ function assertBracketDirection(
 
   const ordered = isLong ? sl < tp : tp < sl;
   if (!ordered) {
-    throw new Error(
+    throw new UsageError(
       `On a ${isLong ? "long" : "short"}, take-profit ${String(tp)} and stop-loss ${String(sl)} are ` +
         `the wrong way round — check the pair before sending it.`,
     );
@@ -1071,10 +1400,10 @@ function assertBracketDirection(
 
 function reduceByPercent(sizeInAsset: number, percent: number | undefined): string {
   if (percent === undefined) {
-    throw new Error("reducePosition: pass either `size` or `percent`.");
+    throw new UsageError("reducePosition: pass either `size` or `percent`.");
   }
   if (!Number.isFinite(percent) || percent <= 0 || percent > 100) {
-    throw new Error(`reducePosition: percent ${String(percent)} must be within (0, 100].`);
+    throw new UsageError(`reducePosition: percent ${String(percent)} must be within (0, 100].`);
   }
   return ((sizeInAsset * percent) / 100).toFixed(9);
 }

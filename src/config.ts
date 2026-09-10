@@ -15,7 +15,7 @@ import { ACTION_RULES } from "./chain/verify.ts";
 /** Entrypoints the corpus has never captured, and why. */
 const UNCONFIRMED_ENTRYPOINTS: Readonly<Record<string, string>> = corpus.uncaptured;
 import { manifestGraceMs } from "./chain/deployment.ts";
-import { ExecutionPolicyError } from "./errors.ts";
+import { ConfigError, ExecutionPolicyError } from "./errors.ts";
 import type { PolicyMode, PolicyScope } from "./policy.ts";
 
 export type Network = "testnet" | "mainnet";
@@ -339,8 +339,9 @@ function parsePositiveInt(raw: string | undefined): number | undefined {
 /** Read `WATERX_ACCOUNT_ID`, failing with an actionable message when unset. */
 export function requireAccountId(config: AgentConfig): string {
   if (config.accountId === undefined) {
-    throw new Error(
-      "No WaterX account configured. Run `npm run create-account`, then set WATERX_ACCOUNT_ID in .env.",
+    throw new ConfigError(
+      "No WaterX account configured. Run `pnpm run create-account -- --name <name> --yes`, wait for " +
+        "the indexer, then `pnpm run accounts` and put the id in WATERX_ACCOUNT_ID.",
     );
   }
   return config.accountId;

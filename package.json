@@ -5,6 +5,12 @@
   "private": true,
   "scripts": {
     "doctor": "tsx scripts/setup/doctor.ts",
+    "preview": "tsx scripts/agent/preview.ts",
+    "approve": "tsx scripts/agent/approve.ts",
+    "execute": "tsx scripts/agent/execute.ts",
+    "reconcile": "tsx scripts/agent/reconcile.ts",
+    "approvals": "tsx scripts/agent/approvals.ts",
+    "limits": "tsx scripts/agent/limits.ts",
     "typecheck": "tsc --noEmit",
     "generate-wallet": "tsx scripts/setup/generate-wallet.ts",
     "fund-sui": "tsx scripts/setup/fund-sui.ts",
@@ -47,7 +53,8 @@
     "generate-abi": "tsx scripts/dev/generate-abi.ts",
     "capture-corpus": "tsx scripts/dev/capture-abi-corpus.ts",
     "check-read-api": "tsx scripts/dev/check-read-api.ts",
-    "check-verifier": "tsx scripts/dev/check-verifier.ts"
+    "check-verifier": "tsx scripts/dev/check-verifier.ts",
+    "check-corpus": "tsx scripts/dev/check-corpus.ts"
   },
   "dependencies": {
     "@mysten/sui": "2.9.1",

@@ -10,6 +10,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The deployment moves on its own; the check that notices has to run on its
+  # own too, not only when someone opens a pull request.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
 
 jobs:
   check:
@@ -34,3 +39,35 @@ jobs:
       - run: pnpm run typecheck
 
       - run: pnpm test
+
+  # The corpus records argument layouts captured from real transactions, and
+  # every positional check in `verify.ts` reads them. A file does not go stale
+  # by itself, so nothing above can notice when the deployment moves on — this
+  # job asks the deployment directly.
+  #
+  # Separate from `check` on purpose. It needs the network, and a config
+  # document that is briefly unreachable must not read as "the layouts are
+  # wrong" (the script exits 7 for that, and the step below says so). Daily,
+  # plus whenever a change touches the fixture or the code that reads it.
+  corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Is the ABI corpus still a description of the deployment?
+        run: |
+          set +e
+          pnpm run check-corpus
+          status=$?
+          set -e
+          case $status in
+            0) exit 0 ;;
+            7) echo "::warning::the deployment config was unreachable; corpus freshness is unknown" ; exit 0 ;;
+            *) echo "::error::the ABI corpus no longer describes the running deployment — run \`pnpm run capture-corpus\`" ; exit 1 ;;
+          esac

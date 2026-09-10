@@ -9,6 +9,7 @@
  */
 import type { ReadApi } from "../api/read.ts";
 import type { MarketInfo, TickerData } from "../api/types.ts";
+import { UsageError } from "../errors.ts";
 
 /** Tradeable states. `not_listed` markets exist in config but have no metadata. */
 const TRADEABLE: ReadonlySet<MarketInfo["status"]> = new Set(["open", "closed", "paused"]);
@@ -48,10 +49,10 @@ export class MarketRegistry {
     const direct = markets.get(raw) ?? markets.get(`${raw}USD`);
     if (direct === undefined) {
       const available = (await this.tradeableTickers()).join(", ");
-      throw new Error(`Unknown market "${input}". Available: ${available}`);
+      throw new UsageError(`Unknown market "${input}". Available: ${available}`);
     }
     if (!TRADEABLE.has(direct.status)) {
-      throw new Error(`Market ${direct.ticker} is not tradeable (status: ${direct.status}).`);
+      throw new UsageError(`Market ${direct.ticker} is not tradeable (status: ${direct.status}).`);
     }
     return direct.ticker;
   }
@@ -105,7 +106,7 @@ export function assertNotCrossing(input: {
 
   const side = input.isLong ? "long" : "short";
   const relation = input.isLong ? "above" : "below";
-  throw new Error(
+  throw new UsageError(
     `${input.ticker}: a ${side} limit at ${String(input.triggerPrice)} is ${relation} the market ` +
       `price ${String(input.spotPrice)}, so it would fill immediately — the contract rejects that ` +
       `(ECrossingLimitOrder). Send a market order if immediate execution is what you want.`,
