@@ -1,41 +1,47 @@
 /**
- * Place a limit or stop order.
- * Usage: npx tsx scripts/orders/place-order.ts --base BTC --long --collateral 10 --leverage 5 --trigger-price 60000 [--stop]
+ * Place a resting limit or stop order.
+ *
+ * A crossing limit — a long above market, a short below it — is rejected before
+ * the request is sent; the contract aborts it as `ECrossingLimitOrder`.
  */
-import { initSigner, requireAccountId, parseArgs, usdcToRaw, fmtTx } from "../lib/init.ts";
-import { placeOrder } from "../../src/agent/index.ts";
-import type { BaseAsset } from "../../src/agent/index.ts";
+import { confirmed, initAgent, parseArgs, reportTx, run } from "../lib/cli.ts";
 
-const signer = initSigner();
-const accountId = requireAccountId();
 const args = parseArgs(
   {
-    base: { required: true, desc: "Market: BTC, ETH, SOL, SUI, etc." },
-    long: { flag: true, desc: "Long direction" },
-    short: { flag: true, desc: "Short direction" },
-    collateral: { required: true, desc: "Collateral amount in USDC" },
-    leverage: { default: "1", desc: "Leverage multiplier" },
-    triggerPrice: { required: true, desc: "Trigger price in USD" },
-    stop: { flag: true, desc: "Make it a stop order (default: limit)" },
+    ticker: { desc: "Market, e.g. BTC", required: true },
+    short: { desc: "Place a short (default is long)", flag: true },
+    collateral: { desc: "Collateral in display USD", required: true },
+    leverage: { desc: "Leverage multiplier (or pass --size)" },
+    size: { desc: "Base-asset size — overrides --leverage" },
+    triggerPrice: { desc: "Trigger price in USD", required: true },
+    stop: { desc: "Stop order rather than limit", flag: true },
+    reduceOnly: { desc: "Reduce-only", flag: true },
+    linkedPositionId: { desc: "Attach to an existing position" },
+    tp: { desc: "Take-profit trigger price" },
+    sl: { desc: "Stop-loss trigger price" },
+    yes: { desc: "Confirm this write", flag: true },
+    policy: { desc: "Narrow the execution policy for this invocation" },
   },
-  "scripts/orders/place-order.ts",
+  "place-order",
 );
 
-const isLong = args.long === "true" || args.short !== "true";
-const isStop = args.stop === "true";
-const orderType = isStop ? "STOP" : "LIMIT";
-const direction = isLong ? "LONG" : "SHORT";
-
-console.log(`Placing ${orderType} ${direction} on ${args.base} @ $${args.triggerPrice}...`);
-
-const result = await placeOrder(signer, {
-  accountId,
-  base: args.base as BaseAsset,
-  isLong,
-  collateralAmount: usdcToRaw(args.collateral),
-  leverage: Number(args.leverage),
-  triggerPrice: Number(args.triggerPrice),
-  isStopOrder: isStop,
+await run(async () => {
+  const agent = initAgent();
+  const result = await agent.placeLimitOrder({
+    ticker: args.ticker ?? "",
+    isLong: args.short !== "true",
+    collateral: args.collateral ?? "0",
+    ...(args.leverage !== undefined ? { leverage: Number(args.leverage) } : {}),
+    ...(args.size !== undefined ? { size: args.size } : {}),
+    triggerPrice: args.triggerPrice ?? "0",
+    ...(args.stop === "true" ? { isStopOrder: true } : {}),
+    ...(args.reduceOnly === "true" ? { reduceOnly: true } : {}),
+    ...(args.linkedPositionId !== undefined
+      ? { linkedPositionId: Number(args.linkedPositionId) }
+      : {}),
+    ...(args.tp !== undefined ? { takeProfitPrice: args.tp } : {}),
+    ...(args.sl !== undefined ? { stopLossPrice: args.sl } : {}),
+    confirm: confirmed(),
+  });
+  reportTx(agent, "place-order", result);
 });
-
-console.log(`Order placed: ${fmtTx(result.digest)}`);

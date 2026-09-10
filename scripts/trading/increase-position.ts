@@ -1,31 +1,30 @@
-/**
- * Increase an existing position's size.
- * Usage: npx tsx scripts/trading/increase-position.ts --base BTC --position-id 0 --collateral 5 [--leverage 5]
- */
-import { initSigner, requireAccountId, parseArgs, usdcToRaw, fmtTx } from "../lib/init.ts";
-import { increasePosition } from "../../src/agent/index.ts";
-import type { BaseAsset } from "../../src/agent/index.ts";
+/** Add collateral and size to an open position. */
+import { asNumber, confirmed, initAgent, parseArgs, reportTx, run } from "../lib/cli.ts";
 
-const signer = initSigner();
-const accountId = requireAccountId();
 const args = parseArgs(
   {
-    base: { required: true, desc: "Market: BTC, ETH, SOL, SUI, etc." },
-    positionId: { required: true, desc: "Position ID to increase" },
-    collateral: { required: true, desc: "Additional collateral in USDC" },
-    leverage: { desc: "Leverage multiplier" },
+    ticker: { desc: "Market, e.g. BTC", required: true },
+    positionId: { desc: "Position id", required: true },
+    collateral: { desc: "Additional collateral in display USD", required: true },
+    leverage: { desc: "Leverage to size the addition at (or pass --size)" },
+    size: { desc: "Base-asset size to add — overrides --leverage" },
+    slippage: { desc: "Slippage bound in percent", default: "0.5" },
+    yes: { desc: "Confirm this write", flag: true },
+    policy: { desc: "Narrow the execution policy for this invocation" },
   },
-  "scripts/trading/increase-position.ts",
+  "increase-position",
 );
 
-console.log(`Increasing position #${args.positionId} on ${args.base} by ${args.collateral} USDC...`);
-
-const result = await increasePosition(signer, {
-  accountId,
-  positionId: Number(args.positionId),
-  base: args.base as BaseAsset,
-  collateralAmount: usdcToRaw(args.collateral),
-  leverage: args.leverage ? Number(args.leverage) : undefined,
+await run(async () => {
+  const agent = initAgent();
+  const result = await agent.increasePosition({
+    ticker: args.ticker ?? "",
+    positionId: Number(args.positionId),
+    collateral: args.collateral ?? "0",
+    ...(args.leverage !== undefined ? { leverage: Number(args.leverage) } : {}),
+    ...(args.size !== undefined ? { size: args.size } : {}),
+    slippagePercent: asNumber(args.slippage) ?? 0.5,
+    confirm: confirmed(),
+  });
+  reportTx(agent, "increase-position", result);
 });
-
-console.log(`Position increased: ${fmtTx(result.digest)}`);

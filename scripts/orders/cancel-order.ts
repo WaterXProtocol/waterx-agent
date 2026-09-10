@@ -1,29 +1,22 @@
-/**
- * Cancel an existing order.
- * Usage: npx tsx scripts/orders/cancel-order.ts --base BTC --order-id 0
- */
-import { initSigner, requireAccountId, parseArgs, fmtTx } from "../lib/init.ts";
-import { cancelOrder } from "../../src/agent/index.ts";
-import type { BaseAsset } from "../../src/agent/index.ts";
+/** Cancel a resting order. */
+import { confirmed, initAgent, parseArgs, reportTx, run } from "../lib/cli.ts";
 
-const signer = initSigner();
-const accountId = requireAccountId();
 const args = parseArgs(
   {
-    base: { required: true, desc: "Market: BTC, ETH, SOL, SUI, etc." },
-    orderId: { required: true, desc: "Order ID to cancel" },
-    orderType: { default: "255", desc: "0=limit_buy, 1=limit_sell, 2=stop_buy, 3=stop_sell, 255=wildcard" },
+    ticker: { desc: "Market, e.g. BTC", required: true },
+    orderId: { desc: "Order id", required: true },
+    yes: { desc: "Confirm this write", flag: true },
+    policy: { desc: "Narrow the execution policy for this invocation" },
   },
-  "scripts/orders/cancel-order.ts",
+  "cancel-order",
 );
 
-console.log(`Cancelling order #${args.orderId} on ${args.base}...`);
-
-const result = await cancelOrder(signer, {
-  accountId,
-  base: args.base as BaseAsset,
-  orderId: Number(args.orderId),
-  orderTypeTag: Number(args.orderType),
+await run(async () => {
+  const agent = initAgent();
+  const result = await agent.cancelOrder({
+    ticker: args.ticker ?? "",
+    orderId: Number(args.orderId),
+    confirm: confirmed(),
+  });
+  reportTx(agent, "cancel-order", result);
 });
-
-console.log(`Order cancelled: ${fmtTx(result.digest)}`);

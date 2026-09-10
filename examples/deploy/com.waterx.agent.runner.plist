@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  launchd unit for the runner (macOS).
+
+  The runner is a foreground process; nothing in this repo restarts it after a
+  reboot or a crash, and nothing should — supervision is the operating system's
+  job and building a second one badly is worse than using the one that exists.
+
+    cp examples/deploy/com.waterx.agent.runner.plist ~/Library/LaunchAgents/
+    launchctl load  ~/Library/LaunchAgents/com.waterx.agent.runner.plist
+    launchctl unload ~/Library/LaunchAgents/com.waterx.agent.runner.plist
+
+  KeepAlive restarts it on exit. That is safe precisely because a restart is
+  safe: the job store survives, and anything ambiguous is reconciled against the
+  chain before a new submission goes out.
+
+  Note there is no passphrase here. A keystore-backed signer must already be
+  unlocked and resident; a machine that boots unattended reads its passphrase
+  from a 0600 file, never from an environment variable — `ps eww` shows those to
+  anyone on the box.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.waterx.agent.runner</string>
+
+  <key>WorkingDirectory</key>
+  <string>/CHANGE/ME/waterx-agent</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/pnpm</string>
+    <string>run</string>
+    <string>runner</string>
+  </array>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>WATERX_EXECUTION_POLICY</key>
+    <string>delegated-auto</string>
+    <key>WATERX_POLICY_SCOPE_FILE</key>
+    <string>/CHANGE/ME/waterx-agent/policy.json</string>
+    <key>WATERX_SIGNER_COMMAND</key>
+    <string>["waterx-predict-keystore","sign"]</string>
+    <key>WATERX_AGENT_WALLET</key>
+    <string>0xCHANGEME</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <!-- Do not restart faster than this; a runner that cannot start should not
+       spin, it should be visible in the log. -->
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <key>StandardOutPath</key>
+  <string>/CHANGE/ME/waterx-agent/runner.log</string>
+  <key>StandardErrorPath</key>
+  <string>/CHANGE/ME/waterx-agent/runner.err</string>
+</dict>
+</plist>

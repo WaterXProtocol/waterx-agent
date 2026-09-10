@@ -1,18 +1,30 @@
-/**
- * Create a WaterX trading account (or find existing).
- * Usage: npx tsx scripts/setup/create-account.ts
- */
-import { initSigner } from "../lib/init.ts";
-import { getOrCreateAccount } from "../../src/agent/index.ts";
+/** Create a WaterX trading account. The account id is indexed asynchronously. */
+import { confirmed, initAgent, parseArgs, reportTx, run, show } from "../lib/cli.ts";
 
-const signer = initSigner();
+const args = parseArgs(
+  {
+    name: { desc: "Account display name (max 32 chars)", default: "agent" },
+    referralCode: { desc: "Referral code to bind at creation" },
+    yes: { desc: "Confirm this write", flag: true },
+    policy: { desc: "Narrow the execution policy for this invocation" },
+  },
+  "create-account",
+);
 
-console.log("Looking for existing WaterX account...");
-const { accountId, isNew } = await getOrCreateAccount(signer);
+await run(async () => {
+  const agent = initAgent();
+  const existing = await agent.accounts();
+  if (existing.length > 0) {
+    console.log("This wallet already owns:");
+    show(existing);
+  }
 
-if (isNew) {
-  console.log(`Created new account: ${accountId}`);
-} else {
-  console.log(`Found existing account: ${accountId}`);
-}
-console.log("Account ID saved to .env (WATERX_ACCOUNT_ID).");
+  const result = await agent.createAccount({
+    name: args.name ?? "agent",
+    ...(args.referralCode !== undefined ? { referralCode: args.referralCode } : {}),
+    confirm: confirmed(),
+  });
+  reportTx(agent, "create-account", result);
+  console.log("\nThe indexer assigns the account id; re-run `npm run accounts` in a moment,");
+  console.log("then set WATERX_ACCOUNT_ID in .env.");
+});

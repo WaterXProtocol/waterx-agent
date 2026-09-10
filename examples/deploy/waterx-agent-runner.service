@@ -1,0 +1,41 @@
+# systemd unit for the runner (Linux).
+#
+#   cp examples/deploy/waterx-agent-runner.service ~/.config/systemd/user/
+#   systemctl --user enable --now waterx-agent-runner
+#   journalctl --user -u waterx-agent-runner -f
+#
+# Restart=always is safe because a restart is safe: the job store survives, and
+# anything left ambiguous is reconciled against the chain before a new
+# submission goes out.
+#
+# The alternative — `cron` running `pnpm run runner -- --once` every minute —
+# works too, and the store's lock file is what stops two runs overlapping. A
+# long-lived process is preferred only because it reacts within one tick instead
+# of within one minute.
+
+[Unit]
+Description=WaterX agent runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/CHANGE/ME/waterx-agent
+ExecStart=/usr/bin/pnpm run runner
+
+Environment=WATERX_EXECUTION_POLICY=delegated-auto
+Environment=WATERX_POLICY_SCOPE_FILE=/CHANGE/ME/waterx-agent/policy.json
+Environment=WATERX_SIGNER_COMMAND=["waterx-predict-keystore","sign"]
+Environment=WATERX_AGENT_WALLET=0xCHANGEME
+
+Restart=always
+# A runner that cannot start should be visible in the journal, not spinning.
+RestartSec=30
+
+# SIGTERM lets it finish the pass in flight; abandoning one halfway would
+# manufacture, on every restart, the ambiguity the ledger exists to recover from.
+KillSignal=SIGTERM
+TimeoutStopSec=120
+
+[Install]
+WantedBy=default.target
