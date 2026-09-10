@@ -37,12 +37,16 @@ describe("classify", () => {
     expect(outcome.nextCommand).toContain("sub_1");
   });
 
-  it("reports an ambiguity with no digest as ambiguous too", () => {
-    // Nothing was signed, but this process cannot prove that to a later one —
-    // and the ledger is what settles it, not a guess made here.
+  it("still hands over a reconcile command when it knows no digest", () => {
+    // The timeout can fire before anything reported a digest. That is not
+    // proof nothing was sent — giving up waiting does not cancel the work — so
+    // the answer is to reconcile broadly rather than to leave the agent
+    // deciding for itself in the one situation where it must not.
     const outcome = classify(new AmbiguousSubmissionError("timed out early", undefined, undefined));
     expect(outcome.status).toBe("ambiguous");
-    expect(outcome.nextCommand).toBeUndefined();
+    expect(outcome.submitted, "conservative: may have been").toBe(true);
+    expect(outcome.retryable).toBe(false);
+    expect(outcome.nextCommand).toBe("pnpm run reconcile -- --all --json");
   });
 
   it("calls a policy refusal a policy refusal, with nothing submitted", () => {

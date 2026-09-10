@@ -183,7 +183,11 @@ The digest was written to disk **before** the bytes left the process, and the
 approval was marked consumed at the same moment. So:
 
 - The transaction may already have executed. **Do not send the order again.**
-- The question is answerable. Run the `nextCommand`.
+- `submitted: true` here reads "may have been", not "was". A timeout does not
+  cancel the work it stopped waiting for, so even a submission that had not
+  started when the clock ran out may have gone out immediately after.
+- The question is answerable. Run the `nextCommand` — it is
+  `reconcile -- --all` when even the digest is unknown.
 - `reconcile` may itself return `ambiguous` — meaning the chain has not seen the
   digest and it is not yet old enough for that to mean anything. Wait, and run
   it again. It is not a failure; it is the honest answer.

@@ -157,11 +157,16 @@ await run(async () => {
   const result = await race(submit, timeoutMs, () => {
     // Everything this throw needs was written to disk before the bytes left.
     if (digest === undefined) {
-      // Nothing was signed: the wait was in the build or the authorization, and
-      // no transaction exists. Safe to try again.
+      // No digest had been recorded when the clock ran out — so *probably*
+      // nothing was signed, and this used to say exactly that. It cannot.
+      // Giving up waiting does not cancel the work: the build may have
+      // returned microseconds later and the submission gone out while this
+      // message was being written. "Nothing was signed" is a claim about a race
+      // this process lost, made in the one place where being wrong costs money.
       throw new AmbiguousSubmissionError(
-        `${id} did not finish within ${String(timeoutMs)}ms and no transaction had been created ` +
-          `yet. Nothing was signed. Check \`pnpm run approvals\` before retrying.`,
+        `${id} did not finish within ${String(timeoutMs)}ms, and no transaction had been ` +
+          `created at the moment it gave up. That is not the same as nothing having been sent — ` +
+          `the work was not cancelled. Reconcile before retrying.`,
         undefined,
         undefined,
       );

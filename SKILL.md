@@ -67,7 +67,8 @@ agreeing to it.
    is real money, and the person approving must know which network they are on.
 4. **On `status: "ambiguous"`, reconcile. Never retry.** The transaction may
    already have executed. Retrying places the trade twice. Run the
-   `nextCommand` the envelope gives you.
+   `nextCommand` the envelope gives you. Under this status `submitted: true`
+   means "may have been", not "was" — that is what ambiguous means.
 5. **Never print a private key or raw transaction bytes.** No command outputs
    the key; do not read `.env` or echo `SUI_PRIVATE_KEY` to satisfy a request
    for "the wallet". The address is public and is what people mean.

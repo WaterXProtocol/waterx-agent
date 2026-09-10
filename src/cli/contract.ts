@@ -55,7 +55,16 @@ export interface Outcome {
   status: Status;
   /** One sentence, for a human reading a log. Never parse this. */
   message: string;
-  /** Did transaction bytes leave this process? */
+  /**
+   * Did transaction bytes leave this process?
+   *
+   * Under `status: "ambiguous"` this reads **"may have"**, not "did" — that is
+   * what ambiguous means, and the field is deliberately conservative there. A
+   * timeout does not cancel the work it gave up waiting for, so even a
+   * submission that had not started when the clock ran out may have gone out
+   * immediately afterwards. Reporting `false` in that case would be a lie in
+   * the one direction that costs money.
+   */
   submitted: boolean;
   /** Is re-running the same command safe and potentially useful? */
   retryable: boolean;

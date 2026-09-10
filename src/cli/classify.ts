@@ -41,11 +41,17 @@ export function classify(error: unknown): Outcome {
       message: error.message,
       submitted: true,
       reconcileRequired: true,
-      ...(error.submissionId !== undefined
-        ? { nextCommand: `pnpm run reconcile -- --id ${error.submissionId} --json` }
-        : error.digest !== undefined
-          ? { nextCommand: `pnpm run reconcile -- --digest ${error.digest} --json` }
-          : {}),
+      nextCommand:
+        error.submissionId !== undefined
+          ? `pnpm run reconcile -- --id ${error.submissionId} --json`
+          : error.digest !== undefined
+            ? `pnpm run reconcile -- --digest ${error.digest} --json`
+            : // Neither is known, which is itself the reason to reconcile
+              // broadly: if anything did go out, it recorded itself before it
+              // left, and `--all` is what finds it. Leaving `nextCommand`
+              // unset here told an agent to work out its own next move in the
+              // one situation where it must not.
+              `pnpm run reconcile -- --all --json`,
       details: { digest: error.digest, submissionId: error.submissionId },
     };
   }
