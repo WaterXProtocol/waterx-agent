@@ -14,6 +14,18 @@ import { initAgent, note, parseArgs, run, show } from "../lib/cli.ts";
 
 parseArgs({}, "balance");
 
+/**
+ * A `function`, not a `const` arrow.
+ *
+ * The script body runs at `await run(...)` on the top level, which is BEFORE a
+ * `const` further down the file has been initialised — so the arrow version
+ * threw `Cannot access 'fmt' before initialization` on every invocation.
+ * TypeScript is happy with it; only running the command finds it.
+ */
+function fmt(value: number | undefined): string {
+  return value === undefined ? "—" : `$${value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}`;
+}
+
 await run(async () => {
   const agent = initAgent();
   const overview = (await agent.read.overview(agent.accountId)) as Record<string, unknown>;
@@ -37,6 +49,3 @@ await run(async () => {
 
   show(overview, { rendered: true });
 });
-
-const fmt = (value: number | undefined): string =>
-  value === undefined ? "—" : `$${value.toFixed(6).replace(/0+$/, "").replace(/\.$/, "")}`;

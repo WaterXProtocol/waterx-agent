@@ -871,8 +871,15 @@ different one.
 ```bash
 pnpm run typecheck
 pnpm test
+pnpm run smoke          # start every read command for real and check its envelope
 pnpm run check-corpus   # is the ABI fixture still a description of the deployment?
 ```
+
+`smoke` exists because the hermetic suite cannot catch a command that fails on
+invocation: `balance` once shipped with a top-level initialisation error that
+typechecked and passed every unit test, because nothing had ever run it. A
+contract that promises "one JSON document on stdout" is a promise about a
+process, and only starting the process tests it.
 
 `check-corpus` needs the network and runs as its own CI job, daily. The suite
 above does not: it is hermetic, and `test/setup.ts` clears every `WATERX_*` /

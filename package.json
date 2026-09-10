@@ -55,7 +55,8 @@
     "capture-corpus": "tsx scripts/dev/capture-abi-corpus.ts",
     "check-read-api": "tsx scripts/dev/check-read-api.ts",
     "check-verifier": "tsx scripts/dev/check-verifier.ts",
-    "check-corpus": "tsx scripts/dev/check-corpus.ts"
+    "check-corpus": "tsx scripts/dev/check-corpus.ts",
+    "smoke": "tsx scripts/dev/smoke.ts"
   },
   "dependencies": {
     "@mysten/sui": "2.9.1",

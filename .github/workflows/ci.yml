@@ -60,6 +60,20 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # Every read command, started for real. The hermetic suite cannot catch a
+      # command that fails on invocation — `balance` shipped with a top-level
+      # TDZ error that typechecked and passed every unit test, because nothing
+      # had ever run it.
+      - name: Does every read command answer with a valid envelope?
+        run: |
+          set +e
+          pnpm run smoke
+          status=$?
+          set -e
+          if [ $status -ne 0 ]; then
+            echo "::warning::the read commands could not all be verified (network, or a real fault — see the log)"
+          fi
+
       - name: Is the ABI corpus still a description of the deployment?
         run: |
           set +e
