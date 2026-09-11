@@ -11,13 +11,13 @@
  * collateral. Those are not errors here, they are answers.
  */
 import { list as listApprovals } from "../../src/agent/approvals.ts";
-import { delegationStatus } from "../../src/agent/delegation.ts";
+import { delegationStatus, perpGrantCommand } from "../../src/agent/delegation.ts";
 import { decide } from "../../src/agent/guidance.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
 import { signsAsDelegate } from "../../src/config.ts";
 import { runDoctor } from "../../src/doctor.ts";
-import { succeeded } from "../../src/cli/contract.ts";
+import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 parseArgs({}, "next");
@@ -47,6 +47,11 @@ await run(async () => {
     const status = delegationStatus({
       network: agent.config.network,
       delegateAddress: agent.signer.address,
+      grantCommand: perpGrantCommand({
+        agentWallet: agent.signer.address,
+        ...(account === undefined ? {} : { accountId: account }),
+        invoke,
+      }),
       ...(agent.config.ownerAddress === undefined ? {} : { ownerAddress: agent.config.ownerAddress }),
       ...(account === undefined ? {} : { accountId: account }),
       ...(delegates === undefined ? {} : { delegates }),

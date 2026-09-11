@@ -10,10 +10,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  AUTHORIZE_PATH,
-  authorizeUrl,
   CONSOLE_ENDPOINTS,
+  delegatesUrl,
   delegationStatus,
+  perpAuthorizeUrl,
   REQUESTED_PERMISSION_NAMES,
 } from "../src/agent/delegation.ts";
 import type { DelegateData } from "../src/api/types.ts";
@@ -37,41 +37,35 @@ const grant = (over: Partial<DelegateData> = {}): DelegateData =>
     ...over,
   }) as DelegateData;
 
-describe("the link an owner opens", () => {
-  it("points at the console paired with the deployment, per network", () => {
-    // A guess is worse than nothing here. An earlier revision pointed at a page
-    // found by probing for a 200; it does not grant anything, and an owner sent
-    // there concludes the product is broken rather than that the link was
-    // wrong.
+describe("where an owner is sent", () => {
+  it("knows the console paired with each deployment", () => {
     expect(CONSOLE_ENDPOINTS.mainnet).toBe("https://waterx.app");
     expect(CONSOLE_ENDPOINTS.testnet).toBe("https://testnet.waterx.app");
-    expect(AUTHORIZE_PATH).toBe("/agent/authorize");
   });
 
-  it("carries the agent wallet, and a label and account when given", () => {
-    const url = new URL(
-      authorizeUrl({ network: "mainnet", agentWallet: AGENT, label: "my-bot", accountId: ACCOUNT }),
-    );
-    expect(url.origin).toBe("https://waterx.app");
-    expect(url.pathname).toBe("/agent/authorize");
-    expect(url.searchParams.get("agent")).toBe(AGENT);
-    expect(url.searchParams.get("label")).toBe("my-bot");
-    expect(url.searchParams.get("account")).toBe(ACCOUNT);
+  it("has no perp authorize page to point at, and does not invent one", () => {
+    // The console's `/agent/authorize` grants prediction markets and says, on
+    // the page itself, that it does not grant perps. Sending a perp owner there
+    // is worse than sending them nowhere: they connect a wallet, sign, and have
+    // granted nothing this package can use.
+    expect(perpAuthorizeUrl()).toBeUndefined();
   });
 
-  it("lets nothing else ride along", () => {
-    // The link confers no authority — it is a page to visit, not a credential —
-    // which is what makes it safe to paste into a chat. A token here would turn
-    // every paste into a leak.
-    const url = new URL(authorizeUrl({ network: "testnet", agentWallet: AGENT }));
-    expect([...url.searchParams.keys()]).toEqual(["agent"]);
+  it("uses it once WaterX ships one, without a code change", () => {
+    vi.stubEnv("WATERX_PERP_AUTHORIZE_URL", "https://waterx.app/agent/authorize-perp");
+    expect(perpAuthorizeUrl()).toBe("https://waterx.app/agent/authorize-perp");
+    vi.unstubAllEnvs();
+  });
+
+  it("sends them to Account → Delegates to review and revoke", () => {
+    // Verified from the console's own copy: "Revoke any time from
+    // Account → Delegates."
+    expect(delegatesUrl("mainnet")).toBe("https://waterx.app/en/account");
   });
 
   it("can be pointed at a private console", () => {
     vi.stubEnv("WATERX_CONSOLE_URL", "https://console.internal/");
-    expect(authorizeUrl({ network: "mainnet", agentWallet: AGENT })).toBe(
-      `https://console.internal/agent/authorize?agent=${AGENT}`,
-    );
+    expect(delegatesUrl("mainnet")).toBe("https://console.internal/en/account");
     vi.unstubAllEnvs();
   });
 });
@@ -91,11 +85,17 @@ describe("the delegate handshake", () => {
     expect(delegationStatus({ network: "mainnet",}).state).toBe("no-wallet");
   });
 
-  it("tells the agent to hand its address to the owner", () => {
-    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+  it("tells the agent to hand its address to the owner, with the command that works", () => {
+    const status = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      grantCommand: "npx waterx add-delegate --delegate 0xa --yes --json",
+    });
     expect(status.state).toBe("awaiting-grant");
     expect(status.headline).toContain(AGENT);
-    expect(status.headline).toContain(status.grantUrl);
+    // The command, not a web page that cannot grant perps.
+    expect(status.headline).toContain("add-delegate");
+    expect(status.headline).toContain("does not grant perps");
   });
 
   it("says an account id cannot be looked up from a delegate key", () => {

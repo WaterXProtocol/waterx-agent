@@ -10,7 +10,12 @@
  * wallet, and an agent that could make it for them would be an agent that could
  * grant itself authority.
  */
-import { delegationStatus, REQUESTED_PERMISSION_NAMES, REQUESTED_PERP_PERMISSIONS } from "../../src/agent/delegation.ts";
+import {
+  delegationStatus,
+  perpGrantCommand,
+  REQUESTED_PERMISSION_NAMES,
+  REQUESTED_PERP_PERMISSIONS,
+} from "../../src/agent/delegation.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
 import type { DelegateData } from "../../src/api/types.ts";
@@ -49,6 +54,15 @@ await run(async () => {
   const status = delegationStatus({
     network: agent.config.network,
     ...(args.label === undefined ? {} : { label: args.label }),
+    ...(delegateAddress === undefined
+      ? {}
+      : {
+          grantCommand: perpGrantCommand({
+            agentWallet: delegateAddress,
+            ...(accountId === undefined ? {} : { accountId }),
+            invoke,
+          }),
+        }),
     ...(delegateAddress === undefined ? {} : { delegateAddress }),
     ...(ownerAddress === undefined ? {} : { ownerAddress }),
     ...(accountId === undefined ? {} : { accountId }),
@@ -63,7 +77,11 @@ await run(async () => {
   }
   if (status.ownerAddress !== undefined) note(`  owner          ${status.ownerAddress}`);
   if (status.accountId !== undefined) note(`  account        ${status.accountId}`);
-  note(`  grant at       ${status.grantUrl}`);
+  note(`  the owner runs ${status.grantCommand ?? "(needs a wallet first)"}`);
+  note(`                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account`);
+  note(`  review/revoke  ${status.grantUrl}  (Account → Delegates)`);
+  note(`  note           the console's /agent/authorize page grants PREDICTION MARKETS and`);
+  note(`                 states it does not grant perps — it will not work for this agent`);
   note(`  asks for       ${Object.keys(REQUESTED_PERMISSION_NAMES).join(", ")}`);
   note(`  never asks for DEPOSIT_COLLATERAL, WITHDRAW_COLLATERAL — funds-out is owner-only on chain`);
   if (status.granted !== undefined) note(`  granted        ${status.granted.join(", ") || "none"}`);
@@ -80,6 +98,7 @@ await run(async () => {
     {
       ...status,
       network: agent.config.network,
+      grantCommand: status.grantCommand ?? null,
       requestedPerpPermissions: REQUESTED_PERP_PERMISSIONS,
       requestedPermissionNames: Object.keys(REQUESTED_PERMISSION_NAMES),
       next,
