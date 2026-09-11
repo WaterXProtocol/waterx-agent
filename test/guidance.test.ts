@@ -22,6 +22,7 @@ const ok: Situation = {
   orders: 0,
   blockers: [],
   network: "testnet",
+  mode: "owner",
 };
 
 describe("what to do next", () => {
@@ -67,6 +68,46 @@ describe("what to do next", () => {
     const g = decide({ ...ok, configured: false, missing: { signer: true, gas: false, account: true } });
     expect(g.state).toBe("not-set-up");
     expect(g.suggestions.map((s) => s.command).join(" ")).toContain("bootstrap");
+  });
+
+  it("offers the delegate path first, and asks for no money to do it", () => {
+    // The correction that prompted this. A wallet with nothing granted to it
+    // was told to fund itself and create an account — solving a problem it does
+    // not have. A delegate needs no gas (the backend sponsors it), no account
+    // and no collateral; the owner keeps all three.
+    const g = decide({ ...ok, mode: "undecided", configured: false, network: "mainnet" });
+    expect(g.state).toBe("awaiting-grant");
+    expect(g.headline).toContain("grants THIS address");
+    expect(g.headline).toContain("cannot withdraw");
+    expect(g.headline).toContain("no SUI of its own");
+    expect(g.suggestions[0]?.command).toContain("onboard");
+    // The owner path stays available, and says what it costs.
+    expect(g.suggestions[1]?.command).toContain("--create-account");
+    expect(g.suggestions[1]?.what).toContain("SUI for gas");
+  });
+
+  it("does not ask a would-be delegate for gas", () => {
+    // Gas is an owner-path requirement. Reaching the gas branch from
+    // `undecided` is the bug this ordering exists to prevent.
+    const g = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      missing: { signer: false, gas: true, account: true },
+    });
+    expect(g.state).toBe("awaiting-grant");
+    expect(g.headline).not.toContain("no SUI, so nothing can be sent");
+  });
+
+  it("still asks for gas on the owner path, where it is really needed", () => {
+    const g = decide({
+      ...ok,
+      mode: "owner",
+      configured: false,
+      missing: { signer: false, gas: true, account: false },
+    });
+    expect(g.state).toBe("not-set-up");
+    expect(g.headline).toContain("no gas");
   });
 
   it("names the specific gap, so asking again moves things along", () => {

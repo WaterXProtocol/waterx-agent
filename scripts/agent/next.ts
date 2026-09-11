@@ -77,6 +77,14 @@ await run(async () => {
       agent.config.accountId !== undefined &&
       !report.checks.some((c) => c.status === "fail"),
     network: agent.config.network,
+    // Both set and different is a delegate; an account with no owner named is
+    // this wallet's own; neither is a decision nobody has made yet.
+    mode:
+      agent.config.ownerAddress !== undefined && delegation !== undefined
+        ? "delegate"
+        : account !== undefined
+          ? "owner"
+          : "undecided",
     ...(report.signerReady ? { address: agent.signer.address } : {}),
     ...(delegation === undefined ? {} : { delegation }),
     missing: {
@@ -111,6 +119,14 @@ await run(async () => {
       headline,
       suggestions,
       network: agent.config.network,
+    // Both set and different is a delegate; an account with no owner named is
+    // this wallet's own; neither is a decision nobody has made yet.
+    mode:
+      agent.config.ownerAddress !== undefined && delegation !== undefined
+        ? "delegate"
+        : account !== undefined
+          ? "owner"
+          : "undecided",
       account: account ?? null,
       freeMargin: freeMargin ?? null,
       gasSui: gas ?? null,

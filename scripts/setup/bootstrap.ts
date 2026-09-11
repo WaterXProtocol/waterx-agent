@@ -103,12 +103,28 @@ await run(async () => {
   // A rate-limited faucet is not a failure of the setup; it is a queue. It is
   // reported as remaining work rather than thrown, so the rest still runs.
   const agent = initAgent();
+
+  /**
+   * Which arrangement this wallet is being set up for.
+   *
+   * `--create-account` is the owner path and says so. Everything else is the
+   * delegate path, where the owner keeps the account and the funds and this
+   * wallet only gets permission to trade — so it needs no SUI (the backend
+   * sponsors a delegate's transactions), no account of its own and no
+   * collateral. Asking a would-be delegate to fund a wallet is asking them to
+   * solve a problem they do not have, and this command did exactly that.
+   */
+  const ownerPath = args.createAccount === "true" || agent.config.accountId !== undefined;
+
   // Asked for only when it is actually needed. A wallet that already holds gas
   // does not want the faucet, and asking anyway turned a busy faucet — shared
   // by everyone on this IP — into a reported fault on a setup that was fine.
   const gas = await gasBalance(agent.config, wallet.address);
-  note(`  gas        ${gas === undefined ? "balance unknown" : `${String(gas)} SUI`}`);
-  const needsGas = gas !== undefined && gas < MIN_GAS_SUI;
+  note(
+    `  gas        ${gas === undefined ? "balance unknown" : `${String(gas)} SUI`}` +
+      (ownerPath ? "" : "  (not needed — the backend sponsors a delegate's transactions)"),
+  );
+  const needsGas = ownerPath && gas !== undefined && gas < MIN_GAS_SUI;
   if (args.skipFaucet !== "true" && agent.config.network === "testnet" && needsGas) {
     try {
       const { getFaucetHost, requestSuiFromFaucetV2 } = await import("@mysten/sui/faucet");
@@ -157,12 +173,27 @@ await run(async () => {
   }
 
   if (accountId === undefined) {
-    remaining.push({
-      what: "a WaterX account",
-      why: "every account-scoped write refuses without one",
-      who: "you",
-      command: invoke("bootstrap", "--create-account", "--yes", "--json"),
-    });
+    // On the delegate path there is nothing to create: the account is the
+    // owner's, and what is missing is their grant, not an account.
+    remaining.push(
+      ownerPath
+        ? {
+            what: "a WaterX account",
+            why: "every account-scoped write refuses without one",
+            who: "you",
+            command: invoke("bootstrap", "--create-account", "--yes", "--json"),
+          }
+        : {
+            what: "the owner's grant",
+            why:
+              `nothing has been granted to ${wallet.address} yet. The account owner grants it ` +
+              `trading permission from their own wallet — they keep the funds, this wallet ` +
+              `cannot withdraw them, and it needs no SUI of its own. Then set ` +
+              `WATERX_OWNER_ADDRESS and WATERX_ACCOUNT_ID to what they give you.`,
+            who: "an operator",
+            command: invoke("onboard", "--json"),
+          },
+    );
   } else {
     if (agent.config.accountId !== accountId) {
       // Written back rather than printed. "Copy this id into .env" is a step an
@@ -187,12 +218,15 @@ await run(async () => {
       : ((await agent.read.overview(accountId)) as { freeMargin?: number }).freeMargin ?? 0;
   if (accountId !== undefined) note(`  collateral $${String(free)} free margin`);
 
-  // Reported even before there is an account to hold it. It is the only item
-  // that needs someone else, so it is the only one with a lead time — an agent
-  // that learns about it on the second round trip has already sent the user
-  // away to do the first two, and the whitelist request could have been in
-  // flight the whole time.
-  if (free <= 0) {
+  // Only on the owner path. Collateral belongs to whoever holds the account,
+  // and on the delegate path that is not this wallet — telling a would-be
+  // delegate to fund itself is the same mistake as telling it to buy gas.
+  //
+  // Within the owner path it is reported even before there is an account to
+  // hold it: on testnet it is the one item that needs someone else, so it is
+  // the one with a lead time, and an agent that mentions it on the second round
+  // trip has already sent the user away to do two other things first.
+  if (free <= 0 && ownerPath) {
     // `who` differs by deployment and is the field an agent acts on. On testnet
     // the credit faucet is whitelist-gated, so no amount of trying gets you
     // there and the answer is to ask a person. On mainnet there is nobody to

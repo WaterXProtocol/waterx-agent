@@ -285,7 +285,7 @@ read a successful `execute` as a position.
 
 ## Trading someone else's account
 
-The arrangement this is built for: a person keeps their own key and their own
+**This is the normal arrangement, and the default the setup assumes.** a person keeps their own key and their own
 account, and grants a **separate** wallet — the agent's — permission to trade
 on it. The agent holds only the delegate key.
 
@@ -293,8 +293,13 @@ on it. The agent holds only the delegate key.
 node bin/waterx.mjs onboard --json
 ```
 
-It reports where the handshake has got to and what the next move is. The grant
-itself is the owner's act, made on chain from their own wallet at
+A delegate needs **nothing**: no SUI, because the backend sponsors its
+transactions; no account of its own; no collateral of its own. The owner keeps
+all three. A fresh install therefore has exactly one thing outstanding — the
+grant — and `bootstrap` says so rather than asking anyone to fund a wallet.
+
+`onboard` reports where the handshake has got to and what the next move is. The
+grant itself is the owner's act, made on chain from their own wallet at
 `https://waterx.app/en/account`, and revocable there; this command reads it and
 never makes it. An agent that could grant itself authority would not be a
 delegate arrangement.
