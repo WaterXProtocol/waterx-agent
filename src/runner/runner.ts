@@ -22,7 +22,7 @@ import { randomUUID } from "node:crypto";
 import type { WaterXAgent } from "../agent/agent.ts";
 import { ExecutionPolicyError, WaterXApiError } from "../errors.ts";
 import type { Inbox, InboxEntry } from "./inbox.ts";
-import type { OrderOutcome, Reconciler } from "./reconcile.ts";
+import type { Reconciler } from "./reconcile.ts";
 import type { JobStore } from "./store.ts";
 import {
   DEFAULT_LIMITS,
@@ -381,12 +381,7 @@ export class Runner {
 
     let sawDigest = false;
     const onSubmitting = async (digest: string): Promise<void> => {
-      // Set AFTER the durable write, not before. `sawDigest`
-      // means "a submission may be in flight"; a failed `update` throws out of
-      // this hook, which aborts the submission before any bytes leave, so
-      // claiming ambiguity there is claiming it about something that never
-      // happened. The honest answer in that case is "not sent" — which is what
-      // the catch below now reaches.
+      sawDigest = true;
       // Durable before the bytes leave. `update` fsyncs, and throwing from
       // this hook aborts the submission — which is correct: a submission whose
       // digest could not be recorded is one we could never resolve.
@@ -396,7 +391,6 @@ export class Runner {
         j.updatedAt = this.now();
         j.events.push({ at: this.now(), state: "submitting", note: `digest ${digest}` });
       });
-      sawDigest = true;
     };
 
     try {
@@ -453,18 +447,6 @@ export class Runner {
         this.transition(job, "submitted", `chain confirms ${job.digest}`, (j) => {
           j.submittedAt = this.now();
         });
-        return;
-      case "aborted":
-        // On chain but aborted: nothing was placed. This is
-        // terminal and safe to report as such — unlike `never-landed`, the
-        // outcome here is *known*, so there is no at-most-once hazard in saying
-        // it plainly. The key is released; a strategy may queue the intent again.
-        this.finish(
-          job,
-          "failed",
-          `${job.digest ?? "the transaction"} is on chain but aborted (${verdict.reason}), ` +
-            `so nothing was placed.`,
-        );
         return;
       case "never-landed":
         // Deliberately NOT a retry. Re-running the intent builds a DIFFERENT
@@ -543,25 +525,11 @@ export class Runner {
     // The submission time bounds the backward search through history — without
     // it the lookup would give up after one page and misreport a busy account's
     // successful order as unresolved.
-    //
-    // `outcomeOf` throws when the page cap, rather than the
-    // time bound, ended the search — deliberately, so "could not settle" is not
-    // mistaken for "nothing happened". But letting that throw escape skipped
-    // `expireIfPastDeadline` below, so an account busy enough to hit the cap
-    // wedged the job in `submitted` and it never timed out at all. Report it and
-    // keep the deadline running: a job that cannot be settled still has to end.
-    let outcome: OrderOutcome | undefined;
-    try {
-      outcome = await this.reconciler.outcomeOf(
-        this.agent.accountId,
-        digest,
-        job.submittedAt ?? job.createdAt,
-      );
-    } catch (error) {
-      this.log(`unsure  ${job.id.slice(0, 8)}  ${describeError(error)}`);
-      this.expireIfPastDeadline(job, "the order history could not be searched far enough back");
-      return;
-    }
+    const outcome = await this.reconciler.outcomeOf(
+      this.agent.accountId,
+      digest,
+      job.submittedAt ?? job.createdAt,
+    );
     if (outcome !== undefined && outcome.orderIds.length > 0 && job.orderIds === undefined) {
       this.store.update(job.id, (j) => {
         j.orderIds = outcome.orderIds;

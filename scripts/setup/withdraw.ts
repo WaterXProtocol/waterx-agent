@@ -4,7 +4,7 @@
  * Owner-only on chain: a delegate signature cannot move funds out, whatever
  * its permission mask says.
  */
-import { confirmed, initAgent, parseArgs, reportTx, run } from "../lib/cli.ts";
+import { confirmed, initAgent, note, parseArgs, reportTx, run } from "../lib/cli.ts";
 
 const args = parseArgs(
   {
@@ -26,7 +26,7 @@ await run(async () => {
     const first = info.backingAssets[0];
     if (first === undefined) throw new Error("This deployment registers no backing assets.");
     assetType = first.coinType;
-    console.log(`Withdrawing as ${first.symbol}`);
+    note(`Withdrawing as ${first.symbol}`);
   }
 
   const result = await agent.withdraw({

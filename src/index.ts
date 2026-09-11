@@ -16,6 +16,18 @@ export type {
   ReducePositionParams,
 } from "./agent/agent.ts";
 export { assertNotCrossing, MarketRegistry } from "./agent/markets.ts";
+export { decide } from "./agent/guidance.ts";
+export type { Guidance, Situation, State, Suggestion } from "./agent/guidance.ts";
+export { buildTx, previewOf } from "./agent/plan.ts";
+export type {
+  BuildRequest,
+  PlanContext,
+  Preview,
+  PreviewBound,
+  PreviewLeg,
+  SenderFields,
+  TradePlan,
+} from "./agent/plan.ts";
 
 export { HttpClient } from "./api/http.ts";
 export { ReadApi } from "./api/read.ts";
@@ -24,7 +36,9 @@ export type * from "./api/types.ts";
 
 export { TxExecutor } from "./chain/executor.ts";
 export type { ExecuteOptions, ExecuteResult } from "./chain/executor.ts";
-export { createSigner } from "./chain/create-signer.ts";
+export { createSigner, signerReadiness } from "./chain/create-signer.ts";
+export { gasBalance, MIN_GAS_SUI } from "./chain/gas.ts";
+export type { SignerReadiness } from "./chain/create-signer.ts";
 export {
   ExternalCommandSigner,
   KeypairSigner,
@@ -43,7 +57,15 @@ export type { WalletInfo } from "./chain/wallet.ts";
 export { explorerTxUrl, loadConfig, requireAccountId } from "./config.ts";
 export type { AgentConfig, ExecutionPolicy, Network } from "./config.ts";
 
-export { ErrorCode, ExecutionPolicyError, TxExecutionError, WaterXApiError } from "./errors.ts";
+export {
+  AmbiguousSubmissionError,
+  ConfigError,
+  ErrorCode,
+  ExecutionPolicyError,
+  TxExecutionError,
+  UsageError,
+  WaterXApiError,
+} from "./errors.ts";
 
 export { fingerprintIntent, narrowOnly, PolicyGate } from "./policy.ts";
 export type { Permit, PolicyMode, PolicyScope, WriteIntent } from "./policy.ts";
@@ -56,7 +78,6 @@ export {
   fromRawCollateral,
   fromRawFloat,
   toRawAcceptablePrice,
-  toRawAssetAmount,
   toRawCollateral,
   toRawPrice,
   toRawSize,

@@ -17,7 +17,7 @@ import { TxApi } from "./api/tx.ts";
 import type { AppInfo } from "./api/types.ts";
 import { type AgentConfig, loadConfig, signsAsDelegate } from "./config.ts";
 import { ExecutionPolicyError } from "./errors.ts";
-import { createSigner } from "./chain/create-signer.ts";
+import { createSigner, signerReadiness } from "./chain/create-signer.ts";
 import type { SignerProvider } from "./chain/signer.ts";
 import {
   type Deployment,
@@ -30,7 +30,7 @@ import {
 } from "./chain/deployment.ts";
 import { ACTION_RULES, usesByPackage } from "./chain/verify.ts";
 import { KNOWN_FUNCTIONS } from "./chain/abi.generated.ts";
-import corpus from "./chain/abi-corpus.json" with { type: "json" };
+import { corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
 import { PolicyGate } from "./policy.ts";
 
 export interface DoctorCheck {
@@ -44,7 +44,58 @@ export interface DoctorReport {
   checks: DoctorCheck[];
   /** False when any check failed — the caller should not proceed to trade. */
   healthy: boolean;
+  /**
+   * Can this process read the deployment — markets, tickers, positions, orders?
+   *
+   * Separate from `writeReady` because the two have almost nothing in common.
+   * A single `healthy` boolean told an agent with no key that everything was
+   * broken, when in fact every read it was about to make would have worked;
+   * and it told an agent whose backend was fine but whose account id was stale
+   * that it could trade. Two questions, two answers.
+   */
+  readReady: boolean;
+  /** Can this process sign and submit? Needs a signer, a policy that permits it, and an account. */
+  writeReady: boolean;
+  /** Could a signer be constructed? Reported without constructing one. */
+  signerReady: boolean;
 }
+
+/**
+ * The sampled transaction shapes an external user's first hour depends on.
+ *
+ * Onboarding and perp trading. A WLP mint is deliberately absent: it is a
+ * separate product surface, it is the one shape that reaches a reward-coin type
+ * the testnet config does not list, and treating its blockage as a failure of
+ * the whole agent sent people to fix a setting the trading path never needed.
+ */
+const CORE_SHAPES: ReadonlySet<string> = new Set(["an order", "a withdrawal", "a deposit"]);
+
+/**
+ * The actions that must work under default settings for the quick start to run
+ * end to end: create an account, fund it, place and manage a position.
+ *
+ * Used to decide whether an unconfirmed argument layout is a failure or a
+ * caveat. WLP and staking are outside it — `pnpm run doctor` names them either
+ * way, but an agent that only trades perps should not be told it is broken.
+ */
+const CORE_ACTIONS: ReadonlySet<string> = new Set([
+  "createAccount",
+  "deposit",
+  "withdraw",
+  "openLong",
+  "openShort",
+  "placeLimitOrder",
+  "placeTpSl",
+  "closePosition",
+  "reducePosition",
+  "increasePosition",
+  "addMargin",
+  "removeMargin",
+  "cancelOrder",
+  "updateOrder",
+  "addDelegate",
+  "removeDelegate",
+]);
 
 const ok = (name: string, detail: string): DoctorCheck => ({ name, status: "ok", detail });
 const warn = (name: string, detail: string): DoctorCheck => ({ name, status: "warn", detail });
@@ -56,11 +107,29 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   const checks: DoctorCheck[] = [];
 
   // ── Signer ────────────────────────────────────────────────────────────
-  // Built rather than described: constructing it is the check. A misconfigured
-  // external signer fails here, not at the first order.
+  // Two steps, because they answer different questions. `signerReadiness`
+  // inspects configuration and loads nothing — so a preflight on a machine
+  // with no key stays a preflight rather than becoming the first thing that
+  // demands one. Only when a key IS configured is the signer built, because
+  // then constructing it IS the check: a misconfigured external signer must
+  // fail here and not at the first order.
+  //
+  // A missing key is a `warn`, not a `fail`. Every read below still works, and
+  // reporting a fresh clone as broken sent people looking for a fault that was
+  // just an empty `.env`.
+  const readiness = signerReadiness(config);
   let signer: SignerProvider | undefined;
-  let ownerAddress: string | undefined;
+  let ownerAddress: string | undefined = config.ownerAddress;
   try {
+    if (!readiness.ready) {
+      checks.push(
+        warn(
+          "signer",
+          `no key loaded — ${readiness.reason ?? "not configured"} ` +
+            `Reads work without one; writes do not.`,
+        ),
+      );
+    } else {
     signer = createSigner(config);
     ownerAddress = config.ownerAddress ?? signer.address;
     checks.push(
@@ -80,6 +149,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
             "ask for a signature but never read the key.",
         ),
       );
+    }
     }
   } catch (error) {
     checks.push(fail("signer", describe(error)));
@@ -221,6 +291,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       // and the reward coin's type. Sampling only an order under-reported by a
       // package, which would have sent an operator away with a list that was
       // still short. Nothing is signed or submitted; these are built and read.
+      // Labels must match CORE_SHAPES below for the severity split to work.
       const shapes: [string, () => Promise<{ txBytes: string }>][] = [
         [
           "an order",
@@ -250,6 +321,12 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       const called = new Set<string>();
       const sampled: string[] = [];
       const skipped: string[] = [];
+      // Which shape reached which package, kept apart rather than unioned.
+      // Unioned, one unlisted package anywhere made every action look blocked:
+      // on testnet the WLP mint carries `mock_deep::MOCK_DEEP` as a reward-coin
+      // type argument, the config document does not list it, and a fresh user
+      // was told "signing will be refused" about a perp flow that was fine.
+      const reachedBy = new Map<string, Set<string>>();
       for (const [label, build] of shapes) {
         try {
           for (const [id, modules] of usesByPackage((await build()).txBytes)) {
@@ -257,6 +334,9 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
             const seen = uses.get(id) ?? new Set<string>();
             for (const m of modules) seen.add(m);
             uses.set(id, seen);
+            const via = reachedBy.get(id) ?? new Set<string>();
+            via.add(label);
+            reachedBy.set(id, via);
           }
           sampled.push(label);
         } catch {
@@ -291,22 +371,49 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       const outside = [...called].filter((id) => !live.typeable.has(id));
       const unlisted = outside.filter((id) => !coversEveryUse(id));
       const named = outside.filter((id) => coversEveryUse(id));
+      // An unlisted package only blocks the shapes that actually reach it.
+      // A failure is reserved for the ones the onboarding and perp flow need;
+      // anything reached solely by a side path is a warning that names which
+      // action will refuse, so the fix stays proportionate to the problem.
+      const blocksCore = unlisted.some((id) =>
+        [...(reachedBy.get(id) ?? [])].some((label) => CORE_SHAPES.has(label)),
+      );
+      const affected = [
+        ...new Set(unlisted.flatMap((id) => [...(reachedBy.get(id) ?? [])])),
+      ].sort();
+      // Packages whose exception cannot be qualified, because the SDK declares
+      // none of the modules they serve. Named so the widening is a stated fact
+      // rather than something an operator infers from a missing `=`.
+      const unqualified = unlisted.filter(
+        (id) => (uses.get(id)?.size ?? 0) > 0 && sdkPackageFor(uses.get(id)) === undefined,
+      );
       // Order matters: a standing exception stays visible even once nothing is
       // outright unlisted, because "accepted because someone said so" is not
       // the same state as "accounted for by the deployment".
       checks.push(
         unlisted.length > 0
-          ? fail(
+          ? (blocksCore ? fail : warn)(
               "packages",
               `the backend calls ${String(unlisted.length)} package(s) the deployment config ` +
                 `does not list, and every Move call must belong to a package this agent can ` +
-                `name — so signing will be refused. Either the config is stale or the ` +
-                `deployment is running an unpublished package; that is worth resolving at the ` +
-                `source. To proceed meanwhile, accept them explicitly:\n` +
+                `name — so ${affected.join(" and ")} will be refused before signing` +
+                (blocksCore
+                  ? `. `
+                  : `. Nothing in the onboarding or perp trading flow reaches them. `) +
+                `Either the config is stale or the deployment is running an unpublished ` +
+                `package; that is worth resolving at the source. To proceed meanwhile, accept ` +
+                `them explicitly:\n` +
                 `        WATERX_EXTRA_PACKAGES=` +
                 `${[...unlisted, ...named]
                   .map((id) => narrowest(id, uses.get(id), sdkPackageFor(uses.get(id))))
-                  .join(",")}`,
+                  .join(",")}` +
+                (unqualified.length === 0
+                  ? ""
+                  : `\n        ${unqualified.map((id) => `0x${id.slice(0, 8)}…`).join(", ")} is ` +
+                    `accepted with \`=*\`, which runs its calls with nothing holding them to a ` +
+                    `shape. That is wider than the qualified form, and it is the only form ` +
+                    `available: the modules it calls belong to no package @waterx/sdk ` +
+                    `declares, so there is no declaration to check them against.`),
             )
           : named.length > 0
             ? warn(
@@ -345,6 +452,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // slots while appearing to work.
   if (deployment !== undefined) {
     const live = deployment;
+    const corpus = corpusFor(config.network);
     // Moved, gone and arrived — the same comparison `execute()` makes, so the
     // preflight and the signing path cannot disagree about whether the corpus
     // still describes the deployment.
@@ -378,7 +486,16 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       Object.values(ACTION_RULES).some((rule) => rule.entrypoint === entrypoint),
     );
     checks.push(
-      moved.length > 0
+      !hasCorpusFor(config.network)
+        ? fail(
+            "abi corpus",
+            `no argument layouts have ever been captured on ${config.network}. Every positional ` +
+              `check reads them, so no write can be signed here — this is "we have never ` +
+              `measured this deployment", not "there is nothing to measure". Measured: ` +
+              `${measuredNetworks().join(", ") || "none"}. Run \`pnpm run capture-corpus\` ` +
+              `against ${config.network}.`,
+          )
+        : moved.length > 0
         ? fail(
             "abi corpus",
             `the argument layouts were captured on ${corpus.capturedAt} against a deployment ` +
@@ -390,17 +507,30 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
           ? // A caveat when unconfirmed layouts are accepted, a failure when
             // they are not — otherwise the preflight reports health for an
             // agent that will refuse these actions at the first attempt.
-            (refused.length > 0 ? fail : warn)(
+            (refused.some((action) => CORE_ACTIONS.has(action)) ? fail : warn)(
               "abi corpus",
+              // Both counts are of entrypoints. They used to be mixed with a
+              // count of *actions*, which read as an arithmetic error to
+              // anyone who then counted the names in the list.
               `${String(Object.keys(corpus.captured).length)} entrypoints confirmed against this ` +
-                `deployment on ${corpus.capturedAt}; ${String(unchecked.length)} never were. ` +
+                `deployment on ${corpus.capturedAt}; ${String(unchecked.length)} never were ` +
+                `(${String(refused.length)} actions reach them). ` +
                 (refused.length > 0
-                  ? `These actions refuse until they are: ${refused.join(", ")}. Re-run ` +
+                  ? `These actions refuse until they are: ${refused.join(", ")}` +
+                    (refused.some((action) => CORE_ACTIONS.has(action))
+                      ? ". "
+                      : " — none of which is part of onboarding or perp trading. ") +
+                    `Re-run ` +
                     `\`pnpm run capture-corpus\`, or accept them explicitly:\n` +
                     `        WATERX_ALLOW_UNCONFIRMED_ABI=` +
-                    `${refused
-                      .map((a) => ACTION_RULES[a]?.entrypoint ?? a)
-                      .join(",")}`
+                    // De-duplicated, because several actions share an
+                    // entrypoint — `openLong`, `openShort`, `placeLimitOrder`
+                    // and `placeTpSl` are all `place_order_request` — and the
+                    // setting is a SET. The line printed here was refused by
+                    // the very parser it was meant to be pasted into, which is
+                    // the worst kind of diagnostic: one that disagrees with the
+                    // check it mirrors.
+                    `${[...new Set(refused.map((a) => ACTION_RULES[a]?.entrypoint ?? a))].join(",")}`
                   : `No action refuses: every unconfirmed entrypoint is named in ` +
                     `WATERX_ALLOW_UNCONFIRMED_ABI.`),
             )
@@ -421,12 +551,12 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
           config.accountId === undefined
             ? warn(
                 "account",
-                `no WaterX account for ${ownerAddress} — run \`npm run create-account\``,
+                `no WaterX account for ${ownerAddress} — run \`pnpm run create-account\``,
               )
             : fail(
                 "account",
                 `WATERX_ACCOUNT_ID is set to ${config.accountId} but ${ownerAddress} owns no account ` +
-                  `on this deployment. The id is stale — clear it and run \`npm run create-account\`.`,
+                  `on this deployment. The id is stale — clear it and run \`pnpm run create-account\`.`,
               ),
         );
       } else {
@@ -508,7 +638,54 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     }
   }
 
-  return { config, checks, healthy: !checks.some((c) => c.status === "fail") };
+  // ── Readiness ─────────────────────────────────────────────────────────
+  // Last, because it summarises everything above. Two booleans rather than one,
+  // for the reason given on `DoctorReport`: "can I read?" and "can I sign?"
+  // fail independently and an agent needs to branch on them independently.
+  const failed = (name: string): boolean =>
+    checks.some((c) => c.name === name && c.status === "fail");
+
+  const readReady = info !== undefined;
+  checks.push(
+    readReady
+      ? ok("read readiness", `markets, tickers, positions and orders are available at ${config.apiUrl}`)
+      : fail("read readiness", `${config.apiUrl} did not answer — every read will fail`),
+  );
+
+  // Everything that stands between a decision and a signature. Each of these
+  // refuses a write at a different point, and naming them individually is what
+  // turns "not ready" into something an operator can act on in one pass.
+  const blockers: string[] = [];
+  if (!readiness.ready) blockers.push(`no signer (${readiness.reason ?? "not configured"})`);
+  if (config.executionPolicy === "read-only") {
+    blockers.push(
+      `policy is read-only${config.network === "mainnet" ? " — the default on mainnet" : ""}`,
+    );
+  }
+  if (config.accountId === undefined) {
+    blockers.push("WATERX_ACCOUNT_ID is unset, so every account-scoped write refuses");
+  }
+  // A failed gate is a refusal at signing time, not a caveat. These are the
+  // checks `execute()` makes for itself.
+  for (const name of ["signer", "execution policy", "manifest", "packages", "abi corpus", "account", "delegate", "delegate scope"]) {
+    if (failed(name)) blockers.push(`the "${name}" check failed`);
+  }
+
+  const writeReady = blockers.length === 0;
+  checks.push(
+    writeReady
+      ? ok("write readiness", `${config.executionPolicy} on ${config.network} — writes can be signed`)
+      : warn("write readiness", `writes will refuse: ${blockers.join("; ")}`),
+  );
+
+  return {
+    config,
+    checks,
+    healthy: !checks.some((c) => c.status === "fail"),
+    readReady,
+    writeReady,
+    signerReady: readiness.ready,
+  };
 }
 
 interface DeploymentConfig {
@@ -538,8 +715,23 @@ const narrowest = (
     // Named only in a type argument, so there is no call to qualify.
     return `0x${id}`;
   }
+  // A qualified exception holds the call to a package's *declared* functions,
+  // which means the SDK has to declare them. Mainnet's order path calls
+  // `pyth_lazer::parse_and_verify_le_ecdsa_update_v2` — Pyth's package, not
+  // WaterX's, so no SDK package will ever name it. This used to print
+  // `<sdk-package>` for that case: a placeholder nobody could fill, in a line
+  // whose only purpose is to be pasted.
+  //
+  // The bare id is wider than the qualified form and it is the only form that
+  // works here. `unqualified` below says so in words rather than leaving an
+  // operator to notice.
+  // `=*` rather than a bare id: a bare id covers no call at all, so suggesting
+  // one for a package the backend CALLS produced a line that looked like a fix
+  // and changed nothing. The starred form is the honest spelling of what is
+  // actually being granted.
+  if (sdkPackage === undefined) return `0x${id}=*`;
   const modules = new Set([...calls].map((c) => c.split("::")[0] ?? ""));
-  return [...modules].map((m) => `0x${id}=${sdkPackage ?? "<sdk-package>"}::${m}`).join(",");
+  return [...modules].map((m) => `0x${id}=${sdkPackage}::${m}`).join(",");
 };
 
 /**

@@ -281,11 +281,32 @@ export interface PackageException {
   readonly sdkPackage?: string;
   readonly module?: string;
   readonly fn?: string;
+  /**
+   * Accept this package's calls with **nothing** holding them to a shape.
+   *
+   * Spelled `0xPKG=*`, and deliberately uglier than the qualified form because
+   * it gives up more. A qualified exception names which of the SDK's packages
+   * an address stands in for, so the call can be checked against that package's
+   * declared function and argument count. A third-party package has no such
+   * declaration anywhere — mainnet's order path calls
+   * `pyth_lazer::parse_and_verify_le_ecdsa_update_v2`, which is Pyth's code,
+   * and no WaterX SDK release will ever describe it.
+   *
+   * Before this existed the grammar could not express that case at all: a bare
+   * id covers no call, and a qualified one needs a package name that does not
+   * exist. So the only way to trade on mainnet was to have no exception and be
+   * refused. An unstatable exception is not a safer exception — it is the same
+   * risk, taken by someone who edited the check instead.
+   */
+  readonly unchecked?: boolean;
 }
 
 export function parseExceptions(entries: readonly string[]): PackageException[] {
   return entries.map((entry) => {
     const [address, qualified] = entry.split("=");
+    if (qualified === "*") {
+      return { pkg: normalizePackage(address ?? ""), unchecked: true };
+    }
     const [sdkPackage, module, fn] = (qualified ?? "").split("::");
     return {
       pkg: normalizePackage(address ?? ""),
@@ -296,7 +317,14 @@ export function parseExceptions(entries: readonly string[]): PackageException[] 
   });
 }
 
-/** Does a standing exception cover this CALL? A bare id covers none. */
+/**
+ * Does a standing exception cover this CALL?
+ *
+ * A bare id covers none — it is the type-argument form, and a package named
+ * only as a type never executes. `=*` covers every call and checks nothing;
+ * a qualified one covers the calls it names and they are checked against the
+ * SDK's declaration.
+ */
 export const exceptionCovers = (
   exception: PackageException,
   pkg: string,
@@ -304,9 +332,10 @@ export const exceptionCovers = (
   fn: string,
 ): boolean =>
   exception.pkg === pkg &&
-  exception.sdkPackage !== undefined &&
-  (exception.module === undefined || exception.module === module) &&
-  (exception.fn === undefined || exception.fn === fn);
+  (exception.unchecked === true ||
+    (exception.sdkPackage !== undefined &&
+      (exception.module === undefined || exception.module === module) &&
+      (exception.fn === undefined || exception.fn === fn)));
 
 /**
  * Refuse when the recorded argument layouts predate the running deployment.

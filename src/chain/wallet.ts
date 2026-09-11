@@ -26,13 +26,18 @@ export function generateWallet(): WalletInfo {
 /**
  * Load wallet from SUI_PRIVATE_KEY environment variable.
  * The key must be bech32-encoded (suiprivkey1...).
+ *
+ * Called on write paths only. `WaterXAgent` constructs its signer lazily, so a
+ * process that only reads never reaches this function — which is what lets
+ * `env -u SUI_PRIVATE_KEY pnpm run markets` work.
  */
 export function loadWallet(): WalletInfo {
   const key = process.env.SUI_PRIVATE_KEY?.trim();
   if (!key) {
     throw new Error(
-      "SUI_PRIVATE_KEY not set. Run `npm run setup` to generate a wallet, " +
-        "or set SUI_PRIVATE_KEY in .env (bech32 suiprivkey1...).",
+      "SUI_PRIVATE_KEY not set. Run `pnpm run generate-wallet` to create one, " +
+        "or set SUI_PRIVATE_KEY in .env yourself (bech32 suiprivkey1...). " +
+        "Read-only commands — markets, ticker, positions, orders — need no key at all.",
     );
   }
   const keypair = Ed25519Keypair.fromSecretKey(key);
@@ -64,6 +69,9 @@ export function saveToEnv(key: string, value: string): void {
 /**
  * Load existing wallet or generate a new one.
  * If generated, saves the secret key to .env automatically.
+ *
+ * This is what `pnpm run generate-wallet` runs. There is no `setup` script;
+ * earlier revisions of this file pointed at one that never existed.
  */
 export function getOrCreateWallet(): WalletInfo & { isNew: boolean } {
   const key = process.env.SUI_PRIVATE_KEY?.trim();

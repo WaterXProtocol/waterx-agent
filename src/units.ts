@@ -109,27 +109,6 @@ export const toRawSize = (size: string | number): string =>
 export const toRawTokenAmount = (amount: string | number, label = "amount"): string =>
   assertWidth(scaleToInteger(amount, COLLATERAL_DECIMALS, label), U64_MAX, label).toString();
 
-/**
- * Base units of an asset with its **own** decimals.
- *
- * `toRawTokenAmount` is hardcoded to `COLLATERAL_DECIMALS` (6), but a deposit's
- * amount is in base units of the *backing asset*, and `InfoTokenMeta` carries a
- * per-asset `decimals` precisely because they differ — SUI is a first-class
- * backing asset at 9. Scaling a 9-decimal asset by 1e6 sends a thousandth of
- * what was asked, and because `collateralRaw` on the intent used the same wrong
- * scale, `assertTransactionMatches` agreed with it and could not catch it.
- */
-export const toRawAssetAmount = (
-  amount: string | number,
-  decimals: number,
-  label = "amount",
-): string => {
-  if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
-    throw new Error(`${label}: asset decimals must be an integer 0–18, got ${String(decimals)}.`);
-  }
-  return assertWidth(scaleToInteger(amount, decimals, label), U64_MAX, label).toString();
-};
-
 /** Raw integer string → a display number. Lossy by design; never feed it back into a request. */
 export function fromRaw(raw: string | bigint, decimals: number): number {
   return Number(BigInt(raw)) / 10 ** decimals;

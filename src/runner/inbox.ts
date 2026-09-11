@@ -37,12 +37,7 @@ export class Inbox {
    */
   submit(entry: InboxEntry): string {
     mkdirSync(this.dir, { recursive: true });
-    // The id leads with a zero-padded submission timestamp,
-    // because `drain()` sorts filenames and a bare UUIDv4 is random — two
-    // intents queued in a deliberate order (close, then re-open) were ingested
-    // in whatever order their random ids happened to sort in. The UUID stays as
-    // the tiebreaker inside a millisecond and keeps the id unique.
-    const id = `${String(Date.now()).padStart(13, "0")}-${randomUUID()}`;
+    const id = randomUUID();
     const temp = join(this.dir, `.${id}.tmp`);
     const final = join(this.dir, `${id}.json`);
 
@@ -80,11 +75,6 @@ export class Inbox {
    * A file that cannot be parsed is moved aside rather than deleted or retried:
    * retrying would wedge the drain on every pass, and deleting would discard an
    * intent someone meant. It stays as `.rejected` for a person to look at.
-   *
-   * The sort is submission order because `submit` leads each name with a
-   * zero-padded millisecond timestamp; names written by an older version are
-   * bare UUIDs and sort arbitrarily among themselves, which is the behaviour
-   * they always had.
    */
   drain(): { id: string; entry: InboxEntry; ack: () => void }[] {
     let names: string[];

@@ -23,10 +23,24 @@
  *
  *   OWNER=0x… ACCT=0x… ORDER_ID=… POSITION_ID=… pnpm run capture-corpus
  *
+ * The position entrypoints need an account with an OPEN position, which is not
+ * the same account as the rest of the capture whenever the testnet keeper is
+ * not filling market orders — an order can be placed, and then simply never
+ * becomes a position. `POSITION_OWNER` / `POSITION_ACCT` let the position
+ * shapes be built against an account that already has one:
+ *
+ *   OWNER=0x… ACCT=0x… POSITION_OWNER=0x… POSITION_ACCT=0x… POSITION_ID=…
+ *
+ * Nothing is signed or submitted by any of this. Every call is *built* and
+ * read, so building against an account this process cannot sign for is exactly
+ * as safe as building against one it can — and it is what keeps five of the
+ * core perp entrypoints confirmed while the keeper is down.
+ *
  * Entrypoints that could not be built are written to the fixture with the
  * reason, and the test fails if one is neither captured nor excused.
  */
-import { writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 
 import { Transaction } from "@mysten/sui/transactions";
 import { fromBase64 } from "@mysten/sui/utils";
@@ -80,9 +94,28 @@ interface Instance {
 const corpus = new Map<string, Instance[]>();
 const skipped = new Map<string, string>();
 
+/**
+ * Decode built bytes, whichever of the two shapes they are.
+ *
+ * The backend returns complete `TransactionData` when Enoki sponsors the build
+ * and transaction *kind* bytes when it does not — the same fork `TxExecutor`
+ * narrows before signing. `Transaction.from` throws on a kind (it reads the
+ * kind tag as a `TransactionKind` variant and finds no such variant), so the
+ * two are told apart by trying. It surfaced on `create_account`, which is built
+ * for an address with no gas and is therefore never the sponsored shape.
+ */
+function decode(txBytes: string): Transaction {
+  const bytes = fromBase64(txBytes);
+  try {
+    return Transaction.from(bytes);
+  } catch {
+    return Transaction.fromKind(bytes);
+  }
+}
+
 /** Pull every instance of `entrypoint` out of a built transaction. */
 function record(entrypoint: string, txBytes: string, sent: Record<string, string>[]): void {
-  const data = Transaction.from(fromBase64(txBytes)).getData();
+  const data = decode(txBytes).getData();
   const found: Instance[] = [];
   for (const command of data.commands) {
     const call = command.MoveCall;
@@ -158,6 +191,13 @@ const spot = (await read.ticker("SUIUSD")).spotPrice;
 const COLLATERAL = 4_000_000n;
 const SIZE = BigInt(Math.floor((8 / spot) * 1e9));
 const ACCEPTABLE = BigInt(Math.floor(spot * 1.05 * 1e9));
+// Exits need the bound on the OTHER side. Closing or reducing a long is a sell,
+// so an acceptable price above market is a bound the fill can never satisfy —
+// the backend dry-runs it, the abort comes back as a generic 6002, and the
+// entrypoint is recorded as uncapturable for a reason that is really an
+// argument error. Distinct from `ACCEPTABLE` so a swap between the two is still
+// visible in the fixture.
+const ACCEPTABLE_EXIT = BigInt(Math.floor(spot * 0.95 * 1e9));
 const TP = 1_600_000_000n;
 const SL = 400_000_000n;
 const DELEGATE = `0x${"9".repeat(64)}`;
@@ -263,13 +303,39 @@ await capture(
   DELEGATE_BUILD,
 );
 
+// A removal only builds for an address that IS a delegate, so this needs a real
+// grant. `DELEGATE_ACCT` / `DELEGATE_OWNER` let it be captured against an
+// account that has one, the same way the position shapes can be.
+const delegateAccount = process.env.DELEGATE_ACCT ?? accountId;
+const delegateAddress = process.env.DELEGATE ?? DELEGATE;
 await capture(
   {
     "account::remove_delegate": [
-      { accountId: addr(accountId), delegateAddress: addr(process.env.DELEGATE ?? DELEGATE) },
+      { accountId: addr(delegateAccount), delegateAddress: addr(delegateAddress) },
     ],
   },
-  () => tx.removeDelegate({ ...body, delegate: process.env.DELEGATE ?? DELEGATE }),
+  () =>
+    tx.removeDelegate({
+      sender: process.env.DELEGATE_OWNER ?? sender,
+      accountId: delegateAccount,
+      delegate: delegateAddress,
+    }),
+);
+
+// `create_account` can only be built for an address that has no account yet,
+// which is why it went uncaptured for so long — every account this repo has is,
+// by definition, one that already exists. A freshly generated address has none,
+// costs nothing, and needs no key: the call is built and read, never signed.
+//
+// It matters more than its size suggests. `createAccount` is the first write a
+// new user makes, and an unconfirmed layout means the agent refuses it — so the
+// onboarding path ended at step one under default settings.
+const FRESH = `0x${Buffer.from(randomBytes(32)).toString("hex")}`;
+await capture(
+  // `alias` is the ABI's name for it; the request body calls it `name`. The
+  // fixture is keyed by ABI parameter, so it uses the contract's word.
+  { "account::create_account": [{ alias: str("probe") }] },
+  () => tx.createAccount({ sender: FRESH, name: "probe" }),
 );
 
 const ORDER_ID = process.env.ORDER_ID;
@@ -311,29 +377,39 @@ if (ORDER_ID !== undefined) {
 }
 
 const POSITION_ID = process.env.POSITION_ID;
+// Defaults to the main account, so the single-account invocation is unchanged.
+const positionAccount = process.env.POSITION_ACCT ?? accountId;
+const positionBody = { sender: process.env.POSITION_OWNER ?? sender, accountId: positionAccount };
 if (POSITION_ID !== undefined) {
   const P = BigInt(POSITION_ID);
   const T = str("SUIUSD");
-  const A = addr(accountId);
+  const A = addr(positionAccount);
   await capture(
     {
       "trading::close_position_request": [
-        { ticker: T, accountId: A, positionId: u64(P), acceptablePrice: u64(ACCEPTABLE) },
+        { ticker: T, accountId: A, positionId: u64(P), acceptablePrice: u64(ACCEPTABLE_EXIT) },
       ],
     },
-    () => tx.closePosition("SUIUSD", Number(P), { ...body, acceptablePrice: String(ACCEPTABLE) }),
+    () =>
+      tx.closePosition("SUIUSD", Number(P), {
+        ...positionBody,
+        acceptablePrice: String(ACCEPTABLE_EXIT),
+      }),
   );
   await capture(
     {
       "trading::decrease_position_request": [
-        { ticker: T, accountId: A, positionId: u64(P), size: u128(SIZE), acceptablePrice: u64(ACCEPTABLE) },
+        {
+          ticker: T, accountId: A, positionId: u64(P),
+          size: u128(SIZE), acceptablePrice: u64(ACCEPTABLE_EXIT),
+        },
       ],
     },
     () =>
       tx.reducePosition("SUIUSD", Number(P), {
-        ...body,
+        ...positionBody,
         size: String(SIZE),
-        acceptablePrice: String(ACCEPTABLE),
+        acceptablePrice: String(ACCEPTABLE_EXIT),
       }),
   );
   await capture(
@@ -347,7 +423,7 @@ if (POSITION_ID !== undefined) {
     },
     () =>
       tx.increasePosition("SUIUSD", Number(P), {
-        ...body,
+        ...positionBody,
         collateralAmount: "1000009",
         size: String(SIZE),
         acceptablePrice: String(ACCEPTABLE),
@@ -359,7 +435,7 @@ if (POSITION_ID !== undefined) {
         { ticker: T, accountId: A, positionId: u64(P), collateralAmount: u64(1_000_011n) },
       ],
     },
-    () => tx.depositMargin("SUIUSD", Number(P), { ...body, collateralAmount: "1000011" }),
+    () => tx.depositMargin("SUIUSD", Number(P), { ...positionBody, collateralAmount: "1000011" }),
   );
   await capture(
     {
@@ -367,28 +443,72 @@ if (POSITION_ID !== undefined) {
         { ticker: T, accountId: A, positionId: u64(P), amount: u64(1_000_013n) },
       ],
     },
-    () => tx.withdrawMargin("SUIUSD", Number(P), { ...body, amount: "1000013" }),
+    () => tx.withdrawMargin("SUIUSD", Number(P), { ...positionBody, amount: "1000013" }),
   );
 }
 
-/** Why an entrypoint has no capture, when the run itself did not say. */
+/**
+ * Why an entrypoint has no capture, when the run itself did not say.
+ *
+ * The reason is the useful half of an uncaptured entry — it is what tells the
+ * next person whether to go and arrange the missing condition or to leave it
+ * alone. So it has to be *true*, and truth here depends on how the capture was
+ * invoked. A blanket "the testnet keeper was not filling orders" was written
+ * once and then applied to a mainnet run with no account configured, where it
+ * described nothing that had happened.
+ */
 const REASONS: Record<string, string> = {
-  "account::create_account": "can only be built for an address that has no account yet",
   "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
   "lp_pool::cancel_redeem": "requires a pending redeem request",
   "waterx_staking::claim": "requires claimable rewards",
   "withdrawal_queue::route_wormhole":
     "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes",
 };
-const POSITION_REASON =
-  "needs an open position, and none could be opened — the testnet keeper was not filling market orders when this was captured";
 
+/** Entrypoints that cannot be built without an account to build them against. */
+const NEEDS_ACCOUNT = "no account was configured for this capture (ACCT), so no account-scoped shape could be built";
+/** …and, among those, the ones that additionally need an open position. */
+const NEEDS_POSITION =
+  "needs an open position, and POSITION_ID named none — on testnet the keeper was not filling market orders, so use POSITION_ACCT to point at an account that already has one";
+const POSITION_ENTRYPOINTS = new Set([
+  "trading::close_position_request",
+  "trading::decrease_position_request",
+  "trading::increase_position_request",
+  "trading::deposit_collateral_request",
+  "trading::withdraw_collateral_request",
+]);
+const NEEDS_ORDER = "needs a resting order, and ORDER_ID named none";
+const ORDER_ENTRYPOINTS = new Set([
+  "trading::cancel_order_request",
+  "trading::update_order_request",
+]);
+
+const noAccount = accountId.trim() === "";
 for (const entrypoint of Object.keys(ABI)) {
-  if (corpus.has(entrypoint) || skipped.has(entrypoint)) continue;
-  skipped.set(
-    entrypoint,
-    REASONS[entrypoint] ?? (POSITION_ID === undefined ? POSITION_REASON : "no capture is written"),
-  );
+  if (corpus.has(entrypoint)) continue;
+  const stated = REASONS[entrypoint];
+  if (stated !== undefined) {
+    skipped.set(entrypoint, stated);
+    continue;
+  }
+  // An error the backend gave is only meaningful when the request was
+  // well-formed. Without an account it is a complaint about the missing id,
+  // not about the entrypoint, and recording it would put "Internal server
+  // error" in a committed fixture as though the deployment were broken.
+  if (noAccount) {
+    skipped.set(entrypoint, NEEDS_ACCOUNT);
+    continue;
+  }
+  if (skipped.has(entrypoint)) continue;
+  if (POSITION_ENTRYPOINTS.has(entrypoint) && POSITION_ID === undefined) {
+    skipped.set(entrypoint, NEEDS_POSITION);
+    continue;
+  }
+  if (ORDER_ENTRYPOINTS.has(entrypoint) && ORDER_ID === undefined) {
+    skipped.set(entrypoint, NEEDS_ORDER);
+    continue;
+  }
+  skipped.set(entrypoint, "no capture is written");
 }
 
 // The deployment this was captured against, package by package. Without it the
@@ -402,21 +522,109 @@ const packages = Object.fromEntries(
   [...deployment.byName.entries()].sort(([a], [b]) => a.localeCompare(b)),
 );
 
-writeFileSync(
-  "src/chain/abi-corpus.json",
-  `${JSON.stringify(
-    {
+/**
+ * Replace the account and address identifiers in a captured record with stable
+ * synthetic ones.
+ *
+ * The fixture exists to prove **where** a parameter sits, not whose account it
+ * was. The identity is incidental to every assertion made against this file —
+ * and it is not incidental to the person whose mainnet account was used to
+ * capture the layouts, because committing it publishes the link between that
+ * account and this project, permanently and to anyone who searches.
+ *
+ * So the identifiers are substituted on both sides at once: in `sent`, and in
+ * the raw `positions` blobs that embed them. The property the tests check —
+ * that the value sent for a parameter is the value at the position the ABI
+ * declares for it — is preserved exactly, because both halves move together.
+ *
+ * The replacements stay **distinct from one another**, which is the one thing
+ * that must not be lost: the whole capture is built with every argument
+ * different from every other, so that a swap between two same-width parameters
+ * moves a value the fixture can see. Collapsing them to a single placeholder
+ * would quietly disable that.
+ *
+ * Package ids are never touched. Those are checked against the live manifest
+ * and are public deployment facts.
+ */
+function redact(record: { captured: Record<string, Instance[]> }, real: Record<string, string>): void {
+  const map = new Map<string, string>();
+  for (const [name, value] of Object.entries(real)) {
+    const from = value.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+    if (from === "".padStart(64, "0")) continue;
+    // Distinct, valid hex, and obviously synthetic to anyone reading the file.
+    const seed = PLACEHOLDERS[name] ?? "ee";
+    map.set(from, seed.repeat(32));
+  }
+  const swap = (text: string): string => {
+    let out = text;
+    for (const [from, to] of map) out = out.split(from).join(to);
+    return out;
+  };
+  for (const instances of Object.values(record.captured)) {
+    for (const instance of instances) {
+      for (const [key, value] of Object.entries(instance.sent)) instance.sent[key] = swap(value);
+      instance.positions = instance.positions.map((p) => (p === null ? null : swap(p)));
+    }
+  }
+}
+
+/** One per role, so a swap between two roles is still visible in the fixture. */
+const PLACEHOLDERS: Record<string, string> = {
+  accountId: "a1",
+  sender: "5e",
+  positionAccount: "a2",
+  positionOwner: "50",
+  delegateAccount: "a3",
+  delegateOwner: "51",
+  delegate: "de",
+};
+
+// Merged into the existing file, never over it. The record is keyed by network
+// — testnet and mainnet publish different packages under the same names, so a
+// capture of one describes the other as entirely changed — and a whole-file
+// write would have made capturing mainnet the act of un-capturing testnet.
+const CORPUS_PATH = "src/chain/abi-corpus.json";
+const network = info.network.replace(/^sui_/, "");
+const existing = JSON.parse(readFileSync(CORPUS_PATH, "utf8")) as {
+  version?: number;
+  networks?: Record<string, unknown>;
+};
+const captured = Object.fromEntries([...corpus.entries()].sort(([a], [b]) => a.localeCompare(b)));
+redact(
+  { captured },
+  {
+    accountId,
+    sender,
+    positionAccount,
+    positionOwner: process.env.POSITION_OWNER ?? sender,
+    delegateAccount,
+    delegateOwner: process.env.DELEGATE_OWNER ?? sender,
+    delegate: delegateAddress,
+  },
+);
+
+const merged = {
+  version: 2,
+  networks: {
+    ...(existing.networks ?? {}),
+    [network]: {
       capturedAt: new Date().toISOString().slice(0, 10),
       network: info.network,
       sdkVersion: SDK_VERSION,
       packages,
-      captured: Object.fromEntries([...corpus.entries()].sort(([a], [b]) => a.localeCompare(b))),
+      captured,
       uncaptured: Object.fromEntries([...skipped.entries()].sort(([a], [b]) => a.localeCompare(b))),
     },
-    null,
-    2,
-  )}\n`,
+  },
+};
+// Sorted, so a capture of one network does not reorder the other and turn a
+// two-line change into a whole-file diff nobody will read.
+merged.networks = Object.fromEntries(
+  Object.entries(merged.networks).sort(([a], [b]) => a.localeCompare(b)),
 );
+writeFileSync(CORPUS_PATH, `${JSON.stringify(merged, null, 2)}\n`);
 
-console.log(`captured ${String(corpus.size)} of ${String(Object.keys(ABI).length)} entrypoints`);
+console.log(
+  `captured ${String(corpus.size)} of ${String(Object.keys(ABI).length)} entrypoints on ${network}`,
+);
 for (const [entrypoint, why] of skipped) console.log(`  uncaptured ${entrypoint} — ${why}`);

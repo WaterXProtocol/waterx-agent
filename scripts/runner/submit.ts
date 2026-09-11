@@ -51,8 +51,8 @@ await run(async () => {
   // lock for as long as it is up, and queueing work must not require stopping
   // it. The runner drains this on its next pass.
   const at = Date.now();
-  const after = asNumber(args.after, "after");
-  const expiresIn = asNumber(args.expiresIn, "expires-in");
+  const after = asNumber(args.after);
+  const expiresIn = asNumber(args.expiresIn);
   // A cooldown with nothing to hang it on was accepted and then dropped at the
   // runner, so the caller believed a limit was in place that never existed.
   const cooldownSeconds = args.cooldown === undefined ? undefined : Number(args.cooldown);
@@ -102,7 +102,7 @@ function inboxDir(storePath: string): string {
 }
 
 function buildIntent(ticker: string): Intent {
-  const slippagePercent = asNumber(args.slippage, "slippage") ?? 0.5;
+  const slippagePercent = asNumber(args.slippage) ?? 0.5;
   switch (args.kind) {
     case "open":
       if (args.collateral === undefined) throw new Error("open needs --collateral.");

@@ -1,7 +1,7 @@
 /**
  * Funding-rate history for a market.
  *
- * The *live* rate is a field on the ticker (`npm run ticker`); there is no
+ * The *live* rate is a field on the ticker (`pnpm run ticker`); there is no
  * separate funding-info route.
  */
 import { asNumber, initAgent, parseArgs, run, show } from "../lib/cli.ts";

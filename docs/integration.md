@@ -294,7 +294,7 @@ reaches the client as a generic `6002 Transaction would fail on-chain`. Observed
 on a live testnet account whose delegate reads
 `OPEN_POSITION CLOSE_POSITION … WITHDRAW_COLLATERAL` and cannot place an order.
 
-`npm run doctor` warns about this whenever a delegate key is loaded, because
+`pnpm run doctor` warns about this whenever a delegate key is loaded, because
 nothing in the API response reveals it. If a delegate fails this way, re-add it.
 
 Running as a delegate:
@@ -360,7 +360,7 @@ await agent.createAccount({ name: "my-agent", confirm: true });
 const [account] = await agent.accounts();
 ```
 
-Then set `WATERX_ACCOUNT_ID`. `npm run doctor` fails loudly if that id is not
+Then set `WATERX_ACCOUNT_ID`. `pnpm run doctor` fails loudly if that id is not
 owned by the loaded wallet on the current deployment — the exact failure that
 made the previous version of this agent look broken for no visible reason.
 
@@ -384,7 +384,7 @@ its market list. Prefer it to anything compiled into a client.
 > **Testnet funding.** The credit faucet (`testnet_faucet::faucet_mint`) is
 > whitelist-gated by an admin capability, so a freshly generated wallet cannot
 > mint its own test collateral. Gas comes from the public Sui faucet
-> (`npm run fund-sui`); collateral needs an operator to whitelist the address or
+> (`pnpm run fund-sui`); collateral needs an operator to whitelist the address or
 > to send it. There is no self-service path, and this agent does not pretend
 > there is one.
 
@@ -422,10 +422,10 @@ Two fields carry sentinel values that a naive consumer will misread:
 
 `src/api/types.ts` mirrors backend wire types by hand; each block names the file
 it mirrors. The backend publishes no client package, so this is a maintained
-copy, and `npm run doctor` is the check that the copy still matches reality.
+copy, and `pnpm run doctor` is the check that the copy still matches reality.
 
 When the backend changes:
 
-1. `npm run doctor` — network, package versions, market list, account.
-2. `npm run info` — collateral and backing assets.
+1. `pnpm run doctor` — network, package versions, market list, account.
+2. `pnpm run info` — collateral and backing assets.
 3. Diff `apps/waterx/src/**/*-tx.dto.ts` against `src/api/types.ts`.

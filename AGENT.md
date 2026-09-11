@@ -195,9 +195,42 @@ energy — and the set changes.
 
 ## Exit codes
 
-| Code | Meaning |
+Stable, and the same for every command. An automated caller can branch on these
+without reading a message; `--json` carries the same answer as fields on the
+envelope. See [AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md) for the full
+contract.
+
+| Code | Status | Meaning |
+|---|---|---|
+| `0` | `ok` | It did what it was asked |
+| `2` | `usage` | The arguments are wrong. Fix them; do not retry as-is |
+| `3` | `config` | The environment is wrong — no account, no key, an unreadable scope file |
+| `4` | `auth` | A key or authority problem |
+| `5` | `policy` | The execution policy or delegation scope refused it. Nothing was built |
+| `6` | `rejected` | The venue, the verifier or the chain refused it. It did **not** happen |
+| `7` | `unavailable` | Transient. Retrying is safe |
+| `8` | `ambiguous` | It may or may not have been submitted. **Reconcile; never retry** |
+| `9` | `needs-approval` | A person has not approved it yet |
+
+`1` is deliberately unused: Node exits `1` when a process dies of an unhandled
+throw, so `1` means "this crashed", never "this decided".
+
+## The approval path
+
+The commands an automated caller uses. A person is in the middle of it by
+construction — `execute` submits a plan `approve` recorded someone agreeing to,
+unchanged.
+
+| Command | What it does |
 |---|---|
-| `0` | Success |
-| `1` | Argument or client-side error (the message names the fix) |
-| `2` | Refused by the execution policy — pass `--yes`, or change the policy |
-| `3` | Backend rejected the request — the error code and message are printed |
+| `pnpm run preview -- --action <action> … --json` | Derives the write exactly. Loads no key, authorizes nothing, builds nothing. Exits `9` |
+| `pnpm run approve -- --id apr_… --approver <name>` | Records a person's decision. `--reject --reason …` records a refusal |
+| `pnpm run execute -- --id apr_…` | Submits the approved plan unchanged. One approval, one transaction |
+| `pnpm run reconcile -- --id sub_… \| --all` | Asks the chain whether a submission landed |
+| `pnpm run approvals` | Previewed plans, who approved them, and anything unsettled |
+| `pnpm run limits` | The policy and risk ceilings in force. `--write policy.json …` creates a scope |
+
+`preview` has **no defaults** for `--collateral`, `--leverage` / `--size` or
+`--slippage`. That is deliberate: an agent that does not know how large a trade
+should be must ask, and the only way to make that true is to leave it nothing to
+fall back on. The direct commands below keep their human-friendly defaults.

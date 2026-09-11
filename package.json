@@ -1,14 +1,21 @@
 {
   "name": "waterx-agent",
   "version": "0.1.0",
-  "description": "WaterX perpetuals trading agent — backend-first order construction with on-chain verification and execution on Sui.",
   "type": "module",
-  "private": true,
-  "exports": {
-    ".": "./src/index.ts"
+  "bin": {
+    "waterx": "bin/waterx.mjs"
   },
+  "private": true,
   "scripts": {
+    "bootstrap": "tsx scripts/setup/bootstrap.ts",
+    "next": "tsx scripts/agent/next.ts",
     "doctor": "tsx scripts/setup/doctor.ts",
+    "preview": "tsx scripts/agent/preview.ts",
+    "approve": "tsx scripts/agent/approve.ts",
+    "execute": "tsx scripts/agent/execute.ts",
+    "reconcile": "tsx scripts/agent/reconcile.ts",
+    "approvals": "tsx scripts/agent/approvals.ts",
+    "limits": "tsx scripts/agent/limits.ts",
     "typecheck": "tsc --noEmit",
     "generate-wallet": "tsx scripts/setup/generate-wallet.ts",
     "fund-sui": "tsx scripts/setup/fund-sui.ts",
@@ -29,6 +36,7 @@
     "cancel-order": "tsx scripts/orders/cancel-order.ts",
     "wlp": "tsx scripts/wlp/wlp.ts",
     "accounts": "tsx scripts/query/accounts.ts",
+    "balance": "tsx scripts/query/balance.ts",
     "positions": "tsx scripts/query/positions.ts",
     "orders": "tsx scripts/query/orders.ts",
     "delegates": "tsx scripts/query/delegates.ts",
@@ -43,6 +51,7 @@
     "info": "tsx scripts/query/info.ts",
     "market-data": "tsx scripts/query/market-data.ts",
     "referral": "tsx scripts/query/referral.ts",
+    "test": "vitest run",
     "funds": "tsx scripts/query/funds.ts",
     "runner": "tsx scripts/runner/run.ts",
     "queue": "tsx scripts/runner/submit.ts",
@@ -50,7 +59,9 @@
     "generate-abi": "tsx scripts/dev/generate-abi.ts",
     "capture-corpus": "tsx scripts/dev/capture-abi-corpus.ts",
     "check-read-api": "tsx scripts/dev/check-read-api.ts",
-    "check-verifier": "tsx scripts/dev/check-verifier.ts"
+    "check-verifier": "tsx scripts/dev/check-verifier.ts",
+    "check-corpus": "tsx scripts/dev/check-corpus.ts",
+    "smoke": "tsx scripts/dev/smoke.ts"
   },
   "dependencies": {
     "@mysten/sui": "2.9.1",
@@ -60,6 +71,8 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
-  }
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "packageManager": "pnpm@10.34.5"
 }

@@ -4,7 +4,7 @@ import { asNumber, confirmed, initAgent, parseArgs, reportTx, run } from "../lib
 const args = parseArgs(
   {
     ticker: { desc: "Market, e.g. BTC", required: true },
-    positionId: { desc: "Position id (see `npm run positions`)", required: true },
+    positionId: { desc: "Position id (see `pnpm run positions`)", required: true },
     slippage: { desc: "Slippage bound in percent", default: "0.5" },
     yes: { desc: "Confirm this write", flag: true },
     policy: { desc: "Narrow the execution policy for this invocation" },

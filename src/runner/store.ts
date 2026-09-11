@@ -70,10 +70,9 @@ export class JobStore {
     // failure below to be reported as a lock conflict, which is what happened.
     mkdirSync(dirname(this.path), { recursive: true });
 
-    // Taking the lock is its own step, so the catch below reasons about
-    // acquisition alone — everything after it is this process's own failure.
     try {
       this.lockFd = openSync(this.lockPath, "wx");
+      writeFileSync(this.lockPath, `${String(process.pid)}\n`);
     } catch (cause) {
       // Only EEXIST means "someone holds this". Anything else — a missing
       // directory, a read-only mount, a permission problem — is its own fault
@@ -99,21 +98,7 @@ export class JobStore {
           `If that process is gone — check with \`ps -p ${holder}\` — remove the file and start again.`,
       );
     }
-
-    // From here the lock is HELD, so every failure has to
-    // release it. The `wx` open is what takes the lock, and a throw from the pid
-    // write or from `load()` used to leave a lock file behind with no live
-    // holder — and this class deliberately refuses to break a stale lock, so the
-    // next start failed and needed a human. (`run.ts` calls `open()` outside its
-    // try/finally, so it cannot clean this up either.) Releasing a lock this
-    // process just took is not the same as breaking someone else's.
-    try {
-      writeFileSync(this.lockPath, `${String(process.pid)}\n`);
-      this.jobs = this.load();
-    } catch (cause) {
-      this.close();
-      throw cause;
-    }
+    this.jobs = this.load();
   }
 
   close(): void {
