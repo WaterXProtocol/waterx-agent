@@ -17,7 +17,7 @@ import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
 import { signsAsDelegate } from "../../src/config.ts";
 import { runDoctor } from "../../src/doctor.ts";
-import { succeeded } from "../../src/cli/contract.ts";
+import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 parseArgs({}, "next");

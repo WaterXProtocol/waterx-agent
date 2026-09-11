@@ -80,7 +80,7 @@
     "info": "tsx scripts/query/info.ts",
     "market-data": "tsx scripts/query/market-data.ts",
     "referral": "tsx scripts/query/referral.ts",
-    "test": "vitest run",
+    "test": "tsc --noEmit && vitest run",
     "funds": "tsx scripts/query/funds.ts",
     "runner": "tsx scripts/runner/run.ts",
     "queue": "tsx scripts/runner/submit.ts",
@@ -90,7 +90,8 @@
     "check-read-api": "tsx scripts/dev/check-read-api.ts",
     "check-verifier": "tsx scripts/dev/check-verifier.ts",
     "check-corpus": "tsx scripts/dev/check-corpus.ts",
-    "smoke": "tsx scripts/dev/smoke.ts"
+    "smoke": "tsx scripts/dev/smoke.ts",
+    "test:only": "vitest run"
   },
   "dependencies": {
     "@mysten/sui": "2.9.1",
