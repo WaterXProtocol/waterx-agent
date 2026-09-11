@@ -115,6 +115,15 @@ describe("what to do next", () => {
     const g = decide({ ...ok, freeMargin: 0 });
     expect(g.state).toBe("no-collateral");
     expect(g.headline).toContain("Gas is not collateral");
+    expect(g.headline, "testnet has no self-service route").toContain("operator");
+
+    // On mainnet there is nobody to ask — you send yourself USDC. Sending a
+    // mainnet user looking for an operator sends them after someone who does
+    // not exist.
+    const onMainnet = decide({ ...ok, network: "mainnet", freeMargin: 0 });
+    expect(onMainnet.state).toBe("no-collateral");
+    expect(onMainnet.headline).not.toContain("operator");
+    expect(onMainnet.headline).toContain("you send");
     expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("--action open-long");
   });
 

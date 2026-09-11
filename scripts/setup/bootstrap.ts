@@ -193,14 +193,20 @@ await run(async () => {
   // away to do the first two, and the whitelist request could have been in
   // flight the whole time.
   if (free <= 0) {
+    // `who` differs by deployment and is the field an agent acts on. On testnet
+    // the credit faucet is whitelist-gated, so no amount of trying gets you
+    // there and the answer is to ask a person. On mainnet there is nobody to
+    // ask: you send yourself USDC. Telling a mainnet user to find an operator
+    // sends them looking for someone who does not exist.
+    const onTestnet = agent.config.network === "testnet";
     remaining.push({
       what: "trading collateral",
-      why:
-        agent.config.network === "testnet"
-          ? "gas is not collateral, and testnet's credit faucet is whitelist-gated — there is " +
-            "no self-service route, so this is the one to start asking about first"
-          : "the wallet holds no backing asset to mint credit against",
-      who: "an operator",
+      why: onTestnet
+        ? "gas is not collateral, and testnet's credit faucet is whitelist-gated — there is " +
+          "no self-service route, so this is the one to start asking about first"
+        : "gas is not collateral: the wallet needs USDC or USDsui of its own to mint credit " +
+          "against, and on mainnet you send that to it yourself",
+      who: onTestnet ? "an operator" : "you",
       command: `${invoke("deposit", "--amount <n>", "--yes", "--json")}  (once the wallet holds USDC or USDsui)`,
     });
   }

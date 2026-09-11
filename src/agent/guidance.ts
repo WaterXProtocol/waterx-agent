@@ -242,7 +242,9 @@ export function decide(s: Situation): Guidance {
       state: "no-collateral",
       headline:
         `Set up and able to sign, but there is no free margin to commit. Gas is not collateral — ` +
-        `on testnet the credit faucet is whitelist-gated, so this one needs an operator.`,
+        (s.network === "testnet"
+          ? `on testnet the credit faucet is whitelist-gated, so this one needs an operator.`
+          : `the wallet needs USDC or USDsui of its own, which on mainnet you send to it.`),
       suggestions: [
         { what: "check what the account holds", command: invoke("balance", "--json") },
         {
