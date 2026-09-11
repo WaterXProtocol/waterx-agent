@@ -17,8 +17,9 @@ Run this and do what it says:
 node bin/waterx.mjs next --json
 ```
 
-From a checkout, after `pnpm install`. If you installed the tarball instead,
-the same command is `npx waterx next --json` — and every command this package
+From a checkout, after `pnpm install`. If this was installed as a package —
+`npm install github:WaterXProtocol/waterx-agent`, or from a tarball — the same
+command is `npx waterx next --json` — and every command this package
 hands back is already spelled for wherever you are, so copy those rather than
 translating. That is the whole entry point —
 first contact and every turn afterwards. It works on a clone with no
