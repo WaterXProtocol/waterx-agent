@@ -16,7 +16,15 @@ export type {
   ReducePositionParams,
 } from "./agent/agent.ts";
 export { assertNotCrossing, MarketRegistry } from "./agent/markets.ts";
-export { appUrl, delegationStatus, REQUESTED_PERMISSION_NAMES, REQUESTED_PERP_PERMISSIONS } from "./agent/delegation.ts";
+export {
+  AUTHORIZE_PATH,
+  authorizeUrl,
+  CONSOLE_ENDPOINTS,
+  consoleUrl,
+  delegationStatus,
+  REQUESTED_PERMISSION_NAMES,
+  REQUESTED_PERP_PERMISSIONS,
+} from "./agent/delegation.ts";
 export type { DelegationState, DelegationStatus } from "./agent/delegation.ts";
 export { decide } from "./agent/guidance.ts";
 export type { Guidance, Situation, State, Suggestion } from "./agent/guidance.ts";

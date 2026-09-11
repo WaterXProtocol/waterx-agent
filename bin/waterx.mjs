@@ -29,8 +29,16 @@ const scripts = pkg.scripts ?? {};
 
 const [command, ...args] = process.argv.slice(2);
 
-/** Scripts that are not agent commands: build plumbing and capture tools. */
-const INTERNAL = new Set(["typecheck", "test", "generate-abi", "capture-corpus", "smoke"]);
+/**
+ * Scripts that are not agent commands: build plumbing and capture tools.
+ *
+ * Hidden from `--help` AND refused when asked for by name. Hiding alone was not
+ * enough: `waterx capture-corpus --help` ran the capture — it has no argument
+ * parsing, so the flag was ignored — and overwrote the committed fixture with a
+ * one-entry capture from an unconfigured run. A destructive maintainer tool
+ * should not be one typo away from a consumer.
+ */
+const INTERNAL = new Set(["typecheck", "test", "build", "prepack", "prepare", "generate-abi", "capture-corpus", "check-corpus", "smoke", "pack:check"]);
 
 if (command === undefined || command === "--help" || command === "-h") {
   // Usage goes to stderr. Even the help text must not put anything on stdout,
@@ -46,6 +54,14 @@ if (command === undefined || command === "--help" || command === "-h") {
       `See SKILL.md for the read -> preview -> approve -> execute loop.\n\n`,
   );
   process.exit(command === undefined ? 2 : 0);
+}
+
+if (INTERNAL.has(command)) {
+  process.stderr.write(
+    `waterx: "${command}" is a maintainer tool, not an agent command. It is run from a checkout ` +
+      `of the repository with \`pnpm run ${command}\`.\n`,
+  );
+  process.exit(2);
 }
 
 const script = scripts[command];
