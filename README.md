@@ -300,7 +300,7 @@ grant — and `bootstrap` says so rather than asking anyone to fund a wallet.
 
 `onboard` reports where the handshake has got to and what the next move is. The
 grant itself is the owner's act, made on chain from their own wallet at
-`https://waterx.app/en/account`, and revocable there; this command reads it and
+`https://waterx.app/agent/authorize?agent=<the agent wallet>`, and revocable there; this command reads it and
 never makes it. An agent that could grant itself authority would not be a
 delegate arrangement.
 

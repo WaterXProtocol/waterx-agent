@@ -111,3 +111,30 @@ describe("commands named in the documentation", () => {
     expect([...new Set(missing)], missing.join("\n")).toEqual([]);
   });
 });
+
+/**
+ * A maintainer tool must not be one typo away from a consumer.
+ *
+ * `waterx capture-corpus --help` ran the capture: the script has no argument
+ * parsing, so the flag was ignored, and it overwrote the committed fixture with
+ * a one-entry capture from an unconfigured run. Hiding it from `--help` was not
+ * enough, because hiding is not refusing.
+ */
+describe("the bin shim", () => {
+  const shim = readFileSync("bin/waterx.mjs", "utf8");
+
+  it("refuses the maintainer tools by name, not merely hides them", () => {
+    expect(shim).toMatch(/if \(INTERNAL\.has\(command\)\)/);
+    for (const tool of ["capture-corpus", "generate-abi", "build", "prepare"]) {
+      expect(shim, tool).toContain(`"${tool}"`);
+    }
+  });
+
+  it("does not ship them either", () => {
+    // Belt and braces: the refusal is a behaviour, this is an absence. A
+    // destructive tool that is not in the tarball cannot be reached by any
+    // route, including ones nobody thought of.
+    const files = JSON.parse(readFileSync("package.json", "utf8")).files as string[];
+    expect(files).toContain("!dist/scripts/dev");
+  });
+});

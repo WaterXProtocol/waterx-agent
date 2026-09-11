@@ -45,6 +45,7 @@ await run(async () => {
       delegates = undefined;
     }
     const status = delegationStatus({
+      network: agent.config.network,
       delegateAddress: agent.signer.address,
       ...(agent.config.ownerAddress === undefined ? {} : { ownerAddress: agent.config.ownerAddress }),
       ...(account === undefined ? {} : { accountId: account }),

@@ -31,10 +31,52 @@ import {
 } from "@waterx/sdk";
 
 import type { DelegateData } from "../api/types.ts";
+import type { Network } from "../config.ts";
 
-/** Where an owner goes to grant or revoke. Overridable for a private deployment. */
-export const appUrl = (): string =>
-  process.env.WATERX_APP_URL?.trim() || "https://waterx.app/en/account";
+/**
+ * The web console paired with each deployment — where an owner signs a grant.
+ *
+ * A lookup, never a default: a private or preview console is passed as a plain
+ * string through `WATERX_CONSOLE_URL`. Guessing one is worse than having none,
+ * because an owner sent to the wrong console will conclude the product is
+ * broken rather than that the link was wrong — which is exactly what happened
+ * here. An earlier revision of this file pointed at a page found by probing for
+ * a 200, and that page does not grant anything.
+ */
+export const CONSOLE_ENDPOINTS: Readonly<Record<Network, string>> = {
+  mainnet: "https://waterx.app",
+  testnet: "https://testnet.waterx.app",
+};
+
+/** Where the authorization flow lives in the console. */
+export const AUTHORIZE_PATH = "/agent/authorize";
+
+/** The console for a deployment, or the one an operator named. */
+export const consoleUrl = (network: Network): string =>
+  process.env.WATERX_CONSOLE_URL?.trim() || CONSOLE_ENDPOINTS[network];
+
+/**
+ * The link an owner opens to grant this wallet.
+ *
+ * It carries the agent wallet, and optionally a label and an account id. It
+ * confers **no authority** — it is a page to visit, not a credential — so it is
+ * safe to paste into a chat in a way a token never would be. That is why
+ * nothing else rides along: a link that carried a bearer token would turn every
+ * paste into a leak.
+ */
+export function authorizeUrl(input: {
+  network: Network;
+  agentWallet: string;
+  label?: string;
+  accountId?: string;
+}): string {
+  const base = consoleUrl(input.network).replace(/\/+$/, "");
+  const url = new URL(AUTHORIZE_PATH, `${base}/`);
+  url.searchParams.set("agent", input.agentWallet);
+  if (input.label !== undefined) url.searchParams.set("label", input.label);
+  if (input.accountId !== undefined) url.searchParams.set("account", input.accountId);
+  return url.toString();
+}
 
 /**
  * What the agent asks for: trading, and nothing else.
@@ -98,13 +140,24 @@ export interface DelegationStatus {
  * the point of checking rather than trusting `WATERX_OWNER_ADDRESS` being set.
  */
 export function delegationStatus(input: {
+  network: Network;
   delegateAddress?: string;
   ownerAddress?: string;
   accountId?: string;
+  /** A name for this agent, shown to the owner on the authorization screen. */
+  label?: string;
   /** `undefined` when the lookup has not been made; an empty array means none. */
   delegates?: readonly DelegateData[];
 }): DelegationStatus {
-  const grantUrl = appUrl();
+  const grantUrl =
+    input.delegateAddress === undefined
+      ? consoleUrl(input.network)
+      : authorizeUrl({
+          network: input.network,
+          agentWallet: input.delegateAddress,
+          ...(input.label === undefined ? {} : { label: input.label }),
+          ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
+        });
   const { delegateAddress, ownerAddress, accountId } = input;
 
   if (delegateAddress === undefined) {
