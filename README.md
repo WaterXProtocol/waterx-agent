@@ -320,6 +320,30 @@ answers "who may act on this account?" and has no reverse lookup, so the owner
 states the account id once (`WATERX_ACCOUNT_ID`). Everything after that is
 checked against the chain rather than believed.
 
+### What mainnet cannot do yet
+
+`cancelOrder` and `updateOrder` are unconfirmed there — capturing a layout needs
+a transaction the deployment will build, and both need a resting order that does
+not exist on any account this repo can reach. Everything else in the perp and
+account flow is confirmed: market orders, closing, reducing, increasing, margin,
+deposit, withdraw, delegates.
+
+That gap has a consequence worth stating, because the code acts on it:
+**placing a resting order is refused while its cancellation is unconfirmed.** An
+order on the book whose retraction cannot be signed can only be got rid of by
+letting it fill, which is strictly worse than not placing it. `placeLimitOrder`
+and `placeTpSl` therefore refuse on mainnet until someone either captures
+`trading::cancel_order_request` or names it deliberately in
+`WATERX_ALLOW_UNCONFIRMED_ABI`.
+
+The refusal states its evidence rather than only its verdict: six other
+entrypoints in the same package and module *are* confirmed against mainnet and
+all matched the SDK. That is corroboration, not proof — the SDK could describe
+one function wrongly while describing its neighbours correctly — and it is the
+difference between "we have never checked anything here" and "we checked six
+siblings and this one needed conditions we could not create". An operator
+deciding whether to accept it should decide with that in front of them.
+
 ## Execution policy
 
 | Policy | Behaviour |

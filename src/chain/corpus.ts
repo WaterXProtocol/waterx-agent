@@ -19,6 +19,7 @@
  * different statements, and only one of them is a reason to sign.
  */
 import type { Network } from "../config.ts";
+import { ABI } from "./abi.generated.ts";
 import file from "./abi-corpus.json" with { type: "json" };
 
 /** One deployment's measurements. */
@@ -76,3 +77,51 @@ export function corpusFor(network: Network): NetworkCorpus {
 /** Has this network ever been measured? */
 export const hasCorpusFor = (network: Network): boolean =>
   file2.networks[network] !== undefined;
+
+/**
+ * What else in the same contract module HAS been confirmed on this deployment.
+ *
+ * An uncaptured entrypoint is not one fact but two, and the fixture used to
+ * collapse them. "We have never confirmed anything about this package here" and
+ * "we confirmed six sibling entrypoints in this exact module, all matching, and
+ * could not build this one because it needs a resting order" are different
+ * statements, and only the first is a reason to treat the layout as unknown.
+ *
+ * This does not make an unconfirmed layout confirmed — the SDK could describe
+ * one function wrongly while describing its neighbours correctly, and nothing
+ * here would notice. What it does is let the refusal state its evidence, so an
+ * operator deciding whether to name the entrypoint in
+ * `WATERX_ALLOW_UNCONFIRMED_ABI` is deciding with the facts rather than
+ * guessing at them.
+ */
+export interface Corroboration {
+  /** Entrypoints confirmed in the same package and module. */
+  siblings: string[];
+  /** The SDK package they all belong to. */
+  package: string | undefined;
+}
+
+export function corroborationFor(network: Network, entrypoint: string): Corroboration {
+  const record = corpusFor(network);
+  const pkg = ABI[entrypoint]?.pkg;
+  const module = entrypoint.split("::")[0];
+  if (pkg === undefined || module === undefined) return { siblings: [], package: pkg };
+  const siblings = Object.keys(record.captured)
+    .filter((other) => ABI[other]?.pkg === pkg && other.split("::")[0] === module)
+    .sort();
+  return { siblings, package: pkg };
+}
+
+/** One sentence of evidence, or none when there is none. */
+export function corroborationNote(network: Network, entrypoint: string): string {
+  const { siblings, package: pkg } = corroborationFor(network, entrypoint);
+  if (siblings.length === 0) {
+    return `Nothing else in ${pkg ?? "its package"} has been confirmed here either.`;
+  }
+  return (
+    `${String(siblings.length)} other entrypoint(s) in the same package and module ARE confirmed ` +
+    `against this deployment and all matched the SDK ` +
+    `(${siblings.map((s) => s.split("::")[1] ?? s).join(", ")}) — corroboration, not proof: the ` +
+    `SDK could describe one function wrongly while describing its neighbours correctly.`
+  );
+}

@@ -28,7 +28,7 @@ import {
   normalizePackage,
   parseExceptions,
 } from "./chain/deployment.ts";
-import { ACTION_RULES, usesByPackage } from "./chain/verify.ts";
+import { ACTION_RULES, NEEDS_A_WAY_BACK, usesByPackage } from "./chain/verify.ts";
 import { KNOWN_FUNCTIONS } from "./chain/abi.generated.ts";
 import { corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
 import { PolicyGate } from "./policy.ts";
@@ -484,15 +484,31 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     // raw entrypoints — the previous line named three of ten, including
     // `withdrawal_queue::route_wormhole`, which no action reaches at all, and
     // omitted the five position paths that were actually blocked.
-    const blocked = Object.entries(ACTION_RULES)
-      .filter(([, rule]) => Object.hasOwn(corpus.uncaptured, rule.entrypoint))
-      .filter(([, rule]) => !config.allowUnconfirmed.includes(rule.entrypoint))
-      .map(([action]) => action);
+    const unconfirmed = (entrypoint: string): boolean =>
+      Object.hasOwn(corpus.uncaptured, entrypoint) &&
+      !config.allowUnconfirmed.includes(entrypoint);
+
+    const blocked = Object.keys(ACTION_RULES).filter(
+      (action) =>
+        unconfirmed(ACTION_RULES[action]?.entrypoint ?? "") ||
+        // Shared with the signing path rather than restated: an action that
+        // leaves a resting order refuses when the call that takes it back is
+        // unconfirmed, and a preflight that listed it as working would be
+        // disagreeing with the check it exists to mirror.
+        unconfirmed(NEEDS_A_WAY_BACK[action]?.entrypoint ?? ""),
+    );
     // Every blocked action. Filtering by `EXITS` here mirrored a rule the
     // signer no longer applies — the layout requirement covers exits too — and
     // a diagnostic that models the check rather than sharing it drifts the
     // moment the check changes.
     const refused = blocked;
+    // What a reader actually needs alongside a list of refusals: the list of
+    // what still works. A bare refusal list reads as "this is broken" when the
+    // truth is usually "these three of twenty are unavailable".
+    const working = Object.keys(ACTION_RULES)
+      .filter((action) => !blocked.includes(action))
+      .filter((action) => CORE_ACTIONS.has(action))
+      .sort();
     const unchecked = Object.keys(corpus.uncaptured).filter((entrypoint) =>
       Object.values(ACTION_RULES).some((rule) => rule.entrypoint === entrypoint),
     );
@@ -527,10 +543,17 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
                 `deployment on ${corpus.capturedAt}; ${String(unchecked.length)} never were ` +
                 `(${String(refused.length)} actions reach them). ` +
                 (refused.length > 0
-                  ? `These actions refuse until they are: ${refused.join(", ")}` +
+                  ? // Order matters: the "none of which" clause qualifies the REFUSED
+                    // list, and putting the working list between them attached it
+                    // to the wrong one.
+                    `These actions refuse until they are: ${refused.join(", ")}` +
                     (refused.some((action) => CORE_ACTIONS.has(action))
-                      ? ". "
-                      : " — none of which is part of onboarding or perp trading. ") +
+                      ? "."
+                      : " — none of which is part of onboarding or perp trading.") +
+                    (working.length === 0
+                      ? " "
+                      : ` Everything else works, including ${working.slice(0, 6).join(", ")}` +
+                        (working.length > 6 ? ` and ${String(working.length - 6)} more. ` : ". ")) +
                     `Re-run ` +
                     `\`pnpm run capture-corpus\`, or accept them explicitly:\n` +
                     `        WATERX_ALLOW_UNCONFIRMED_ABI=` +
