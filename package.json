@@ -5,8 +5,32 @@
   "bin": {
     "waterx": "bin/waterx.mjs"
   },
+  "files": [
+    "dist",
+    "bin",
+    "SKILL.md",
+    "AGENT_INSTRUCTIONS.md",
+    "AGENT.md",
+    "README.md",
+    ".env.example",
+    "policy.example.json"
+  ],
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "engines": {
+    "node": ">=22"
+  },
   "private": true,
   "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "pack:check": "tsx scripts/dev/pack-check.ts",
     "bootstrap": "tsx scripts/setup/bootstrap.ts",
     "next": "tsx scripts/agent/next.ts",
     "doctor": "tsx scripts/setup/doctor.ts",

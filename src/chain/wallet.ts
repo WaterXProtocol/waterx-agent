@@ -1,10 +1,24 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ENV_PATH = path.join(__dirname, "../../.env");
+/**
+ * The `.env` this package writes to: the **caller's**, not its own.
+ *
+ * It used to resolve relative to this file, which is the package directory.
+ * That is the same place as the working directory in exactly one situation — a
+ * repository checkout, driven from its root — and wrong everywhere else:
+ * running from a subdirectory wrote a key that `dotenv` (which reads the
+ * working directory) would never load, and installing this package would have
+ * written it inside `node_modules`, to be wiped by the next install.
+ *
+ * Read and write have to name the same file or the setup silently does not
+ * stick, so this follows `dotenv`'s rule rather than inventing a second one.
+ * `WATERX_ENV_FILE` overrides it for a caller that keeps configuration
+ * elsewhere.
+ */
+export const envPath = (): string =>
+  process.env.WATERX_ENV_FILE?.trim() || path.resolve(process.cwd(), ".env");
 
 export interface WalletInfo {
   keypair: Ed25519Keypair;
@@ -49,9 +63,10 @@ export function loadWallet(): WalletInfo {
  * Update or append a key=value pair in the .env file.
  */
 export function saveToEnv(key: string, value: string): void {
+  const target = envPath();
   let content = "";
-  if (existsSync(ENV_PATH)) {
-    content = readFileSync(ENV_PATH, "utf8");
+  if (existsSync(target)) {
+    content = readFileSync(target, "utf8");
   }
 
   const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -63,7 +78,7 @@ export function saveToEnv(key: string, value: string): void {
     content += `${key}=${value}\n`;
   }
 
-  writeFileSync(ENV_PATH, content, "utf8");
+  writeFileSync(target, content, "utf8");
 }
 
 /**

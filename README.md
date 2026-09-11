@@ -33,6 +33,38 @@ Concretely, that leaves three things here:
 `@waterx/sdk` is a dependency for its permission and order-type constants — the
 on-chain source of truth for those bitmasks — not for transaction building.
 
+## Install
+
+Two ways in, and they differ only in how you reach the command.
+
+```bash
+# a checkout — runs straight from TypeScript through tsx, no build step
+git clone git@github.com:WaterXProtocol/waterx-agent.git
+cd waterx-agent && pnpm install
+node bin/waterx.mjs next --json
+
+# a tarball — carries compiled JS, needs no tsx, installs into any project
+pnpm run build && npm pack           # produces waterx-agent-0.1.0.tgz
+cd ~/your-project && npm install /path/to/waterx-agent-0.1.0.tgz
+npx waterx next --json
+```
+
+The commands are identical either way, and the ones this package *hands back*
+(`nextCommand`, `suggestions[].command`) are spelled for wherever they were
+printed — `npx waterx …` from an install, `node bin/waterx.mjs …` from a
+checkout — so they can be run verbatim.
+
+Configuration belongs to the caller: `.env` and the `.waterx/` ledgers are read
+and written in the **working directory**, not inside the package.
+
+`pnpm run pack:check` packs the tarball, installs it into a throwaway project
+and asserts what arrived — that `bin` resolves, that no `tsx` came with it, and
+that the commands it emits are runnable there. None of that is visible from
+inside the repository, which is why the check leaves it.
+
+The package stays `private: true`: it is installable from a tarball and
+publishing to npm is a separate, deliberate decision.
+
 ## Driving it from an agent
 
 **The prompt to hand someone**, for Claude Code, Codex, or anything with a

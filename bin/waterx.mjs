@@ -19,8 +19,8 @@
  * not cannot be invented.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,10 +63,42 @@ if (target === undefined) {
   process.exit(2);
 }
 
-const child = spawnSync(
-  process.execPath,
-  [join(root, "node_modules", "tsx", "dist", "cli.mjs"), join(root, target), ...args],
-  { stdio: "inherit", cwd: root },
-);
+/**
+ * Compiled output when there is some, the TypeScript sources otherwise.
+ *
+ * A checkout runs straight from source through `tsx`, which is what makes the
+ * repo pleasant to work in — no build step between an edit and a run. An
+ * installed tarball carries `dist/` and no `tsx` at all, because a consumer
+ * should not have to install a TypeScript runtime to place an order. One shim
+ * covers both by asking which one is present rather than being told.
+ */
+const built = join(root, "dist", target.replace(/\.ts$/, ".js"));
+const useBuilt = existsSync(built);
+
+/**
+ * How a caller would type this command themselves.
+ *
+ * Passed down so the commands this package hands back are runnable where they
+ * were printed: a consumer who installed the tarball has no `bin/waterx.mjs`
+ * path, and a checkout has no `waterx` on its PATH.
+ */
+const invokedAs = root.includes(`${sep}node_modules${sep}`) ? "npx waterx" : "node bin/waterx.mjs";
+const env = { ...process.env, WATERX_INVOKED_AS: invokedAs };
+
+const child = useBuilt
+  ? spawnSync(process.execPath, [built, ...args], { stdio: "inherit", env })
+  : spawnSync(
+      process.execPath,
+      [join(root, "node_modules", "tsx", "dist", "cli.mjs"), join(root, target), ...args],
+      { stdio: "inherit", env },
+    );
+
+if (child.error !== undefined) {
+  process.stderr.write(
+    `waterx: could not start "${command}": ${child.error.message}\n` +
+      (useBuilt ? "" : "The sources need `tsx`. Run `pnpm install`, or `pnpm run build` first.\n"),
+  );
+  process.exit(3);
+}
 
 process.exit(child.status ?? 1);
