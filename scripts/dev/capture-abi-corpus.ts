@@ -522,6 +522,63 @@ const packages = Object.fromEntries(
   [...deployment.byName.entries()].sort(([a], [b]) => a.localeCompare(b)),
 );
 
+/**
+ * Replace the account and address identifiers in a captured record with stable
+ * synthetic ones.
+ *
+ * The fixture exists to prove **where** a parameter sits, not whose account it
+ * was. The identity is incidental to every assertion made against this file —
+ * and it is not incidental to the person whose mainnet account was used to
+ * capture the layouts, because committing it publishes the link between that
+ * account and this project, permanently and to anyone who searches.
+ *
+ * So the identifiers are substituted on both sides at once: in `sent`, and in
+ * the raw `positions` blobs that embed them. The property the tests check —
+ * that the value sent for a parameter is the value at the position the ABI
+ * declares for it — is preserved exactly, because both halves move together.
+ *
+ * The replacements stay **distinct from one another**, which is the one thing
+ * that must not be lost: the whole capture is built with every argument
+ * different from every other, so that a swap between two same-width parameters
+ * moves a value the fixture can see. Collapsing them to a single placeholder
+ * would quietly disable that.
+ *
+ * Package ids are never touched. Those are checked against the live manifest
+ * and are public deployment facts.
+ */
+function redact(record: { captured: Record<string, Instance[]> }, real: Record<string, string>): void {
+  const map = new Map<string, string>();
+  for (const [name, value] of Object.entries(real)) {
+    const from = value.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+    if (from === "".padStart(64, "0")) continue;
+    // Distinct, valid hex, and obviously synthetic to anyone reading the file.
+    const seed = PLACEHOLDERS[name] ?? "ee";
+    map.set(from, seed.repeat(32));
+  }
+  const swap = (text: string): string => {
+    let out = text;
+    for (const [from, to] of map) out = out.split(from).join(to);
+    return out;
+  };
+  for (const instances of Object.values(record.captured)) {
+    for (const instance of instances) {
+      for (const [key, value] of Object.entries(instance.sent)) instance.sent[key] = swap(value);
+      instance.positions = instance.positions.map((p) => (p === null ? null : swap(p)));
+    }
+  }
+}
+
+/** One per role, so a swap between two roles is still visible in the fixture. */
+const PLACEHOLDERS: Record<string, string> = {
+  accountId: "a1",
+  sender: "5e",
+  positionAccount: "a2",
+  positionOwner: "50",
+  delegateAccount: "a3",
+  delegateOwner: "51",
+  delegate: "de",
+};
+
 // Merged into the existing file, never over it. The record is keyed by network
 // — testnet and mainnet publish different packages under the same names, so a
 // capture of one describes the other as entirely changed — and a whole-file
@@ -532,6 +589,20 @@ const existing = JSON.parse(readFileSync(CORPUS_PATH, "utf8")) as {
   version?: number;
   networks?: Record<string, unknown>;
 };
+const captured = Object.fromEntries([...corpus.entries()].sort(([a], [b]) => a.localeCompare(b)));
+redact(
+  { captured },
+  {
+    accountId,
+    sender,
+    positionAccount,
+    positionOwner: process.env.POSITION_OWNER ?? sender,
+    delegateAccount,
+    delegateOwner: process.env.DELEGATE_OWNER ?? sender,
+    delegate: delegateAddress,
+  },
+);
+
 const merged = {
   version: 2,
   networks: {
@@ -541,7 +612,7 @@ const merged = {
       network: info.network,
       sdkVersion: SDK_VERSION,
       packages,
-      captured: Object.fromEntries([...corpus.entries()].sort(([a], [b]) => a.localeCompare(b))),
+      captured,
       uncaptured: Object.fromEntries([...skipped.entries()].sort(([a], [b]) => a.localeCompare(b))),
     },
   },
