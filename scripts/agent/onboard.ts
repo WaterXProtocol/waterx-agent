@@ -16,7 +16,14 @@ import { invoke, succeeded } from "../../src/cli/contract.ts";
 import type { DelegateData } from "../../src/api/types.ts";
 import { initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
-parseArgs({}, "onboard");
+const args = parseArgs(
+  {
+    label: {
+      desc: "A name for this agent, shown to the owner on the authorization screen",
+    },
+  },
+  "onboard",
+);
 
 await run(async () => {
   const agent = initAgent();
@@ -40,6 +47,8 @@ await run(async () => {
   }
 
   const status = delegationStatus({
+    network: agent.config.network,
+    ...(args.label === undefined ? {} : { label: args.label }),
     ...(delegateAddress === undefined ? {} : { delegateAddress }),
     ...(ownerAddress === undefined ? {} : { ownerAddress }),
     ...(accountId === undefined ? {} : { accountId }),
