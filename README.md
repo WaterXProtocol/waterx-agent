@@ -46,11 +46,17 @@ npm install github:WaterXProtocol/waterx-agent
 npx waterx next --json
 ```
 
-The build happens at install time via the `prepare` script. Some npm versions
-and most locked-down CI setups refuse lifecycle scripts by default — npm ≥ 11
-prints `npm warn allow-scripts` — and a refused `prepare` leaves a package with
-no `dist/`. If `npx waterx next` reports a missing build, that is why; use a
-tarball instead.
+The build happens at install time via the `prepare` script, which means this
+route depends on lifecycle scripts being allowed. Two things to know:
+
+- **npm** runs it, with a `npm warn allow-scripts` notice on npm ≥ 11. If a
+  policy blocks it, the package installs with no `dist/` — an install that looks
+  fine and has no build in it.
+- **pnpm refuses outright**: `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. It wants
+  the package named in `onlyBuiltDependencies` first. Nothing is silently
+  broken — the install fails — but `pnpm add github:…` does not work as typed.
+
+Use a tarball wherever either of those bites.
 
 **From a tarball.** Already built, so nothing runs at install time.
 
@@ -90,9 +96,14 @@ while publishing to npm remains a separate, deliberate decision.
 **The prompt to hand someone**, for Claude Code, Codex, or anything with a
 shell:
 
-> Clone `git@github.com:Bucket-Protocol/waterx-agent.git`, run `pnpm install`,
-> read `SKILL.md`, then run `node bin/waterx.mjs bootstrap --json` and tell me
-> what is still missing before I can trade on testnet.
+> Run `npm install github:WaterXProtocol/waterx-agent`, then
+> `npx waterx next --json`, and do what it says.
+
+`next` works on a package with no configuration at all and routes itself to
+`bootstrap`, which reports what is still missing and who can supply it. The
+agent does not have to plan the onboarding, and does not need to find a
+document first — though `npx waterx skill` prints these instructions if it
+wants them.
 
 `bootstrap` does every setup step that does not need a person — a wallet, gas
 if the wallet needs any, finding and recording the account id — and returns the

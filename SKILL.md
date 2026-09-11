@@ -1,6 +1,6 @@
 ---
 name: waterx-agent
-description: Trade WaterX perpetuals on Sui from the command line — read market and account state, preview a write, have a person approve it, execute it, and reconcile a submission whose result nobody saw. Use when asked to check WaterX markets, positions, orders or account balances; to open, close, reduce or increase a perpetual position; to place, amend or cancel an order; to set up a WaterX wallet, account, delegate or risk limits; or to find out whether a WaterX transaction went through. Requires a checkout of the waterx-agent repository.
+description: Trade WaterX perpetuals on Sui from the command line — read market and account state, preview a write, have a person approve it, execute it, and reconcile a submission whose result nobody saw. Use when asked to check WaterX markets, positions, orders or account balances; to open, close, reduce or increase a perpetual position; to place, amend or cancel an order; to set up a WaterX wallet, account, delegate or risk limits; or to find out whether a WaterX transaction went through. Install with `npm install github:WaterXProtocol/waterx-agent`, or work from a checkout.
 ---
 
 # WaterX agent
@@ -239,12 +239,22 @@ checkout and tell it to read `SKILL.md`. Installing only saves that sentence.
 
 Paste this into Claude Code, Codex, or anything else with a shell:
 
-> Clone `git@github.com:Bucket-Protocol/waterx-agent.git`, run `pnpm install`,
-> read `SKILL.md`, then run `node bin/waterx.mjs bootstrap --json` and tell me
-> what is still missing before I can trade on testnet.
+> Run `npm install github:WaterXProtocol/waterx-agent`, then
+> `npx waterx next --json`, and do what it says.
 
-That gets to a set-up checkout and an exact list of what remains — which, on a
-fresh wallet, is testnet collateral, and no agent can arrange that (see below).
+`next` works on a package with no configuration at all and routes itself to
+`bootstrap`, which reports what is still missing and who can supply it. The
+agent does not have to plan the onboarding, and does not need to find a
+document first — though `npx waterx skill` prints these instructions if it
+wants them.
+
+Use `npm`, not `pnpm` — pnpm refuses a git install that needs a build
+(`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`). If install scripts are blocked where
+you are, install a tarball instead; the rest is identical:
+
+> Run `npm install <url-to-waterx-agent-0.1.0.tgz>`, then
+> `npx waterx next --json`, and do what it says.
+
 Once an operator has funded the account:
 
 > Show me SUI on WaterX, then preview a $10 long at 2x with 0.5% slippage.

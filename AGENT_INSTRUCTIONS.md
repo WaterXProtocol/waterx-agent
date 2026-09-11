@@ -8,6 +8,17 @@ Read it once, then work from the JSON envelopes.
 
 ---
 
+## 0. Finding these instructions again
+
+```bash
+npx waterx skill              # prints SKILL.md
+npx waterx skill --json       # the paths, for reading the files directly
+```
+
+Where the documents live depends on the package manager — npm puts them under
+`node_modules/waterx-agent/`, pnpm behind a symlink into `.pnpm/`, a checkout at
+the root — so ask rather than guessing a path.
+
 ## 1. How to call anything
 
 ```bash
