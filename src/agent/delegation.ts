@@ -34,49 +34,60 @@ import type { DelegateData } from "../api/types.ts";
 import type { Network } from "../config.ts";
 
 /**
- * The web console paired with each deployment — where an owner signs a grant.
+ * The web console paired with each deployment.
  *
- * A lookup, never a default: a private or preview console is passed as a plain
- * string through `WATERX_CONSOLE_URL`. Guessing one is worse than having none,
- * because an owner sent to the wrong console will conclude the product is
- * broken rather than that the link was wrong — which is exactly what happened
- * here. An earlier revision of this file pointed at a page found by probing for
- * a 200, and that page does not grant anything.
+ * A lookup, never a guess: a private or preview console goes in
+ * `WATERX_CONSOLE_URL`. Guessing one is worse than having none, because an
+ * owner sent to the wrong place concludes the product is broken rather than
+ * that the link was wrong.
  */
 export const CONSOLE_ENDPOINTS: Readonly<Record<Network, string>> = {
   mainnet: "https://waterx.app",
   testnet: "https://testnet.waterx.app",
 };
 
-/** Where the authorization flow lives in the console. */
-export const AUTHORIZE_PATH = "/agent/authorize";
-
-/** The console for a deployment, or the one an operator named. */
 export const consoleUrl = (network: Network): string =>
   process.env.WATERX_CONSOLE_URL?.trim() || CONSOLE_ENDPOINTS[network];
 
+/** Where an owner reviews and revokes what they have granted: Account → Delegates. */
+export const delegatesUrl = (network: Network): string =>
+  `${consoleUrl(network).replace(/\/+$/, "")}/en/account`;
+
 /**
- * The link an owner opens to grant this wallet.
+ * The console's `/agent/authorize` page grants **prediction markets only**.
  *
- * It carries the agent wallet, and optionally a label and an account id. It
- * confers **no authority** — it is a page to visit, not a credential — so it is
- * safe to paste into a chat in a way a token never would be. That is why
- * nothing else rides along: a link that carried a bearer token would turn every
- * paste into a leak.
+ * This is not an inference. The page says so itself: "This grants — place and
+ * close prediction-market orders"; "This does not grant — withdrawals,
+ * transfers, **perps**, staking, or claiming settled winnings." It reads one
+ * query parameter, `agent`, and there is no protocol to choose.
+ *
+ * So it is the wrong page for this agent, and sending an owner there is worse
+ * than sending them nowhere: they connect a wallet, sign, and have granted
+ * nothing this package can use — and the next thing they hear is that the
+ * permissions are missing. An earlier revision of this file did exactly that.
+ *
+ * If WaterX ships a perp equivalent, name it here rather than changing code.
  */
-export function authorizeUrl(input: {
-  network: Network;
+export const perpAuthorizeUrl = (): string | undefined =>
+  process.env.WATERX_PERP_AUTHORIZE_URL?.trim() || undefined;
+
+/**
+ * How an owner grants perp trading today: with their own key, through this
+ * package.
+ *
+ * `account::add_delegate` and `account::set_delegate_protocol_permission` are
+ * both confirmed against both deployments, so this is a path that demonstrably
+ * works — which is more than can be said for a web page that does not cover
+ * perps. It does mean the owner puts their key in a CLI rather than keeping it
+ * in a browser wallet, and that is a real cost of the missing page, not a
+ * design choice worth defending.
+ */
+export const perpGrantCommand = (input: {
   agentWallet: string;
-  label?: string;
   accountId?: string;
-}): string {
-  const base = consoleUrl(input.network).replace(/\/+$/, "");
-  const url = new URL(AUTHORIZE_PATH, `${base}/`);
-  url.searchParams.set("agent", input.agentWallet);
-  if (input.label !== undefined) url.searchParams.set("label", input.label);
-  if (input.accountId !== undefined) url.searchParams.set("account", input.accountId);
-  return url.toString();
-}
+  invoke: (command: string, ...args: string[]) => string;
+}): string =>
+  input.invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
 
 /**
  * What the agent asks for: trading, and nothing else.
@@ -129,7 +140,10 @@ export interface DelegationStatus {
   granted?: string[];
   /** Requested permissions the grant does not carry. */
   missing?: string[];
+  /** Where to review and revoke — Account → Delegates. Not where to grant. */
   grantUrl: string;
+  /** The command the owner runs to grant, when there is a wallet to grant to. */
+  grantCommand?: string;
 }
 
 /**
@@ -144,20 +158,17 @@ export function delegationStatus(input: {
   delegateAddress?: string;
   ownerAddress?: string;
   accountId?: string;
-  /** A name for this agent, shown to the owner on the authorization screen. */
+  /** A name for this agent, for the caller's own records. */
   label?: string;
+  /** The exact command the owner runs to grant, spelled for where they are. */
+  grantCommand?: string;
   /** `undefined` when the lookup has not been made; an empty array means none. */
   delegates?: readonly DelegateData[];
 }): DelegationStatus {
-  const grantUrl =
-    input.delegateAddress === undefined
-      ? consoleUrl(input.network)
-      : authorizeUrl({
-          network: input.network,
-          agentWallet: input.delegateAddress,
-          ...(input.label === undefined ? {} : { label: input.label }),
-          ...(input.accountId === undefined ? {} : { accountId: input.accountId }),
-        });
+  // Where to REVIEW and revoke — verified from the console's own copy ("Revoke
+  // any time from Account → Delegates"). Not where to grant: the console's
+  // authorize page covers prediction markets and says it does not cover perps.
+  const grantUrl = perpAuthorizeUrl() ?? delegatesUrl(input.network);
   const { delegateAddress, ownerAddress, accountId } = input;
 
   if (delegateAddress === undefined) {
@@ -168,16 +179,23 @@ export function delegationStatus(input: {
     };
   }
 
-  const base = { delegateAddress, grantUrl };
+  const base = {
+    delegateAddress,
+    grantUrl,
+    ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }),
+  };
 
   if (ownerAddress === undefined) {
     return {
       ...base,
       state: "awaiting-grant",
       headline:
-        `Give ${delegateAddress} to the account owner. They grant it trading permission at ` +
-        `${grantUrl} from the wallet that owns the account, then tell you their address and ` +
-        `account id.`,
+        `Give ${delegateAddress} to the account owner. Granting PERP permission is not something ` +
+        `the console does today — its \`/agent/authorize\` page covers prediction markets and ` +
+        `states that it does not grant perps — so the owner grants it with their own key: ` +
+        `${input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes"}. They can ` +
+        `review and revoke it at ${grantUrl} (Account → Delegates). Then tell you their address ` +
+        `and account id.`,
     };
   }
 
@@ -223,8 +241,10 @@ export function delegationStatus(input: {
       accountId,
       state: "not-granted",
       headline:
-        `${delegateAddress} is not a delegate of ${accountId}. The owner grants it at ` +
-        `${grantUrl}; until they do, every write refuses on chain.`,
+        `${delegateAddress} is not a delegate of ${accountId}. The owner grants it with their ` +
+        `own key — ${input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes"} ` +
+        `— because the console's authorize page grants prediction markets and not perps. Until ` +
+        `they do, every write refuses on chain.`,
     };
   }
 
@@ -241,7 +261,8 @@ export function delegationStatus(input: {
       state: "stale-grant",
       headline:
         "The grant is in the superseded authority slot, so every perp action aborts on chain " +
-        `(EUnauthorized, surfaced as 6002). The owner must re-grant it at ${grantUrl}.`,
+        `(EUnauthorized, surfaced as 6002). The owner must re-grant it: ` +
+        `${input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes"}.`,
     };
   }
 
@@ -257,7 +278,8 @@ export function delegationStatus(input: {
       state: "insufficient",
       headline:
         `Granted, but without ${missing.join(", ")}. Those actions will refuse on chain; the ` +
-        `owner can widen the grant at ${grantUrl}.`,
+        `owner widens the grant by re-running it with a fuller perp mask. If they granted through ` +
+        `the console's authorize page, that is why: it grants prediction markets, not perps.`,
     };
   }
 

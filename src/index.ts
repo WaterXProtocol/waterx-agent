@@ -17,10 +17,11 @@ export type {
 } from "./agent/agent.ts";
 export { assertNotCrossing, MarketRegistry } from "./agent/markets.ts";
 export {
-  AUTHORIZE_PATH,
-  authorizeUrl,
   CONSOLE_ENDPOINTS,
   consoleUrl,
+  delegatesUrl,
+  perpAuthorizeUrl,
+  perpGrantCommand,
   delegationStatus,
   REQUESTED_PERMISSION_NAMES,
   REQUESTED_PERP_PERMISSIONS,

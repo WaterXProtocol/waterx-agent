@@ -298,6 +298,31 @@ transactions; no account of its own; no collateral of its own. The owner keeps
 all three. A fresh install therefore has exactly one thing outstanding — the
 grant — and `bootstrap` says so rather than asking anyone to fund a wallet.
 
+**The console cannot grant this yet.** Its `/agent/authorize` page covers
+prediction markets and says so on the page: *"This does not grant — withdrawals,
+transfers, **perps**, staking…"*. Sending a perp owner there is worse than
+sending them nowhere — they connect a wallet, sign, and have granted nothing
+this package can use.
+
+So today the owner grants it with their own key:
+
+```bash
+# run by the OWNER, with their key in SUI_PRIVATE_KEY and their account in
+# WATERX_ACCOUNT_ID
+npx waterx add-delegate --delegate <the agent wallet> --yes --json
+```
+
+`account::add_delegate` and `account::set_delegate_protocol_permission` are both
+confirmed against both deployments, so this demonstrably works. It does mean the
+owner puts their key in a CLI rather than keeping it in a browser wallet, and
+that is a real cost of the missing page rather than a design choice worth
+defending — **a perp equivalent of `/agent/authorize` would remove it.** When
+one exists, name it in `WATERX_PERP_AUTHORIZE_URL` and the agent will hand out
+the link instead, with no code change.
+
+Either way, the owner reviews and revokes from **Account → Delegates** in the
+console, and revocation takes effect on chain immediately.
+
 `onboard` reports where the handshake has got to and what the next move is. The
 grant itself is the owner's act, made on chain from their own wallet at
 `https://waterx.app/agent/authorize?agent=<the agent wallet>`, and revocable there; this command reads it and

@@ -64,7 +64,7 @@ and **ask for anything in `needsFromUser` instead of choosing it**.
 | `unsettled` | Something was sent and nobody knows what happened. Reconcile before anything else. |
 | `awaiting-approval` | A preview is waiting on them. Show it and ask. |
 | `not-set-up` | Run `bootstrap` and relay what is still missing — some of it needs an operator. |
-| `awaiting-grant` | A wallet exists and nothing has been granted to it. Give the address to the account owner — they grant it on the web. The agent needs no SUI, no account and no collateral of its own. |
+| `awaiting-grant` | A wallet exists and nothing has been granted to it. Give the address to the account owner; `onboard` prints the exact command they run. **Do not send them to the console's `/agent/authorize` page — it grants prediction markets and says it does not grant perps.** The agent needs no SUI, no account and no collateral of its own. |
 | `not-delegated` | The owner granted nothing, or the grant is stale. Run `onboard` and relay it — only they can fix it. |
 | `read-only` | Nothing can be signed. On mainnet that is the default and changing it is their decision. |
 | `no-collateral` | Set up, but nothing to commit. Gas is not collateral; this one needs an operator. |
