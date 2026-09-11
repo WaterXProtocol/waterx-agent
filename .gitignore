@@ -4,3 +4,4 @@ policy.json
 dist/
 .DS_Store
 .waterx/
+*.tgz

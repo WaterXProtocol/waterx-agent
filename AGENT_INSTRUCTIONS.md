@@ -14,7 +14,8 @@ Read it once, then work from the JSON envelopes.
 node bin/waterx.mjs <command> [options] --json
 ```
 
-From the repository root.
+From a checkout; `npx waterx <command> … --json` from a project that installed
+the tarball. Identical otherwise.
 
 - `--json` — exactly one JSON document on stdout and nothing else, for the whole
   life of the process. Everything human-readable goes to stderr.

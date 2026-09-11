@@ -1,0 +1,23 @@
+{
+  // Emitting build, as distinct from the type-checking one.
+  //
+  // The sources import each other with explicit `.ts` extensions, which is what
+  // lets `tsx` run them straight from a checkout with no build step at all —
+  // the thing that makes this repo pleasant to hack on. A consumer installing a
+  // tarball should not need `tsx`, so this compiles the same sources to JS and
+  // rewrites those specifiers to `.js` on the way out.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    // Turns `./foo.ts` into `./foo.js` in the emitted output. Without it the
+    // built files would import specifiers that exist only before compilation.
+    "rewriteRelativeImportExtensions": true
+  },
+  // Tests are not shipped and do not need compiling; they run from source.
+  "include": ["src", "scripts", "bin"],
+  "exclude": ["node_modules", "dist", "test"]
+}

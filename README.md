@@ -33,6 +33,58 @@ Concretely, that leaves three things here:
 `@waterx/sdk` is a dependency for its permission and order-type constants — the
 on-chain source of truth for those bitmasks — not for transaction building.
 
+## Install
+
+Three ways in. The commands are identical afterwards, and the ones this package
+*hands back* are spelled for wherever they were printed — `npx waterx …` from an
+install, `node bin/waterx.mjs …` from a checkout — so they run verbatim.
+
+**From the repository URL.** Nothing to host; npm clones, builds and packs.
+
+```bash
+npm install github:WaterXProtocol/waterx-agent
+npx waterx next --json
+```
+
+The build happens at install time via the `prepare` script. Some npm versions
+and most locked-down CI setups refuse lifecycle scripts by default — npm ≥ 11
+prints `npm warn allow-scripts` — and a refused `prepare` leaves a package with
+no `dist/`. If `npx waterx next` reports a missing build, that is why; use a
+tarball instead.
+
+**From a tarball.** Already built, so nothing runs at install time.
+
+```bash
+npm install https://github.com/WaterXProtocol/waterx-agent/releases/download/v0.1.0/waterx-agent-0.1.0.tgz
+npx waterx next --json
+```
+
+Produce one with `pnpm run build && npm pack` and attach it to a GitHub release.
+This is the option to hand to anyone whose environment blocks install scripts.
+
+**A checkout**, to work on it:
+
+```bash
+git clone git@github.com:WaterXProtocol/waterx-agent.git
+cd waterx-agent && pnpm install
+node bin/waterx.mjs next --json
+```
+
+Runs straight from TypeScript through `tsx`, with no build step between an edit
+and a run — the shim prefers sources when they are present, which they are only
+in a checkout.
+
+Configuration belongs to the caller: `.env` and the `.waterx/` ledgers are read
+and written in the **working directory**, never inside the package.
+
+`pnpm run pack:check` packs the tarball, installs it into a throwaway project
+and asserts what arrived — that `bin` resolves, that no `tsx` came with it, and
+that the commands it emits are runnable there. None of that is visible from
+inside the repository, which is why the check leaves it.
+
+The package stays `private: true`: installable from a tarball or a git URL,
+while publishing to npm remains a separate, deliberate decision.
+
 ## Driving it from an agent
 
 **The prompt to hand someone**, for Claude Code, Codex, or anything with a

@@ -19,8 +19,8 @@
  * not cannot be invented.
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -63,10 +63,49 @@ if (target === undefined) {
   process.exit(2);
 }
 
-const child = spawnSync(
-  process.execPath,
-  [join(root, "node_modules", "tsx", "dist", "cli.mjs"), join(root, target), ...args],
-  { stdio: "inherit", cwd: root },
-);
+/**
+ * The sources when they are there, the compiled output when they are not.
+ *
+ * The test is for the SOURCE, not for `dist/`, and the direction matters. A
+ * checkout always has `scripts/`; a tarball never does, because `files` does
+ * not ship it. So a checkout runs live through `tsx` — no build step between an
+ * edit and a run — and an install runs the build, needing no TypeScript runtime
+ * to place an order.
+ *
+ * Preferring `dist/` instead would have been quietly wrong the moment anything
+ * created one in a checkout: `prepare` builds on install, and every edit
+ * afterwards would have been ignored in favour of a stale compile.
+ */
+const source = join(root, target);
+const built = join(root, "dist", target.replace(/\.ts$/, ".js"));
+const useBuilt = !existsSync(source);
+
+/**
+ * How a caller would type this command themselves.
+ *
+ * Passed down so the commands this package hands back are runnable where they
+ * were printed: a consumer who installed the tarball has no `bin/waterx.mjs`
+ * path, and a checkout has no `waterx` on its PATH.
+ */
+const invokedAs = root.includes(`${sep}node_modules${sep}`) ? "npx waterx" : "node bin/waterx.mjs";
+const env = { ...process.env, WATERX_INVOKED_AS: invokedAs };
+
+const child = useBuilt
+  ? spawnSync(process.execPath, [built, ...args], { stdio: "inherit", env })
+  : spawnSync(
+      process.execPath,
+      [join(root, "node_modules", "tsx", "dist", "cli.mjs"), join(root, target), ...args],
+      { stdio: "inherit", env },
+    );
+
+if (child.error !== undefined) {
+  process.stderr.write(
+    `waterx: could not start "${command}": ${child.error.message}\n` +
+      (useBuilt
+        ? "The build is missing or incomplete. Reinstall the package.\n"
+        : "The sources need `tsx`. Run `pnpm install` first.\n"),
+  );
+  process.exit(3);
+}
 
 process.exit(child.status ?? 1);
