@@ -15,6 +15,7 @@ const ok: Situation = {
   firstUnsettled: undefined,
   pending: [],
   configured: true,
+  missing: { signer: false, gas: false, account: false },
   readOnly: false,
   freeMargin: 100,
   positions: 0,
@@ -62,10 +63,38 @@ describe("what to do next", () => {
   });
 
   it("sends an unconfigured caller to bootstrap, not to a trade", () => {
-    const g = decide({ ...ok, configured: false, blockers: ["account"] });
+    const g = decide({ ...ok, configured: false, missing: { signer: true, gas: false, account: true } });
     expect(g.state).toBe("not-set-up");
-    expect(g.headline).toContain("account");
     expect(g.suggestions.map((s) => s.command).join(" ")).toContain("bootstrap");
+  });
+
+  it("names the specific gap, so asking again moves things along", () => {
+    // Generic advice made a loop: bootstrap says "you need an account", the
+    // agent asks `next`, `next` says "run bootstrap", bootstrap says the same
+    // thing. Each turn costs the user a message and changes nothing.
+    const noKey = decide({ ...ok, configured: false, missing: { signer: true, gas: false, account: true } });
+    expect(noKey.headline).toContain("No signing key");
+
+    const noAccount = decide({ ...ok, configured: false, missing: { signer: false, gas: false, account: true } });
+    expect(noAccount.headline).toContain("no WaterX account");
+    expect(noAccount.suggestions[0]?.command).toContain("--create-account");
+
+    // A wallet and an account, but a failing check: name the check.
+    const noGas = decide({
+      ...ok,
+      configured: false,
+      missing: { signer: false, gas: true, account: true },
+    });
+    expect(noGas.headline).toContain("no gas");
+    expect(noGas.suggestions[0]?.command).toContain("fund-sui");
+
+    const blocked = decide({
+      ...ok,
+      configured: false,
+      missing: { signer: false, gas: false, account: false },
+      blockers: ["abi corpus"],
+    });
+    expect(blocked.headline).toContain("abi corpus");
   });
 
   it("does not offer a trade with no collateral, and says who can fix it", () => {
@@ -87,7 +116,12 @@ describe("what to do next", () => {
   });
 
   it("still calls a read-only process unconfigured when it also is", () => {
-    const g = decide({ ...ok, readOnly: true, configured: false, blockers: ["account"] });
+    const g = decide({
+      ...ok,
+      readOnly: true,
+      configured: false,
+      missing: { signer: false, gas: false, account: true },
+    });
     expect(g.state).toBe("not-set-up");
   });
 

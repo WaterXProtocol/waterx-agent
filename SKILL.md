@@ -9,8 +9,28 @@ A TypeScript agent for the [WaterX](https://waterx.io) perpetual protocol on
 Sui. It holds a keypair, asks the WaterX backend to build each transaction,
 verifies the bytes against what was authorized, signs, and submits.
 
-Every command below is real and lives in `package.json`. Run them from the
-repository root.
+## Start here, every time
+
+Run this and do what it says:
+
+```bash
+node bin/waterx.mjs next --json
+```
+
+From the repository root, after `pnpm install`. That is the whole entry point —
+first contact and every turn afterwards. It works on a clone with no
+configuration at all: no `.env`, no wallet, no account. Those are answers, not
+errors.
+
+It returns the first state that applies, the sentence to tell the user, and the
+commands to offer. On a fresh checkout that is `not-set-up`, and it points at
+`bootstrap`, which does every setup step that does not need a person and
+returns the rest as `{ what, why, who }`. **Relay those verbatim** — `who` is
+the field that matters, because some of it needs an operator at the venue and
+no amount of retrying will produce it.
+
+You do not have to plan the onboarding. Run `next`, do the one thing it says,
+run `next` again.
 
 ## How to call it
 
@@ -27,11 +47,7 @@ to stdout, which breaks the one-document guarantee — `pnpm --silent run
 <command> -- --json` also works, but it depends on a flag that is easy to omit
 and impossible to notice missing.
 
-## Guiding a person: start every turn here
-
-```bash
-node bin/waterx.mjs next --json
-```
+## The six states `next` can return
 
 One read that answers "where am I, and what should I offer?" — and answers it
 in the order the states have to be resolved, so you cannot offer a trade to

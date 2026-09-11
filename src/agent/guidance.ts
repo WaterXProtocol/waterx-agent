@@ -69,6 +69,15 @@ export interface Situation {
    * to fix.
    */
   configured: boolean;
+  /**
+   * What specifically is missing, so the advice can name it.
+   *
+   * Without this, `not-set-up` could only say "run bootstrap" — and an agent
+   * that ran bootstrap, was told it needed an account, and then asked `next`
+   * what to do was sent back to bootstrap. It loops, and each turn costs the
+   * user a message to say the same thing.
+   */
+  missing: { signer: boolean; gas: boolean; account: boolean };
   readOnly: boolean;
   freeMargin: number | undefined;
   positions: number;
@@ -117,16 +126,54 @@ export function decide(s: Situation): Guidance {
   }
 
   if (!s.configured) {
+    // Named, not generic. Each branch is the one thing to do next, so an agent
+    // that keeps asking `next` keeps moving instead of being handed the same
+    // "run bootstrap" it just ran.
+    if (s.missing.signer) {
+      return {
+        state: "not-set-up",
+        headline:
+          `No signing key, so nothing can be written. Bootstrap generates one and asks the ` +
+          `faucet for gas; it signs nothing.`,
+        suggestions: [{ what: "generate a wallet and get gas", command: invoke("bootstrap", "--json") }],
+      };
+    }
+    if (s.missing.gas) {
+      // Before the account, because the account cannot be created without it.
+      // Told "create the account" by a wallet with no SUI, an agent runs the
+      // command, watches it fail on gas selection, asks what to do next, and
+      // is told to create the account. The loop is the symptom; not knowing
+      // gas exists is the cause.
+      return {
+        state: "not-set-up",
+        headline:
+          `The wallet holds no gas, so nothing can be sent — including creating an account. On ` +
+          `testnet the public faucet supplies it and is often busy; this is a queue, not a ` +
+          `fault, so wait and try again.`,
+        suggestions: [{ what: "ask the faucet for gas", command: invoke("fund-sui", "--json") }],
+      };
+    }
+    if (s.missing.account) {
+      return {
+        state: "not-set-up",
+        headline:
+          `There is a wallet but no WaterX account, and every account-scoped write refuses ` +
+          `without one. Creating it signs one transaction and moves no funds — ask the user ` +
+          `before running it.`,
+        suggestions: [
+          {
+            what: "create the account (one signature, no funds moved)",
+            command: invoke("bootstrap", "--create-account", "--yes", "--json"),
+          },
+        ],
+      };
+    }
     return {
       state: "not-set-up",
       headline:
-        `Reads work, writes do not${s.blockers.length === 0 ? "" : ` (${s.blockers.join(", ")})`}. ` +
-        `Run bootstrap and relay what it says is still missing — some of it needs an operator, ` +
-        `not you.`,
-      suggestions: [
-        { what: "find out exactly what is missing", command: invoke("bootstrap", "--json") },
-        { what: "the full preflight", command: invoke("doctor", "--json") },
-      ],
+        `Reads work, writes do not: ${s.blockers.join(", ")}. These are checks the signing path ` +
+        `makes for itself, so they refuse a write rather than merely warning.`,
+      suggestions: [{ what: "the full preflight, with the fix for each", command: invoke("doctor", "--json") }],
     };
   }
 

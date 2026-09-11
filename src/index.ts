@@ -37,6 +37,7 @@ export type * from "./api/types.ts";
 export { TxExecutor } from "./chain/executor.ts";
 export type { ExecuteOptions, ExecuteResult } from "./chain/executor.ts";
 export { createSigner, signerReadiness } from "./chain/create-signer.ts";
+export { gasBalance, MIN_GAS_SUI } from "./chain/gas.ts";
 export type { SignerReadiness } from "./chain/create-signer.ts";
 export {
   ExternalCommandSigner,

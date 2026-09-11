@@ -20,6 +20,7 @@
  * then only `createAccount`, which moves no funds. It never deposits — that
  * commits money, and money is a decision.
  */
+import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { getOrCreateWallet, saveToEnv } from "../../src/chain/wallet.ts";
 import { runDoctor } from "../../src/doctor.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
@@ -47,9 +48,6 @@ const TRADE_COMMAND = invoke(
   "--slippage <n>",
   "--json",
 );
-
-/** Below this, a transaction may not have gas to pay for itself. */
-const MIN_GAS_SUI = 0.02;
 
 /** One thing a person still has to do, in a shape an agent can relay verbatim. */
 interface Step {
@@ -85,7 +83,7 @@ await run(async () => {
   // Asked for only when it is actually needed. A wallet that already holds gas
   // does not want the faucet, and asking anyway turned a busy faucet — shared
   // by everyone on this IP — into a reported fault on a setup that was fine.
-  const gas = await gasBalance(agent, wallet.address);
+  const gas = await gasBalance(agent.config, wallet.address);
   note(`  gas        ${gas === undefined ? "balance unknown" : `${String(gas)} SUI`}`);
   const needsGas = gas !== undefined && gas < MIN_GAS_SUI;
   if (args.skipFaucet !== "true" && agent.config.network === "testnet" && needsGas) {
@@ -239,32 +237,6 @@ await run(async () => {
         },
   );
 });
-
-/**
- * SUI held by an address, or `undefined` when the fullnode could not say.
- *
- * `undefined` is not zero. Treating a failed lookup as an empty wallet would
- * send every run to the faucet during a fullnode wobble.
- */
-async function gasBalance(
-  agent: ReturnType<typeof initAgent>,
-  owner: string,
-): Promise<number | undefined> {
-  try {
-    const { SuiGrpcClient } = await import("@mysten/sui/grpc");
-    const client = new SuiGrpcClient({
-      network: agent.config.network,
-      baseUrl: agent.config.grpcUrl,
-    });
-    const result = (await client.core.getBalance({
-      owner,
-      coinType: "0x2::sui::SUI",
-    })) as { balance?: { balance?: string | number } };
-    return Number(result.balance?.balance ?? 0) / 1e9;
-  } catch {
-    return undefined;
-  }
-}
 
 /** The indexer publishes the id a moment after the transaction lands. */
 async function waitForAccount(

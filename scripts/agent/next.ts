@@ -12,6 +12,7 @@
  */
 import { list as listApprovals } from "../../src/agent/approvals.ts";
 import { decide } from "../../src/agent/guidance.ts";
+import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
 import { runDoctor } from "../../src/doctor.ts";
 import { succeeded } from "../../src/cli/contract.ts";
@@ -22,6 +23,13 @@ parseArgs({}, "next");
 await run(async () => {
   const agent = initAgent();
   const report = await runDoctor();
+
+  // Gas, because an account cannot be created without it and "create the
+  // account" is useless advice to a wallet that cannot pay for the transaction.
+  const gas =
+    report.signerReady && report.readReady
+      ? await gasBalance(agent.config, agent.signer.address)
+      : undefined;
 
   const open = unsettled();
   const pending = listApprovals().filter((a) => a.state === "pending");
@@ -47,6 +55,13 @@ await run(async () => {
       report.signerReady &&
       agent.config.accountId !== undefined &&
       !report.checks.some((c) => c.status === "fail"),
+    missing: {
+      signer: !report.signerReady,
+      // `undefined` is "could not ask", not "empty" — reporting a fullnode
+      // wobble as an empty wallet would name the wrong blocker.
+      gas: gas !== undefined && gas < MIN_GAS_SUI,
+      account: agent.config.accountId === undefined,
+    },
     readOnly: agent.config.executionPolicy === "read-only",
     freeMargin,
     positions,
@@ -74,6 +89,7 @@ await run(async () => {
       network: agent.config.network,
       account: account ?? null,
       freeMargin: freeMargin ?? null,
+      gasSui: gas ?? null,
       exposure: { positions, orders },
       unsettledSubmissions: open.length,
       pendingApprovals: pending.length,
