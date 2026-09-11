@@ -56,7 +56,6 @@ export {
   fromRawCollateral,
   fromRawFloat,
   toRawAcceptablePrice,
-  toRawAssetAmount,
   toRawCollateral,
   toRawPrice,
   toRawSize,

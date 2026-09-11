@@ -117,20 +117,6 @@ export interface WriteIntent {
    * second place, where the two could drift apart.
    */
   collateralRaw?: string;
-  /**
-   * New display USD this action commits, when that differs
-   * from `collateral`.
-   *
-   * `collateral` is what the per-order ceilings judge, and for a re-price that
-   * has to be the resting order's own collateral so the new size can be
-   * measured against `maxLeverage`. But the cumulative meter asks a different
-   * question — how much capital has been committed — and a re-price commits
-   * none. Metering the whole order on every update made a trailing stop eat its
-   * own ceiling: a 50 USDC order against a 500 USDC scope is refused on the
-   * tenth adjustment and stays refused, freezing the stop while the position is
-   * live. Defaults to `collateral` when omitted.
-   */
-  cumulativeDelta?: number;
   leverage?: number;
   slippagePercent?: number;
   /**
@@ -394,9 +380,8 @@ export class PolicyGate {
         break;
     }
 
-    if (!EXITS.has(intent.action)) {
-      const committed = intent.cumulativeDelta ?? intent.collateral;
-      if (committed !== undefined) this.cumulativeCollateral += committed;
+    if (!EXITS.has(intent.action) && intent.collateral !== undefined) {
+      this.cumulativeCollateral += intent.collateral;
     }
     const permit: Permit = { action: intent.action, fingerprint: fingerprintIntent(intent) };
     this.permits.add(permit);
@@ -566,10 +551,6 @@ export class PolicyGate {
 function assertMeasurable(intent: WriteIntent): void {
   for (const [name, value] of [
     ["collateral", intent.collateral],
-    // Feeds the cumulative total directly, so it needs the same guard —
-    // a NaN here poisons the running sum and disables the ceiling for the
-    // rest of the process, which is the failure this function exists for.
-    ["cumulativeDelta", intent.cumulativeDelta],
     ["leverage", intent.leverage],
     ["slippagePercent", intent.slippagePercent],
   ] as const) {

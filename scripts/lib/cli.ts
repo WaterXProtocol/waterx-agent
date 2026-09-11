@@ -95,39 +95,8 @@ function printUsage(defs: Record<string, ArgDef>, scriptName: string): void {
 
 const toKebab = (s: string): string => s.replace(/([A-Z])/g, "-$1").toLowerCase();
 
-/**
- * A numeric flag, or undefined when it was not given.
- *
- * Refuses a non-numeric value instead of handing back
- * `NaN`. `--cooldown` already guarded against exactly this (with a comment
- * about the bug class), but every other numeric flag went through the bare
- * `Number(v)` and every one of them fails silently and differently:
- *
- *   - `--after 5m` produced `notBefore: NaN`, serialized to `null`; the
- *     runner's `at < job.notBefore` is then false, so the deferral vanished
- *     and the trade fired on the next pass. The `new Date(NaN).toISOString()`
- *     that follows throws AFTER the inbox entry is durably written, so the
- *     operator saw a failed command and believed nothing had been queued.
- *   - `--interval 20s` produced `NaN` ms, and `??` does not catch `NaN`, so
- *     the runner span at full speed.
- *   - `--slippage`/`--limit` quietly became `NaN` inside a request.
- *
- * `NaN` compares false against everything, so it is never loudly wrong — which
- * is exactly why it has to be rejected at the edge.
- */
-export const asNumber = (value: string | undefined, label = "value"): number | undefined => {
-  if (value === undefined) return undefined;
-  // `Number("")` and `Number("  ")` are 0, not NaN — an empty flag would become
-  // a silent zero (a zero limit, a zero slippage bound) rather than an error.
-  const n = value.trim() === "" ? Number.NaN : Number(value);
-  if (!Number.isFinite(n)) {
-    throw new Error(
-      `--${label} "${value}" is not a number. Durations are given in seconds as plain ` +
-        `digits (30, not 30s).`,
-    );
-  }
-  return n;
-};
+export const asNumber = (value: string | undefined): number | undefined =>
+  value === undefined ? undefined : Number(value);
 
 export const asBool = (value: string | undefined): boolean => value === "true";
 

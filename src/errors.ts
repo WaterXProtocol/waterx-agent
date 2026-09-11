@@ -21,25 +21,9 @@ export class WaterXApiError extends Error {
     super(message);
   }
 
-  /**
-   * Transport failures, 5xx, and the explicitly-transient 6003 are worth
-   * retrying; 4xx are not.
-   *
-   * `status === 0` is the transport-failure sentinel that
-   * `http.ts` raises for a DNS/connect/timeout error, with a comment saying it
-   * picks 0 so that `retryable` treats it as transient — but `0 >= 500` is
-   * false, so the one class the GET backoff loop exists for was the one class
-   * it never retried. Worse, `runner.ts` shares this predicate: a single
-   * timed-out `GET /markets/:t/ticker` inside `closePosition` moved the job to
-   * terminal `failed`, permanently abandoning a close and leaving the position
-   * open on chain.
-   */
+  /** 5xx and the explicitly-transient 6003 are worth retrying; 4xx are not. */
   get retryable(): boolean {
-    return (
-      this.status === 0 ||
-      this.status >= 500 ||
-      this.code === ErrorCode.SponsorshipRequiredForDelegate
-    );
+    return this.status >= 500 || this.code === ErrorCode.SponsorshipRequiredForDelegate;
   }
 }
 

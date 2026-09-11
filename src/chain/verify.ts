@@ -637,10 +637,8 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     registry: obj("waterx_credit.credit_registry"),
     accountRegistry: obj("waterx_account.account_registry"),
     accountId: "accountId",
-    // The coin being credited: either the sender's balance withdrawal redeemed
-    // by coin::redeem_funds (amount and asset bound against that input), or —
-    // — the verified deposit SplitCoins' result, accepted
-    // inside checkProducedBy with the same guarantees proven elsewhere.
+    // The coin being credited comes from the sender's own balance withdrawal,
+    // whose amount and asset are bound against that input.
     assetCoin: { producedBy: "coin::redeem_funds" },
     extraData: { free: "an opaque routing blob the backend composes; the agent supplies none" },
   },
@@ -1359,7 +1357,6 @@ function checkProducedBy(
   name: string,
   wanted: string,
   deployment: Deployment,
-  depositSplit?: DepositCoinSplit,
 ): void {
   const argument = args[index] as
     | { $kind?: string; Result?: number; NestedResult?: [number, number] }
@@ -1377,17 +1374,6 @@ function checkProducedBy(
         `${String(argument?.$kind ?? "absent")} — not the output of any call in this ` +
         `transaction.`,
     );
-  }
-  // Coin-funded deposit: mint's assetCoin is the result of
-  // the one verified SplitCoins rather than of coin::redeem_funds. Source coin,
-  // amount and sole-consumption were proven in findDepositCoinSplit.
-  if (
-    depositSplit !== undefined &&
-    from === depositSplit.commandIndex &&
-    intent.action === "deposit" &&
-    wanted === "coin::redeem_funds"
-  ) {
-    return;
   }
   const producer = data.commands[from]?.MoveCall;
   const produced = producer == null ? undefined : `${producer.module}::${producer.function}`;
@@ -1570,7 +1556,6 @@ function checkArguments(
   entrypoint: string,
   deployment: Deployment,
   overrides: Readonly<Record<string, Binding>> = {},
-  depositSplit?: DepositCoinSplit,
 ): void {
   const call = data.commands[commandIndex]?.MoveCall;
   if (call == null) throw refuse(intent, `${entrypoint} is not a Move call`);
@@ -1614,7 +1599,6 @@ function checkArguments(
     if (isProducedBy(binding)) {
       checkProducedBy(
         data, call.arguments, index, intent, entrypoint, name, binding.producedBy, deployment,
-        depositSplit,
       );
       continue;
     }
@@ -1913,175 +1897,11 @@ function checkMainOrder(args: OrderArgs, intent: WriteIntent): void {
  * them. A `TransferObjects` appended to a correct order passed every parameter
  * binding in this file.
  */
-
-/**
- * The coin-funded deposit variant.
- *
- * The corpus was captured when the backend paid deposits with a
- * `FundsWithdrawal` reservation. The live backend now also builds the classic
- * shape — the signer's own Coin object, a `SplitCoins` carving off exactly the
- * authorized amount, the piece fed to `custody_vault::mint`. That build fails
- * three checks written for the reservation shape (command kind, input kind,
- * funds-withdrawal count), so this verifies the variant on its own terms and
- * hands the verified indices to those checks:
- *
- *  - exactly ONE SplitCoins, only under a `deposit` intent;
- *  - its source is an owned-object input (the chain itself refuses execution
- *    unless the sender owns it, and the sender is asserted to be the signer);
- *  - its single amount is a pure u64 equal to `intent.collateralRaw` — the
- *    asset is pinned separately by `custody_vault::mint`'s type argument;
- *  - its result is consumed exactly once, and the `assetCoin` binding then
- *    proves that one consumer is `custody_vault::mint` itself.
- *
- * Anything off-pattern refuses rather than falling through.
- */
-export interface DepositCoinSplit {
-  commandIndex: number;
-  coinInputIndex: number;
-}
-
-// Exported for the deposit-verifier regression tests.
-// Not part of the package's public surface — reached by relative path.
-export function findDepositCoinSplit(
-  data: Decoded,
-  intent: WriteIntent,
-): DepositCoinSplit | undefined {
-  const splits = data.commands
-    .map((c, i) => [c, i] as const)
-    .filter(([c]) => (c as { $kind?: string }).$kind === "SplitCoins");
-  if (splits.length === 0) return undefined;
-  if (intent.action !== "deposit") {
-    // Not this variant's to allow — the shape check refuses with its own message.
-    return undefined;
-  }
-  if (splits.length !== 1) {
-    throw refuse(
-      intent,
-      `the transaction carries ${String(splits.length)} SplitCoins commands; the coin-funded ` +
-        `deposit uses exactly one.`,
-    );
-  }
-  const [command, commandIndex] = splits[0];
-  const split = (command as { SplitCoins?: unknown }).SplitCoins as
-    | {
-        coin?: { $kind?: string; Input?: number };
-        amounts?: { $kind?: string; Input?: number }[];
-      }
-    | undefined;
-
-  const coinRef = split?.coin;
-  if (coinRef?.$kind !== "Input" || typeof coinRef.Input !== "number") {
-    throw refuse(intent, `the deposit split's source coin is not a transaction input.`);
-  }
-  const coinInputIndex = coinRef.Input;
-  const coinInput = data.inputs[coinInputIndex] as
-    | { $kind?: string; Object?: { $kind?: string } | null }
-    | undefined;
-  const coinKind =
-    coinInput?.$kind === "Object" ? (coinInput.Object?.$kind ?? "Object") : coinInput?.$kind;
-  if (coinKind !== "ImmOrOwnedObject") {
-    throw refuse(
-      intent,
-      `the deposit split draws from a ${String(coinKind)} input; the coin-funded variant ` +
-        `spends the signer's own coin object and nothing else.`,
-    );
-  }
-
-  const amounts = split?.amounts ?? [];
-  const amountRef = amounts[0];
-  if (amounts.length !== 1 || amountRef?.$kind !== "Input" || typeof amountRef.Input !== "number") {
-    throw refuse(intent, `the deposit split must carve exactly one amount, given as a pure input.`);
-  }
-  const amountInput = data.inputs[amountRef.Input] as
-    | { $kind?: string; Pure?: { bytes?: string } | null }
-    | undefined;
-  const bytes = amountInput?.$kind === "Pure" ? amountInput.Pure?.bytes : undefined;
-  if (typeof bytes !== "string") {
-    throw refuse(intent, `the deposit split's amount is not a pure input.`);
-  }
-  const raw = fromBase64(bytes);
-  if (raw.length !== 8) {
-    throw refuse(intent, `the deposit split's amount does not decode as a u64.`);
-  }
-  let amount = 0n;
-  for (let i = 7; i >= 0; i--) amount = (amount << 8n) | BigInt(raw[i]);
-  if (intent.collateralRaw === undefined || BigInt(intent.collateralRaw) !== amount) {
-    throw refuse(
-      intent,
-      `the deposit split carves ${String(amount)} from the signer's coin, but ` +
-        `${String(intent.collateralRaw)} was authorized.`,
-    );
-  }
-
-  // Count references to a value anywhere in a command's argument tree.
-  const countRefs = (node: unknown, matches: (o: RefNode) => boolean): number => {
-    if (node == null || typeof node !== "object") return 0;
-    const o = node as RefNode;
-    if (matches(o)) return 1;
-    let n = 0;
-    for (const v of Object.values(o)) n += countRefs(v, matches);
-    return n;
-  };
-
-  // The carved piece must go exactly one place; the assetCoin binding then
-  // proves that place is custody_vault::mint.
-  let uses = 0;
-  for (const [i, c] of data.commands.entries()) {
-    if (i === commandIndex) continue;
-    uses += countRefs(c, (o) =>
-      (o.$kind === "Result" && o.Result === commandIndex) ||
-      (o.$kind === "NestedResult" && o.NestedResult?.[0] === commandIndex),
-    );
-  }
-  if (uses !== 1) {
-    throw refuse(
-      intent,
-      `the deposit split's result is consumed ${String(uses)} times; it must feed ` +
-        `custody_vault::mint exactly once.`,
-    );
-  }
-
-  // ...and so must the coin itself. Admitting the owned coin as an input (see
-  // ALLOWED_INPUTS below) only proves that SplitCoins may draw from it — it says
-  // nothing about what *else* may name it. Nothing here constrained that:
-  // ALLOWED_COMMANDS permits MoveCall, 0x2 is unconditionally in
-  // `deployment.callable` as a framework package, and `0x2::transfer` is not in
-  // SENSITIVE, so a build response could append
-  // `0x2::transfer::public_transfer(Input(coin), Input(attacker))` and walk off
-  // with the coin's entire remaining balance while the deposit itself verified
-  // clean. A malicious build response is the whole reason this file exists, so
-  // the coin gets the same treatment as the split's result: the SplitCoins
-  // command is its only permitted consumer.
-  let coinUses = 0;
-  for (const [i, c] of data.commands.entries()) {
-    if (i === commandIndex) continue;
-    coinUses += countRefs(c, (o) => o.$kind === "Input" && o.Input === coinInputIndex);
-  }
-  if (coinUses !== 0) {
-    throw refuse(
-      intent,
-      `the signer's coin is named by ${String(coinUses)} command(s) beyond the deposit split; ` +
-        `the split is the only thing allowed to touch it.`,
-    );
-  }
-
-  return { commandIndex, coinInputIndex };
-}
-
-/** Argument-tree node shapes the reference counter recognises. */
-interface RefNode {
-  $kind?: string;
-  Input?: number;
-  Result?: number;
-  NestedResult?: [number, number];
-}
-
 function assertShapeIsAllowed(
   data: Decoded,
   intent: WriteIntent,
   deployment: Deployment,
   extraPackages: readonly string[],
-  depositSplit?: DepositCoinSplit,
 ): void {
   // Every call, not only the defining one. A single Move call from an unknown
   // package can do whatever it likes with the shared objects and the sender's
@@ -2153,8 +1973,6 @@ function assertShapeIsAllowed(
   for (const [index, command] of data.commands.entries()) {
     const kind = command.$kind;
     if (!ALLOWED_COMMANDS.has(kind)) {
-      // The one SplitCoins findDepositCoinSplit verified.
-      if (kind === "SplitCoins" && index === depositSplit?.commandIndex) continue;
       throw refuse(
         intent,
         `the transaction contains a ${kind} command (#${String(index)}), which these ` +
@@ -2189,8 +2007,6 @@ function assertShapeIsAllowed(
       }
     }
     if (!ALLOWED_INPUTS.has(kind)) {
-      // The one owned coin the verified deposit split spends.
-      if (kind === "ImmOrOwnedObject" && index === depositSplit?.coinInputIndex) continue;
       throw refuse(
         intent,
         `input #${String(index)} is a ${kind}. These operations read only pure values and ` +
@@ -2209,11 +2025,7 @@ function assertShapeIsAllowed(
  * missing from the intent — they were never argument values to find, they were
  * here.
  */
-function assertFundsWithdrawal(
-  data: Decoded,
-  intent: WriteIntent,
-  depositSplit?: DepositCoinSplit,
-): void {
+function assertFundsWithdrawal(data: Decoded, intent: WriteIntent): void {
   const withdrawals = data.inputs.filter((i) => i.$kind === "FundsWithdrawal");
   const wantAmount = intent.collateralRaw;
   const wantAsset = intent.assetType;
@@ -2225,20 +2037,6 @@ function assertFundsWithdrawal(
         intent,
         `the transaction withdraws funds from the signer's balance, which this action does ` +
           `not do. Refusing to pay out of an operation that authorized no payment.`,
-      );
-    }
-    return;
-  }
-
-  // Coin-funded deposit: the payment is the verified
-  // SplitCoins (amount checked there, asset pinned by mint's type argument).
-  // Paying through BOTH channels is no variant at all.
-  if (depositSplit !== undefined) {
-    if (withdrawals.length > 0) {
-      throw refuse(
-        intent,
-        `the transaction pays both by coin split and by balance withdrawal; ` +
-          `a deposit funds itself exactly one way.`,
       );
     }
     return;
@@ -2523,13 +2321,8 @@ export function assertTransactionMatches(
 
   // Shape first: everything below reasons about Move calls and their
   // arguments, so a command or input those checks cannot see must not exist.
-  // Verified before the shape checks so they can admit
-  // exactly the one split (and its coin input) that this proved.
-  const depositSplit = findDepositCoinSplit(data, intent);
-  assertShapeIsAllowed(
-    data, intent, context.deployment, context.extraPackages ?? [], depositSplit,
-  );
-  assertFundsWithdrawal(data, intent, depositSplit);
+  assertShapeIsAllowed(data, intent, context.deployment, context.extraPackages ?? []);
+  assertFundsWithdrawal(data, intent);
 
   // Who signs before who pays: a transaction sent from another address is not
   // ours to reason about at all, and saying so first gives the clearer error.
@@ -2608,9 +2401,7 @@ export function assertTransactionMatches(
   // 4. Every argument of every occurrence, and the code it runs.
   for (const index of definingIndices) {
     assertCodeIsTheDeployments(data, index, intent, required, context.deployment);
-    checkArguments(
-      data, index, intent, required, context.deployment, rule.overrides, depositSplit,
-    );
+    checkArguments(data, index, intent, required, context.deployment, rule.overrides);
   }
 
   // 5. The calls that ride WITH this action — a delegate grant's authority is

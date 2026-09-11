@@ -65,7 +65,7 @@ await run(async () => {
       return;
     }
 
-    const intervalMs = (asNumber(args.interval, "interval") ?? 20) * 1000;
+    const intervalMs = (asNumber(args.interval) ?? 20) * 1000;
     let stopping = false;
     for (const signal of ["SIGINT", "SIGTERM"] as const) {
       process.once(signal, () => {

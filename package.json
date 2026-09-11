@@ -1,12 +1,8 @@
 {
   "name": "waterx-agent",
   "version": "0.1.0",
-  "description": "WaterX perpetuals trading agent — backend-first order construction with on-chain verification and execution on Sui.",
   "type": "module",
   "private": true,
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "scripts": {
     "doctor": "tsx scripts/setup/doctor.ts",
     "typecheck": "tsc --noEmit",
@@ -43,6 +39,7 @@
     "info": "tsx scripts/query/info.ts",
     "market-data": "tsx scripts/query/market-data.ts",
     "referral": "tsx scripts/query/referral.ts",
+    "test": "vitest run",
     "funds": "tsx scripts/query/funds.ts",
     "runner": "tsx scripts/runner/run.ts",
     "queue": "tsx scripts/runner/submit.ts",
@@ -60,6 +57,8 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
-  }
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "packageManager": "pnpm@10.34.5"
 }

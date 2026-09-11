@@ -23,8 +23,6 @@ import type { SignerProvider } from "../chain/signer.ts";
 import { type Permit, PolicyGate, type WriteIntent } from "../policy.ts";
 import {
   acceptablePriceFor,
-  COLLATERAL_DECIMALS,
-  toRawAssetAmount,
   toRawCollateral,
   toRawPrice,
   toRawSize,
@@ -643,12 +641,6 @@ export class WaterXAgent {
         ticker,
         side: order.side,
         collateral: order.collateral,
-        // The per-order ceilings judge the order's own
-        // collateral (above), but a re-price commits no NEW capital — the
-        // collateral is the resting order's and does not change. Metering the
-        // whole order on every update let a trailing stop exhaust its own
-        // cumulative ceiling and then stay refused with the position live.
-        cumulativeDelta: 0,
         leverage: order.collateral > 0 ? newNotional / order.collateral : Number.NaN,
         orderId: params.orderId,
         sizeRaw: toRawSize(params.newSize),
@@ -709,19 +701,10 @@ export class WaterXAgent {
    * `assetType` is the fully-qualified Move type of the coin being deposited —
    * deposit is a credit mint against the custody vault now, not a transfer of
    * a fixed collateral coin.
-   *
-   * `decimals` is the backing asset's own scale, from
-   * `GET /info`'s `backingAssets[].decimals`. It used to be hardcoded to the
-   * collateral scale (6), which silently sends 1/1000th of the requested amount
-   * for a 9-decimal asset such as SUI. It defaults to the collateral scale so
-   * existing USDC callers are unaffected, but pass it — the two are only equal
-   * by coincidence.
    */
   async deposit(
-    params: WriteOptions & { assetType: string; amount: string | number; decimals?: number },
+    params: WriteOptions & { assetType: string; amount: string | number },
   ): Promise<ExecuteResult> {
-    const decimals = params.decimals ?? COLLATERAL_DECIMALS;
-    const amountRaw = toRawAssetAmount(params.amount, decimals, "deposit amount");
     return this.run(
       {
         action: "deposit",
@@ -730,7 +713,7 @@ export class WaterXAgent {
         // A deposit is paid from the signer's own balance, and the amount and
         // asset live in that reservation rather than in any call argument.
         movesFundsIn: true,
-        collateralRaw: amountRaw,
+        collateralRaw: toRawTokenAmount(params.amount),
         assetType: params.assetType,
       },
       params,
@@ -738,7 +721,7 @@ export class WaterXAgent {
       ...this.executor.txBody(),
       accountId: this.accountId,
       assetType: params.assetType,
-      amount: amountRaw,
+      amount: toRawTokenAmount(params.amount),
     }),
     );
   }

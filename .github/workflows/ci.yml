@@ -1,0 +1,36 @@
+# Typecheck and tests on every push and pull request.
+#
+# The repo signs real transactions, so "the tests passed on my machine" is not
+# a standard it can be held to. The suite is hermetic — test/setup.ts clears
+# every WATERX_* / SUI_* variable before any file loads — so a runner with no
+# configuration is the honest place to run it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No `version:` here on purpose — package.json's `packageManager` field
+      # already pins it, and the action refuses two sources of truth. Local and
+      # CI therefore cannot drift to different pnpm versions.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # --frozen-lockfile: a PR that changes dependencies must say so in the
+      # lockfile rather than resolving something different in CI than locally.
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm run typecheck
+
+      - run: pnpm test

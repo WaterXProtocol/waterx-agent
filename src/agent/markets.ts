@@ -10,25 +10,8 @@
 import type { ReadApi } from "../api/read.ts";
 import type { MarketInfo, TickerData } from "../api/types.ts";
 
-/**
- * States a ticker can be *resolved* in. `not_listed` markets exist in config
- * but have no metadata, so there is nothing to resolve to.
- *
- * Resolution stays permissive on purpose: a market that is paused or closed
- * right now still has a real ticker, and the venue's own refusal is a better
- * error than "unknown market".
- */
-const RESOLVABLE: ReadonlySet<MarketInfo["status"]> = new Set(["open", "closed", "paused"]);
-
-/**
- * States that will actually accept an order.
- *
- * The single set used to serve both questions under the name `TRADEABLE`, so
- * `tradeableTickers()` — which is printed to an operator as "Tradeable:" and
- * used to list what is available — advertised paused and closed markets as
- * tradeable.
- */
-const TRADEABLE: ReadonlySet<MarketInfo["status"]> = new Set(["open"]);
+/** Tradeable states. `not_listed` markets exist in config but have no metadata. */
+const TRADEABLE: ReadonlySet<MarketInfo["status"]> = new Set(["open", "closed", "paused"]);
 
 export class MarketRegistry {
   private markets?: Map<string, MarketInfo>;
@@ -67,10 +50,8 @@ export class MarketRegistry {
       const available = (await this.tradeableTickers()).join(", ");
       throw new Error(`Unknown market "${input}". Available: ${available}`);
     }
-    // Resolution, not tradeability — see RESOLVABLE. A paused market resolves,
-    // and the venue refuses the order with a reason of its own.
-    if (!RESOLVABLE.has(direct.status)) {
-      throw new Error(`Market ${direct.ticker} is not listed (status: ${direct.status}).`);
+    if (!TRADEABLE.has(direct.status)) {
+      throw new Error(`Market ${direct.ticker} is not tradeable (status: ${direct.status}).`);
     }
     return direct.ticker;
   }

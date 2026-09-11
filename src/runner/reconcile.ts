@@ -23,12 +23,6 @@ import type { AgentConfig } from "../config.ts";
 export type LandedVerdict =
   | { kind: "landed" }
   | { kind: "never-landed" }
-  /**
-   * On chain, and it aborted. A Move abort is still a
-   * committed transaction, so "the chain has this digest" is not the same
-   * answer as "the request took effect".
-   */
-  | { kind: "aborted"; reason: string }
   /** Not on chain yet, and not old enough for absence to mean anything. */
   | { kind: "unknown"; reason: string };
 
@@ -79,22 +73,7 @@ export class Reconciler {
    */
   async didLand(digest: string, submittedAt: number, settleMs: number, now: number): Promise<LandedVerdict> {
     try {
-      const result = await this.client().core.getTransaction({ digest });
-      // Inspect the execution status, don't just observe
-      // that the lookup succeeded. A Move abort commits like any other
-      // transaction, so the old `return { kind: "landed" }` said "landed" for
-      // one. The caller then moved the job to `submitted`, and for an on-chain
-      // settled intent `awaitOutcome` immediately finished it as `filled` with
-      // "the request is on chain" — the ledger recording a trade that aborted,
-      // and the keyed cooldown starting on a decision that never took effect.
-      const tx = result.$kind === "Transaction" ? result.Transaction : result.FailedTransaction;
-      const status = tx?.status;
-      if (status?.success === false) {
-        return { kind: "aborted", reason: describe(status.error) };
-      }
-      if (result.$kind === "FailedTransaction") {
-        return { kind: "aborted", reason: "the chain reports this transaction as failed" };
-      }
+      await this.client().core.getTransaction({ digest });
       return { kind: "landed" };
     } catch (error) {
       // A lookup that failed for a transport reason is not evidence of absence.

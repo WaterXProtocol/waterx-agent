@@ -40,7 +40,7 @@ import { Transaction } from "@mysten/sui/transactions";
 import { fromBase64, toBase64 } from "@mysten/sui/utils";
 
 import type { TxApi } from "../api/tx.ts";
-import { type AgentConfig, signsAsDelegate } from "../config.ts";
+import type { AgentConfig } from "../config.ts";
 import { TxExecutionError } from "../errors.ts";
 import type { Permit, PolicyGate, WriteIntent } from "../policy.ts";
 import type { SignerProvider } from "./signer.ts";
@@ -117,22 +117,9 @@ export class TxExecutor {
     return this.config.ownerAddress ?? this.address;
   }
 
-  /**
-   * Set when signing as a delegate; the backend requires it to be absent otherwise.
-   *
-   * Decided by COMPARING the configured owner to the
-   * signer, the same way `signsAsDelegate` does — not by `ownerAddress` merely
-   * being set. The two disagreed, and `assertOwnerSigned` used this one: setting
-   * `WATERX_OWNER_ADDRESS` to the address of the owner key actually held (which
-   * is what `.env.example` describes that variable as being for) made
-   * `withdraw`, `addDelegate`, `removeDelegate` and `removeAllDelegates` all
-   * throw "this process is signing as a delegate" with the owner key in hand —
-   * blocking fund recovery and authority revocation. It also shipped
-   * `delegateSender === sender`, which `TxBody` documents as required absent for
-   * an owner.
-   */
+  /** Set when signing as a delegate; the backend requires it to be absent otherwise. */
   get delegateSender(): string | undefined {
-    return signsAsDelegate(this.config, this.address) ? this.address : undefined;
+    return this.config.ownerAddress === undefined ? undefined : this.address;
   }
 
   /** Body fields every tx-build request carries. Spread this into each request. */
@@ -195,25 +182,9 @@ export class TxExecutor {
       });
       // Already complete and gas-owned by the sponsor: sign exactly these bytes.
       const signature = await this.signer.signTransaction(fromBase64(built.txBytes));
-      // Enoki reserved this digest at build time, so it is
-      // knowable before the submission goes out — which is what makes a crash
-      // here recoverable. But `built.digest` is an unverified field of the same
-      // HTTP response whose bytes we just checked, and the recovery record is
-      // only worth what the digest is worth: a stale or wrong one sends
-      // `reconcile.didLand()` asking the chain about a transaction that never
-      // existed, which times out into `never-landed` and re-queues the trade —
-      // exactly the duplicate submission `onSubmitting` exists to prevent.
-      // Derive it from the verified bytes and refuse a response that disagrees.
-      const derived = await Transaction.from(fromBase64(built.txBytes)).getDigest();
-      if (derived !== built.digest) {
-        throw new TxExecutionError(
-          `${action}: the build response reserved digest ${built.digest}, but the bytes it ` +
-            `returned hash to ${derived}. Refusing to record a digest that does not name the ` +
-            `transaction being signed.`,
-          undefined,
-        );
-      }
-      await options.onSubmitting?.(derived);
+      // Enoki reserved this digest at build time, so it is knowable before the
+      // submission goes out — which is what makes a crash here recoverable.
+      await options.onSubmitting?.(built.digest);
       const result = await this.txApi.executeSponsored({
         digest: built.digest,
         signature,

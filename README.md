@@ -1,48 +1,735 @@
-# waterx-agent
+# WaterX Agent
 
-A trading agent for [WaterX](https://waterx.app) perpetual futures on Sui.
+A TypeScript agent for the [WaterX](https://waterx.io) perpetual protocol on Sui.
+No browser wallet: it holds a keypair, asks the WaterX backend to build each
+transaction, signs the bytes, and submits them.
 
-## Why backend-first
+## Why the backend builds the transaction
 
-The agent never composes a programmable transaction block itself. It asks the
-WaterX backend to **build** each transaction, then — before signing — **verifies
-the returned bytes locally** against a policy: which Move calls are allowed, which
-objects each command may name, how much collateral and leverage a scope permits,
-and that a deposit's coin can be consumed by nothing but the deposit itself. Only
-then does it sign the bytes locally and submit them.
+A perp PTB has to refresh the right oracle rules for the deployment it targets,
+dedup those refreshes per ticker, and respect the per-position reentrancy lock.
+Which rules are live changes — testnet retired `PythRule` for the enclave-backed
+`WaterxRule`, mainnet re-weighted its Lazer leg — and when a client omits a leg
+that is weighted on chain, the transaction aborts with `EMissingPriceSource`
+rather than failing a type check.
 
-The backend can build; it cannot make the agent sign something it did not intend.
-That verification layer (`src/chain/verify.ts`) is the security boundary this
-package exists for — a malicious or buggy build response is the threat model.
+That composition already exists in the backend, is exercised by production
+traffic, and moves with each deployment. A second copy in this repo would be a
+second thing to keep in step, and it would fail silently. So this agent shapes
+requests and owns the signature; the backend owns PTB composition. (One
+exception, because it matters for what "owns" means: on the self-pay path the
+backend returns transaction *kind* bytes and this repo rebuilds them, adding a
+sender and letting its own client select gas. The commands are the backend's;
+the envelope is not.)
+
+Concretely, that leaves three things here:
+
+| Concern | Where |
+|---|---|
+| Display units → the raw integer strings the DTOs demand | `src/units.ts` |
+| The path every write in this package signs through, and the policy gating it | `src/chain/executor.ts` |
+| Request shaping and the guards that need live market state | `src/agent/` |
+
+`@waterx/sdk` is a dependency for its permission and order-type constants — the
+on-chain source of truth for those bitmasks — not for transaction building.
 
 ## Quick start
 
 ```bash
 pnpm install
-pnpm run doctor        # preflight — signs nothing, safe on any network
+cp .env.example .env
+
+pnpm run generate-wallet    # writes SUI_PRIVATE_KEY to .env
+pnpm run fund-sui           # testnet gas
+pnpm run doctor             # preflight — signs nothing
+pnpm run create-account -- --name my-agent --yes
+pnpm run accounts           # copy the id into WATERX_ACCOUNT_ID
+pnpm run deposit -- --amount 100 --yes
 ```
 
-`doctor` checks that the backend's network matches yours, reports the deployment's
-package versions and market list, and fails on a stale `WATERX_ACCOUNT_ID`. Run it
-first, and whenever a command fails in a way that doesn't name its own fix.
+Collateral is a **backing asset** the wallet already holds — on testnet, mock
+USDC or mock USDsui (`pnpm run info` lists what this deployment accepts).
+`fund-sui` covers gas only; there is no self-service faucet for collateral, as
+the credit faucet is whitelist-gated. Ask an operator, or use a wallet that
+already holds some.
+
+`doctor` is the command to run first and whenever something looks wrong. It
+checks the backend's network against yours, reports the deployment's package
+versions and market list, and fails loudly on a stale `WATERX_ACCOUNT_ID` —
+each of which was, at some point, a silent failure that surfaced as an on-chain
+abort.
+
+```
+✓  execution policy   confirm on testnet (https://api-testnet.waterx.app)
+✓  wallet             0xb142…de6c (owner key)
+✓  backend            https://api-testnet.waterx.app → sui_testnet
+✓  markets            30 listed — SUI, BTC, ETH, SOL, DEEP, WAL, HYPE, XRP, …
+✓  collateral         USD (6 dp); backing assets: USDC, USDsui
+✓  deployment config  waterx_perp=v3 waterx_account=v2 waterx_oracle=v1 waterx_rule=v2
+✓  account            0x6a6b…0e84 owned by 0xb142…de6c
+```
+
+## Execution policy
+
+| Policy | Behaviour |
+|---|---|
+| `read-only` | Writes are refused before a signature exists. |
+| `interactive` | A write needs explicit per-call confirmation — `--yes` on the CLI, `confirm: true` in code. |
+| `delegated-auto` | Unattended signing inside a scope an operator wrote down. Delegate wallets only. |
+
+Unset means `interactive` on testnet and `read-only` on mainnet: on mainnet a
+wrong default costs real money, so writing there should be a decision someone
+typed. `--policy <mode>` narrows for one invocation and can never widen —
+`--policy read-only` on an unattended machine is a safety belt, the reverse is
+an error.
+
+Two independent things stand between a decision and a signature. `PolicyGate`
+authorizes an intent and issues a **permit**; `TxExecutor` spends one per
+signature and refuses a permit it did not issue or that has already been used, so
+a write path that forgot to authorize refuses rather than quietly signs.
+
+That holds for paths that go through `TxExecutor.execute()`, which is every one
+this package exposes. It does **not** hold for a caller that reaches
+`SignerProvider` directly: there is no permit check at the signer, and nothing
+there to check one with. The gate makes an unauthorized signature impossible by
+*mistake* — see [What none of this is](#what-none-of-this-is).
+
+A permit is bound twice: to the **intent** at authorization, and to the
+**transaction bytes** the gate itself obtained. The first stops a permit issued
+for a cheap action funding an expensive one; the second stops any permit being
+presented alongside bytes it did not cover.
+
+Then, immediately before the signature, the transaction is **decoded and
+checked against the intent it is presented for**. Provenance alone turned out to
+be a regress: the gate was handed bytes, then a builder returning bytes, and each
+time the caller still supplied the thing being vouched for. The way out is to
+stop trusting the source and read the artifact.
+
+```
+openLong: the transaction calls withdrawal_queue::route_native,
+account::request_withdraw, which moves funds or changes account authority.
+That is not what this action was authorized to do.
+```
+
+**What this proves.** The transaction performs the operation it is presented as
+and no *other action's* operation: it calls that action's defining entrypoint,
+and calls no entrypoint any other action here defines. Auxiliary calls inside
+the deployment's own packages are a separate matter — see [the trust
+boundary](#the-backend-is-the-trust-boundary-for-auxiliary-composition). It is also sent from the address about to sign
+it. That covers the case that matters most — a permit for a cheap action, which
+clears every ceiling *because* it commits nothing, carrying a transaction that
+opens a position or moves funds.
+
+**Where the layouts come from.** Argument positions are read from
+`@waterx/sdk`'s generated Move bindings — the same package that ships with the
+deployment — and committed as `src/chain/abi.generated.ts`. `pnpm run
+generate-abi` regenerates them, and a test re-runs the extraction so an SDK bump
+that moves an argument fails CI rather than leaving the checks reading the old
+slot. Bindings are keyed by the parameter's *name*, because positions are the
+thing that moves.
+
+Every argument the ABI declares is either bound to a field of the intent or
+declared unconstrained **with a stated reason**; an argument that is neither is a
+refusal. So is a call whose signature no longer matches the ABI, a type argument
+that names a choice the intent did not make, and a permission grant over a
+protocol slot this cannot identify.
+
+**Where a value came from.** Some arguments are not values to compare but the
+output of one specific call, and which one matters. `senderRequest` is the
+authority handle: every checked call takes one, and every one takes it from
+`account::request`. A handle produced elsewhere is a different authority, and
+since a Move call's internals are not PTB commands, nothing else here would see
+it. The same binding covers the pieces a withdrawal is assembled from — its
+`extraData` **is** the route call's result, which is how the chosen route
+reaches the contract at all.
+
+What this does *not* reach is the auxiliary graph: oracle collection feeds the
+protocol through shared state rather than through any argument of the defining
+call, so "this price reached the right consumer" is not something these checks
+establish.
+
+**What else has to hold.** Every Move call must belong to a package the
+deployment publishes, and to *that entrypoint's own* package — Sui keeps
+upgraded packages callable forever, so a superseded version is refused too.
+Commands are restricted to `MoveCall` and `MakeMoveVec`, and inputs to pure
+values, shared objects and one funds withdrawal, which is all this deployment
+ever builds. A transaction that cannot name an owned object cannot hand the
+signer's coins to a call that rode along.
+
+**Layouts are confirmed against the deployment, not just the SDK.**
+`src/chain/abi-corpus.json` records, per entrypoint, the values a real
+transaction carried at each position and the package it was called on. The
+executor refuses to sign when a package in that record has since moved: nothing
+in CI can notice a fixture going stale, so the check runs where the signature is
+produced. Twelve of twenty-two entrypoints are confirmed this way; `npm run
+doctor` names the rest, whose layouts rest on the SDK alone.
+
+**What it does not prove.** The derived position size, which the backend
+computes from collateral and leverage — reproducing it here would be a second
+implementation of the sizing rule, free to disagree with the first. Collateral,
+leverage and the acceptable price are all bound, so a substituted size would have
+to be wrong while its inputs were right.
+
+### What none of this is
+
+**These checks are not a boundary against a compromised process.** The policy
+gate, the permit and the transaction check all run *inside* the agent, called by
+`TxExecutor.execute()`. Code that is already executing here controls that call
+site: it can skip every one of them and hand bytes straight to the signer. A
+permit proves an authorization happened; it does not survive an attacker who can
+issue one.
+
+What they are worth is real but narrower:
+
+- **bugs** — the agent building something other than what the caller asked for,
+  which is the failure that actually happens;
+- **a backend that returns the wrong OPERATION** — the operation a transaction
+  is presented as is checked argument by argument against an intent formed
+  locally before the request went out — every argument either bound to that
+  intent, or listed as unconstrained with a reason — so a withdrawal cannot
+  arrive dressed as an order. What this does *not* cover is everything the
+  backend composes *around* that operation, the prices it will execute against,
+  and the handful of arguments listed as unconstrained;
+  [see below](#the-backend-is-the-trust-boundary-for-auxiliary-composition);
+- **partial compromise reaching only the API layer** — a poisoned HTTP client, a
+  dependency that can alter responses but not the signing path.
+
+Two things do hold against code running here, and neither is in this repo: the
+key itself, if it lives outside the process ([Signer boundary](#signer-boundary)),
+and the delegate's on-chain permission mask. That mask is capability bits with
+**no ceiling on size or notional**, so it bounds *what kind* of action is
+possible and not *how large* — which is why the scope file below exists, and why
+it is not a substitute for a narrower on-chain grant.
+
+A third thing decides *where the key is*. See [Signer boundary](#signer-boundary).
+
+### The backend is the trust boundary for auxiliary composition
+
+This is a deliberate, stated limit, not an oversight — and it is worth being
+exact about where it falls, because everything on one side of it is checked
+closely — bar the fourteen arguments listed below as unconstrained — and
+nothing on the other side is checked at all.
+
+**Verified independently of the backend.** That the transaction performs the
+operation it is presented as, and that it performs no *other* operation any
+action here defines — a withdrawal cannot ride along inside an order. That every
+shared object is the one the deployment names for *that role*, that every type
+argument is the coin the deployment settles in, and that every value produced by
+another call comes from the call — and the package — it is supposed to.
+
+Every argument of that operation is either **bound** — to the intent, an object
+role, a type or a producer, read at the position the deployed contract declares
+for it — **or listed below as unconstrained, with the reason.** Those are not
+the same claim, and the list is not short. It is the whole of it, checked
+against the code by a test rather than written out here and left to drift:
+
+<!-- FREE-ARGUMENTS:BEGIN — generated; `test/verify.test.ts` fails if it drifts -->
+
+| Unconstrained argument | Why nothing here constrains it |
+| --- | --- |
+| `account::add_delegate.alias` | A label on the grant, carrying no authority |
+| `custody_vault::mint.extraData` | An opaque routing blob the backend composes; the agent supplies none |
+| `lp_pool::mint_wlp.minLpAmount` | A minimum-output bound the backend computes from live pool state; the agent names no figure for it and so has none to compare against |
+| `removeAllDelegates (override) delegateAddress` | Which delegates exist is the account's state, not the intent's. The bound here is that every call is a removal — never identity, because the intent names no one. |
+| `trading::cancel_order_request.orderTypeTag` | A locator the backend reads from live order state so the contract can find the order; the agent never chose it |
+| `trading::cancel_order_request.triggerPrice` | A locator the backend reads from live order state so the contract can find the order; the agent never chose it |
+| `trading::update_order_request.currentTriggerPrice` | A locator the backend reads from live order state so the contract can find the order; the agent never chose it |
+| `trading::update_order_request.orderTypeTag` | A locator the backend reads from live order state so the contract can find the order; the agent never chose it |
+| `waterx_staking::claim.request` | An authority handle, unobserved: no claim could be built to read how it is produced |
+| `waterx_staking::claim.self` | The staking pool, unobserved: no claim could be built to read which object it takes |
+| `withdrawal_queue::route_native.minOutput` | A floor on the amount received, computed by the backend from live bridge and pool state; the agent names no figure for it |
+| `withdrawal_queue::route_wormhole.evmDestinationChain` | Unreachable: this agent only ever withdraws natively on Sui |
+| `withdrawal_queue::route_wormhole.evmRecipient` | Unreachable: this agent only ever withdraws natively on Sui |
+| `withdrawal_queue::route_wormhole.evmToken` | Unreachable: this agent only ever withdraws natively on Sui |
+
+<!-- FREE-ARGUMENTS:END -->
+
+**Two of these carry money.** `lp_pool::mint_wlp.minLpAmount` and
+`withdrawal_queue::route_native.minOutput` are slippage *floors* — the least the
+caller will accept. The backend picks them, the agent names no figure, so
+nothing here stops either being zero and a mint or a withdrawal settling far
+below what the caller expected. That is the auxiliary-composition boundary
+showing up inside the operation itself, and it is the reason this list is
+spelled out rather than summarized.
+
+The rest cost nothing directly: four are locators the backend reads from live
+order state, three are unreachable because this agent only withdraws natively,
+two belong to `waterx_staking::claim` — refused by default anyway, its layout
+never having been confirmed — one is a label carrying no authority, and one is
+an address the intent deliberately does not name because *which* delegates exist
+is the account's state, with removal-of-everything the bound instead.
+
+A transaction whose OPERATION is not the one that was authorized does not get a
+signature — which is a narrower statement than "does nothing it was not asked
+to", and the paragraph below is why.
+
+**Not verified — and this is wider than prices.** Inside the packages the
+deployment publishes, the backend composes freely. A transaction may carry any
+auxiliary call in those packages that no action claims as its own, take any
+shared object the deployment document lists, and pass any arguments, types,
+multiplicity or ordering to them; their effects on shared state are not modelled
+at all. The price case is the consequence people will care about most — the
+oracle legs write into shared state and the trading call reads it from there,
+with no argument in the PTB joining them — but it is an instance, not the
+boundary.
+
+So the boundary, stated as widely as the code actually draws it: **the backend
+is trusted to choose arbitrary auxiliary composition within admitted deployment
+packages, over deployment-listed shared objects.** What it cannot do is reach
+outside those packages, touch an object the deployment does not name, hand the
+signer's own coins to anything, or alter the operation the transaction is
+presented as.
+
+**What that means concretely.** A backend that sources a wrong price produces a
+transaction that passes every check here and fills at that price. The
+acceptable-price bound does not save you: the agent computes it from a spot
+reading taken from the same backend, so a consistently misreported price moves
+the bound with it. If you need protection from that, it has to come from
+somewhere other than this repo.
+
+**What would close it.** A commitment naming the feeds a build used, signed by a
+source that is not the composer, and bound to the final transaction digest and
+the deployment revision — checkable here before signing. A backend signing its
+own build would prove nothing, which is why this is not simply a matter of
+adding a header. No such commitment exists today.
+
+Until one does, running an agent here means accepting the deployment's backend
+as the authority on price. That is the same trust every client of a
+backend-composed protocol extends; the difference is that it is written down.
+
+### Scopes, and why they are not optional here
+
+`delegated-auto` requires `WATERX_POLICY_SCOPE_FILE` pointing at a document like
+[`policy.example.json`](policy.example.json):
+
+```jsonc
+{
+  "accounts": ["0x…"],            // required; "any account" is not a scope
+  "markets": ["BTCUSD"],          // optional allowlist
+  "sides": ["long"],              // optional
+  "maxCollateralPerOrder": 50,    // required — display USD
+  "maxCumulativeCollateral": 200, // required — summed over this process's life
+  "maxLeverage": 5,               // required
+  "maxSlippagePercent": 1,        // required
+  "notAfter": "2026-12-31T00:00:00Z"  // required
+}
+```
+
+Every ceiling is mandatory, and an incomplete scope is refused when it loads
+rather than at the first trigger. That is stricter than it may look, for a
+specific reason: **on chain a perp delegate's permissions are capability bits,
+not amounts.** `PERM_OPEN_POSITION` says the delegate may open a position; it
+says nothing about how large. Nothing on the perp side enforces a per-order or
+per-hour ceiling server-side either. So this file is the only amount limit a
+delegate has, and an optional ceiling in it would be an unbounded one.
+
+Checks run locally, before any request, so an out-of-scope order costs nothing.
+Actions that *reduce* exposure — close, reduce, add margin, cancel — are
+deliberately never metered: a risk limit that trapped a position open would be
+worse than none.
+
+## Signer boundary
+
+By default the key is read from `SUI_PRIVATE_KEY` into this process. That is the
+honest default for a developer at a terminal, and the wrong one for anything
+that signs while nobody is watching: an unattended process with a resident key
+is one bug away from whatever that key can do.
+
+Set `WATERX_SIGNER_COMMAND` and the key moves out. The agent writes one JSON
+line to a child process and reads a signature back; it never holds key material:
+
+```bash
+WATERX_SIGNER_COMMAND='["waterx-predict-keystore","sign"]'
+WATERX_AGENT_WALLET=0x…        # the address the child holds — stated, not derived
+```
+
+**What moving the key out does and does not buy.** It is key custody isolation,
+and only that. `SIGNER_PROTOCOL` carries opaque bytes: the signer does not parse
+the transaction, does not know what a WaterX intent is, and applies no policy of
+its own. So a process that has been taken over cannot extract the key — but it
+can still ask the child to sign whatever bytes it likes, by calling
+`SignerProvider` directly and never going through `TxExecutor.execute()`.
+
+Every authorization guarantee in this repo — the gate, the permit, the
+transaction check — holds for code that goes through `execute()`, which is every
+path this package exposes, and for no other. Closing that would mean running the
+verifier and the policy **at the signer**, on the final bytes, which the current
+protocol cannot express: it would have to carry the intent alongside the bytes
+and the signer would have to understand WaterX semantics. That is a change to
+`SIGNER_PROTOCOL`, not a setting here.
+
+The wire is **`SIGNER_PROTOCOL` v1**, the same protocol the WaterX Predict agent
+runtime speaks. It carries an address and opaque bytes and returns a signature —
+nothing in it knows whether those bytes open a perp position or buy a prediction
+share — so an existing provider serves this package **unmodified**. That is why
+this repo copies the protocol descriptor (`src/chain/signer-protocol.ts`)
+instead of merging into that workspace: the protocol is published as data
+precisely so an outside implementation can speak it without depending on the
+implementation.
+
+The address is configured rather than derived, because deriving it would need
+the key this arrangement exists to keep out. A conforming signer refuses a
+request for an address it does not hold, naming the one it does:
+
+```
+signer: this signer holds 0xab0192d3…, not 0xb1428c76…
+The signer exited with status 1; its output was not used.
+```
+
+`examples/keypair-signer.mjs` is the smallest provider that satisfies the wire —
+enough to exercise the boundary, not a deployment. `npm run doctor` reports
+which provider is in use, and warns when `delegated-auto` is signing from a key
+held in this process.
+
+Every child failure is a named refusal rather than a stray signature: a non-zero
+exit, output that is not JSON, JSON with no signature, a signer that never
+answers, a command that cannot be run. Timeouts default to 120s because a
+conforming provider may be a person — a browser-wallet bridge blocks on a
+dialog.
+
+## Programmatic use
+
+```typescript
+import "dotenv/config";
+import { WaterXAgent } from "waterx-agent";
+
+const agent = new WaterXAgent();
+
+// Reads need no policy.
+const positions = await agent.positions();
+const btc = await agent.read.ticker("BTCUSD");
+
+// 5× long BTC with 10 USD, 0.5% slippage, bracketed.
+await agent.openLong({
+  ticker: "BTC",              // "BTC" and "BTCUSD" both resolve
+  collateral: 10,             // display USD — scaling happens in units.ts
+  leverage: 5,
+  slippagePercent: 0.5,
+  takeProfitPrice: 90_000,
+  stopLossPrice: 70_000,
+  confirm: true,
+});
+
+await agent.closePosition({ ticker: "BTC", positionId: 0, confirm: true });
+```
+
+Amounts are display units everywhere on this surface — USD for collateral and
+prices, base-asset units for size. The conversion to raw `u64`/`u128` strings
+happens once, in `src/units.ts`, which refuses precision it cannot represent
+rather than rounding it away.
+
+## Commands
+
+Every write takes `--yes` under the `confirm` policy. `--help` on any command.
+
+**Setup** — `doctor` · `generate-wallet` · `fund-sui` · `create-account` ·
+`deposit` · `withdraw` · `add-delegate` · `remove-delegate`
+
+**Trading** — `open-long` · `open-short` · `close-position` · `reduce-position` ·
+`increase-position` · `margin`
+
+**Orders** — `place-order` · `place-tpsl` · `update-order` · `cancel-order`
+
+**WLP** — `wlp -- --action mint|burn|cancel-burn|claim`
+
+**Reads** — `accounts` · `positions` · `orders` · `delegates` · `markets` ·
+`ticker` · `candles` · `trades` · `funding` · `history` · `funds` · `pnl` ·
+`wlp-info` · `info` · `market-data` · `referral`
+
+```bash
+pnpm run open-long -- --ticker BTC --collateral 10 --leverage 5 --tp 90000 --sl 70000 --yes
+pnpm run place-order -- --ticker ETH --short --collateral 20 --leverage 3 --trigger-price 4200 --yes
+pnpm run reduce-position -- --ticker BTC --position-id 0 --percent 50 --yes
+pnpm run margin -- --ticker BTC --position-id 0 --amount 5 --yes
+```
+
+## Behaviour worth knowing before you trade
+
+- **A crossing limit is rejected.** A long limit above market (or a short below)
+  would fill immediately, and the contract aborts it as `ECrossingLimitOrder` at
+  both placement and re-price. The agent refuses it first and says to send a
+  market order instead. A limit exactly *at* market is allowed, on chain and here.
+- **Withdrawal is owner-only.** After the delegate-phishing hardening, no
+  permission mask opens a funds-out path. A delegate can trade the account and
+  cannot drain it; `withdraw`, `deposit`, `add-delegate` and `remove-delegate`
+  are refused at the API edge (`2018`) for a delegate-signed request.
+- **Perp and WLP share ONE mask.** `account_data::WaterXPerp` carries the trading
+  bits and `PERM_MINT_WLP` / `PERM_REDEEM_WLP` together — `trading::assert_protocol_perm`
+  and `lp_pool::assert_wxa_protocol_perm` read the same slot. Predict and staking
+  are separate masks; perp authority grants nothing on those.
+- **The mask the API shows you is not the one the chain enforces for trading.**
+  `GET /account/delegate` returns the legacy `request::TradingRequest<CREDIT>`
+  mask, while `trading::assert_protocol_perm` reads
+  `account_data::WaterXPerp`. `addDelegate` writes both today, so a delegate
+  added through the current backend works — but one added earlier reads as fully
+  authorised and still aborts `EUnauthorized`, surfacing as a generic
+  `6002 Transaction would fail on-chain`. `npm run doctor` warns about this
+  whenever a delegate key is loaded.
+- **Deposit mints wxUSD credit** against a registered backing asset, so it names
+  a Move coin type rather than transferring a fixed collateral coin. `npm run
+  info` lists what the deployment accepts; `deposit` defaults to the first.
+- **WLP mint stakes in the same step** and burn redeems from the staked balance,
+  so there is no separate stake/unstake action. A burn is queued and settled by
+  the withdrawal queue.
+- **`estLiqPrice: 0` means "cannot estimate"**, never "no liquidation risk", and
+  `priceStale: true` means every price-derived field beside it is stale too.
+- **The market list is read from the deployment**, not compiled in. It has grown
+  from 13 to 30 since this agent was last updated; hardcoding it is what went
+  stale.
+- **An order is a request, not a fill, and the gap is not bounded.** `open-long`
+  returns once the request is on chain; the keeper's `match_orders` sweep fills
+  it, and `match_orders` is keeper-only so nothing here can force it. Measured on
+  testnet the wait ranged from ~2 to ~7 minutes for identical orders. Read
+  `pnpm run positions` to see the fill — a market order sits in
+  `pnpm run orders` with `triggerPrice: 0` until then. Anything long-running must
+  reconcile rather than assume.
+- **`/markets/:ticker/trades` can be far staler than the chain.** During
+  verification it reported the last SUIUSD trade as 83 days old while orders
+  were filling in under two minutes. Trust `positions` over the trades feed.
+
+## The runner
+
+The scripts above run once and exit. `pnpm run runner` is the long-lived form:
+it drives queued intents, survives restarts, and retries — without ever
+submitting the same intent twice.
+
+```bash
+pnpm run queue -- --kind open --ticker SUI --collateral 10 --leverage 2
+pnpm run runner            # drives it; Ctrl-C finishes the pass in flight
+pnpm run jobs -- --verbose # what it believes, and why
+```
+
+It requires `delegated-auto` and refuses to start otherwise — a runner under
+`interactive` would recover, look healthy, and refuse every submission.
+
+`delegated-auto` in turn requires a **delegate** key — established by comparing
+the signer's address to the configured owner, not by the owner merely being set,
+since pointing `WATERX_OWNER_ADDRESS` at your own address would otherwise satisfy
+the check while leaving owner authority in an unattended process. Its safety
+argument is that a delegate cannot withdraw or grant authority, and an owner key
+has both. The gate refuses to construct otherwise, and refuses funds-out and delegate-management
+intents under that mode regardless of which key is loaded — the on-chain
+guarantee holds only while the key really is a delegate, and nothing in a scope
+file can establish that.
+
+`queue` writes to an inbox beside the store rather than to the store itself, so
+work can be added while the runner is up. The store keeps one writer; adding work
+does not need to be one. Each entry is removed only once its job is durably in
+the ledger, and carries its inbox id so a crash in between is recognised as the
+same intent rather than queued twice.
+
+### At most once
+
+A process can die between sending a transaction and learning what happened to
+it. That window cannot be closed, only made recoverable, and the runner does it
+by writing down the digest **before** the bytes leave:
+
+```
+crashed before the job was marked `submitting`  → nothing was sent
+crashed after it, before the digest was written → nothing was signed; retry is safe
+crashed after the digest                        → ask the chain about that digest
+```
+
+There is no fourth case, and none of them is resolved by a timer. On restart the
+ambiguous jobs are reconciled **before** any new one is submitted.
+
+Absence is treated asymmetrically, because that asymmetry is the whole safety
+argument. A digest the chain *has* is conclusive at once. A digest it does not
+have is conclusive only after a settle window — and a lookup that merely
+*failed* is never conclusive, because reading a broken lookup as absence is what
+licenses a retry of a transaction that executed.
+
+The fill wait ends at a terminal order status or at a deadline, and the deadline
+produces `unresolved` — a state that asks for a human — rather than a guess.
+
+```
+$ pnpm run jobs -- --verbose
+submitted  bbbbbbbb  open long SUIUSD 10 @2x   attempts=2  DhEqCKMC…
+    06:02:50Z  submitting  reconstructed crash state
+    06:08:36Z  queued      the chain never saw it; retrying is safe
+    06:08:45Z  submitting  attempt 2
+    06:08:49Z  submitting  digest DhEqCKMCb5GnuQdD9BrkmFHDiDTJV37idVWLogxfihxz
+    06:08:50Z  submitted   on chain as DhEqCKMCb5GnuQdD9BrkmFHDiDTJV37idVWLogxfihxz
+```
+
+One writer at a time is enforced with a lock file, not assumed: two runners over
+one store would each believe they owned a job. A lock left by a dead process
+names its pid and waits for a person — breaking it automatically is
+indistinguishable from racing a live runner.
+
+### Driving it from a strategy
+
+The runner decides nothing. It makes decisions survive. A strategy is the other
+half — it watches, decides, and hands the decision over as an intent:
+
+```typescript
+import { JobStore, Reconciler, Runner, WaterXAgent } from "waterx-agent";
+
+const runner = new Runner({ agent, store, reconciler });
+runner.assertCanRunUnattended();
+
+while (running) {
+  // Drive first. Work in flight outranks work being considered, and a decision
+  // taken while an earlier one is unresolved is taken on an unknown position.
+  await runner.tick();
+  if (runner.pending().length === 0) await decide(runner);
+  await sleep(30_000);
+}
+```
+
+The split is what lets a strategy be rewritten, crash, or be replaced with no
+risk to money already in flight. One thing stays the strategy's job: the runner
+guarantees an intent is submitted at most once, but it cannot know that two
+intents are the *same idea* — a condition that stays true for several ticks must
+not queue several orders. `examples/strategy.ts` is a worked example.
+
+### Deferred intents
+
+"In five minutes, place a limit order" is a first-class intent:
+
+```typescript
+const now = Date.now();
+runner.enqueue(
+  { kind: "limit", ticker: "SUIUSD", side: "long", collateral: 10, leverage: 2,
+    triggerPrice: 0.70 },
+  { notBefore: now + 5 * 60_000, expiresAt: now + 60 * 60_000 },
+);
+```
+
+```bash
+pnpm run queue -- --kind limit --ticker SUI --collateral 10 --leverage 2 \
+  --trigger-price 0.70 --after 300 --expires-in 3600
+```
+
+Two properties make this safe to leave running.
+
+**The delay is measured from the decision, not from the last restart.** Both
+instants are stored absolute, so a runner that dies and comes back at minute
+four still fires at minute five — a relative countdown would start over and
+"in five minutes" would quietly mean something else.
+
+**A deferred intent must carry an expiry, and is refused without one.** The gap
+between deciding and firing is exactly the window in which the reason for the
+decision stops being true; an order that survives an outage and lands on a
+market that has moved is a trade nobody asked for. The expiry bounds only the
+*start* — a job already submitted is in flight and no expiry can undo it.
+
+An expired job ends as `expired`, having done nothing.
+
+### Intents, and what each one waits for
+
+| Intent | Finishes when |
+|---|---|
+| `open`, `limit` | the order it created reaches a terminal status |
+| `close`, `cancel` | the position or order it **named** is gone |
+| `reduce`, `increase`, `add-margin`, `remove-margin`, `wlp-*` | the transaction lands |
+
+The three rules exist because the three groups leave different traces, and
+pretending otherwise reports success as failure. A cancel's digest appears in
+neither history category, so waiting for an order status strands a successful
+cancel until the deadline and then calls it `unresolved`. A keeper-executed
+`reduce` fills under the *keeper's* digest, not ours, so the fill cannot be tied
+back to the job at all — "the request is on chain" is the most this can honestly
+attest, and it says exactly that.
+
+`close` and `cancel` get a stronger rule only because the intent names the thing
+that should disappear; that is what makes its absence evidence about *this* job.
+
+### Refusals that repeating cannot fix
+
+A retry ceiling protects against a loop, not against a wrong answer. When the
+backend says `No claimable rewards`, or the agent refuses a crossing limit or a
+position that is not there, the job fails **immediately** with that reason
+instead of spending three attempts and reporting `gave up after 3 attempts` —
+which would bury the actual cause under a retry count.
+
+```
+failed  4decfc94  refused: No claimable rewards (code 3006)
+```
+
+The classification is a small allow-list, not "anything that is not a network
+error": mistaking a transient fault for a permanent one silently drops work, so
+the default stays retry.
+
+### Deciding the same thing twice
+
+The runner submits an intent at most once. It cannot know that two intents are
+the same *idea* — a condition true for ten passes produces ten distinct intents,
+and all ten would be faithfully sent. A key says they are one decision:
+
+```typescript
+const job = runner.enqueue(intent, { key: "SUIUSD-dip-entry", cooldownMs: 60 * 60_000 });
+if (job === undefined) return;   // already in play, or too soon
+```
+
+```bash
+pnpm run queue -- --kind limit --ticker SUI --collateral 10 --leverage 2 \
+  --trigger-price 0.70 --key sui-dip --cooldown 3600
+```
+
+Suppressed while a job with that key is unfinished, and for `cooldownMs` after
+one settles. Two details are deliberate:
+
+- **An `unresolved` job blocks its key regardless of the cooldown.** That job is
+  an open question about money — its order may be live — and deciding again on
+  top of an unknown outcome is precisely the duplicate this design exists to
+  prevent. It blocks until a person settles it.
+- **An `expired` job never blocks.** Nothing happened.
+
+A key is about the *decision*. It cannot see that you already hold the position
+the decision was meant to open — that check is separate, and both are needed. A
+key alone lets you re-enter after the cooldown even though you are still in;
+a position check alone lets you queue a second order while the first is in
+flight but unfilled.
+
+Keep no state in the strategy process. The job store survives a crash and
+in-memory variables do not, so derive everything from chain and backend reads
+each pass — otherwise a restart comes back holding a view of the world it has no
+evidence for.
+
+### Keeping it running
+
+Supervision is the operating system's job, not this repo's, and building a
+second one badly is worse than using the one that exists.
+`examples/deploy/` has a launchd plist and a systemd unit; `cron` running
+`pnpm run runner -- --once` works too, with the store's lock file preventing
+overlap.
+
+Restarting is safe by construction: the store survives, and anything ambiguous
+is reconciled against the chain before a new submission goes out. Both units
+send `SIGTERM` and wait, so the pass in flight finishes — abandoning one halfway
+would manufacture, on every restart, exactly the ambiguity the ledger exists to
+recover from.
 
 ## Layout
 
-- **`src/`** — the library: API client (`src/api`), on-chain verify + execute
-  (`src/chain`), the durable job runner (`src/runner`), policy scopes
-  (`src/policy.ts`), and unit conversion (`src/units.ts`).
-- **`scripts/`** — a CLI over the library: `setup/`, `trading/`, `orders/`,
-  `query/`, `runner/`. Each is `pnpm run <name>` (see `package.json`).
-- **`AGENT.md`** — the full command reference.
-- **`docs/integration.md`** — the programmatic surface for embedding the agent.
-- **`examples/`** — a keypair signer, a strategy sketch, and deploy units.
+```
+src/
+├── config.ts        network, endpoints, policy mode and scope, signer wiring
+├── policy.ts        the scope, the gate, and the permits it issues
+├── units.ts         display ↔ raw scales (6 dp collateral, 1e9 price/size)
+├── errors.ts        backend error codes worth branching on
+├── doctor.ts        preflight
+├── api/             http envelope · read plane · tx-build plane · wire types
+├── chain/           signer providers · SIGNER_PROTOCOL · the executor
+├── agent/           WaterXAgent · market resolution and guards
+└── runner/          durable job store · reconciliation · the loop
+```
 
-## Running unattended
+## Development
 
-`pnpm run runner` drives queued jobs to terminal states durably: it reconciles
-each job against the chain (`landed` / `aborted` / never-landed) before advancing,
-so a timed-out read or an aborted Move call never records a trade that didn't take
-effect. Scopes and per-order limits are enforced before signing.
+```bash
+pnpm run typecheck
+pnpm test
+```
 
-Writes need explicit confirmation; reads never sign. See **AGENT.md** for the
-per-command details and the environment variables each expects.
+## Docs
+
+- **[Integration guide](docs/integration.md)** — the request/sign/submit flow,
+  the delegate model, error handling, and what changed from the SDK-composed
+  design.
+- **[AGENT.md](AGENT.md)** — command reference for an AI agent driving the CLI.
+
+## License
+
+MIT
