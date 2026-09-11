@@ -160,22 +160,28 @@ await run(async () => {
   // Named even when everything else worked, because it is the step that
   // surprises people: gas is not collateral, and there is no self-service
   // route to the latter on testnet.
-  if (accountId !== undefined) {
-    const overview = (await agent.read.overview(accountId)) as { freeMargin?: number };
-    const free = overview.freeMargin ?? 0;
-    note(`  collateral $${String(free)} free margin`);
-    if (free <= 0) {
-      remaining.push({
-        what: "trading collateral",
-        why:
-          agent.config.network === "testnet"
-            ? "gas is not collateral, and testnet's credit faucet is whitelist-gated — there is " +
-              "no self-service route"
-            : "the wallet holds no backing asset to mint credit against",
-        who: "an operator",
-        command: `${invoke("deposit", "--amount <n>", "--yes", "--json")}  (once the wallet holds USDC or USDsui)`,
-      });
-    }
+  const free =
+    accountId === undefined
+      ? 0
+      : ((await agent.read.overview(accountId)) as { freeMargin?: number }).freeMargin ?? 0;
+  if (accountId !== undefined) note(`  collateral $${String(free)} free margin`);
+
+  // Reported even before there is an account to hold it. It is the only item
+  // that needs someone else, so it is the only one with a lead time — an agent
+  // that learns about it on the second round trip has already sent the user
+  // away to do the first two, and the whitelist request could have been in
+  // flight the whole time.
+  if (free <= 0) {
+    remaining.push({
+      what: "trading collateral",
+      why:
+        agent.config.network === "testnet"
+          ? "gas is not collateral, and testnet's credit faucet is whitelist-gated — there is " +
+            "no self-service route, so this is the one to start asking about first"
+          : "the wallet holds no backing asset to mint credit against",
+      who: "an operator",
+      command: `${invoke("deposit", "--amount <n>", "--yes", "--json")}  (once the wallet holds USDC or USDsui)`,
+    });
   }
 
   // ── Everything the preflight knows ──────────────────────────────────────
