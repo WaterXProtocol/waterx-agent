@@ -17,7 +17,10 @@ Run this and do what it says:
 node bin/waterx.mjs next --json
 ```
 
-From the repository root, after `pnpm install`. That is the whole entry point —
+From a checkout, after `pnpm install`. If you installed the tarball instead,
+the same command is `npx waterx next --json` — and every command this package
+hands back is already spelled for wherever you are, so copy those rather than
+translating. That is the whole entry point —
 first contact and every turn afterwards. It works on a clone with no
 configuration at all: no `.env`, no wallet, no account. Those are answers, not
 errors.
@@ -38,8 +41,9 @@ run `next` again.
 node bin/waterx.mjs <command> [options] --json
 ```
 
-From the repository root. `--json` makes the command write **exactly one JSON
-document to stdout and nothing else**; human-readable output goes to stderr,
+From a checkout. From a project that installed the tarball it is
+`npx waterx <command> [options] --json` — identical otherwise. `--json` makes
+the command write **exactly one JSON document to stdout and nothing else**; human-readable output goes to stderr,
 where it is safe to ignore or to show the user.
 
 Use `bin/waterx.mjs`, not `pnpm run`. The package manager writes its own banner
