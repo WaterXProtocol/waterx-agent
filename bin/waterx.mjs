@@ -64,16 +64,21 @@ if (target === undefined) {
 }
 
 /**
- * Compiled output when there is some, the TypeScript sources otherwise.
+ * The sources when they are there, the compiled output when they are not.
  *
- * A checkout runs straight from source through `tsx`, which is what makes the
- * repo pleasant to work in — no build step between an edit and a run. An
- * installed tarball carries `dist/` and no `tsx` at all, because a consumer
- * should not have to install a TypeScript runtime to place an order. One shim
- * covers both by asking which one is present rather than being told.
+ * The test is for the SOURCE, not for `dist/`, and the direction matters. A
+ * checkout always has `scripts/`; a tarball never does, because `files` does
+ * not ship it. So a checkout runs live through `tsx` — no build step between an
+ * edit and a run — and an install runs the build, needing no TypeScript runtime
+ * to place an order.
+ *
+ * Preferring `dist/` instead would have been quietly wrong the moment anything
+ * created one in a checkout: `prepare` builds on install, and every edit
+ * afterwards would have been ignored in favour of a stale compile.
  */
+const source = join(root, target);
 const built = join(root, "dist", target.replace(/\.ts$/, ".js"));
-const useBuilt = existsSync(built);
+const useBuilt = !existsSync(source);
 
 /**
  * How a caller would type this command themselves.
@@ -96,7 +101,9 @@ const child = useBuilt
 if (child.error !== undefined) {
   process.stderr.write(
     `waterx: could not start "${command}": ${child.error.message}\n` +
-      (useBuilt ? "" : "The sources need `tsx`. Run `pnpm install`, or `pnpm run build` first.\n"),
+      (useBuilt
+        ? "The build is missing or incomplete. Reinstall the package.\n"
+        : "The sources need `tsx`. Run `pnpm install` first.\n"),
   );
   process.exit(3);
 }
