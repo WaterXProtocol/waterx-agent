@@ -21,7 +21,8 @@
  * commits money, and money is a decision.
  */
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
-import { getOrCreateWallet, saveToEnv } from "../../src/chain/wallet.ts";
+import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
+import { envPath, getOrCreateWallet, saveToEnv } from "../../src/chain/wallet.ts";
 import { runDoctor } from "../../src/doctor.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
@@ -74,7 +75,29 @@ await run(async () => {
   const hadKey = signerReadiness(initAgent().config).ready;
   const wallet = getOrCreateWallet();
   done.push(hadKey ? `wallet ${wallet.address} (already configured)` : `generated wallet ${wallet.address}`);
-  note(`  wallet     ${wallet.address}${wallet.isNew ? "  (new — key saved to .env)" : ""}`);
+  note(`  wallet     ${wallet.address}`);
+
+  // A key was just written into the caller's project, which is usually a git
+  // repository, and a fresh one has no `.gitignore` at all. Closing that door
+  // is finishing what this command started, not a liberty taken with someone
+  // else's repo.
+  let ignored: ReturnType<typeof ensureEnvIgnored> | undefined;
+  if (wallet.isNew) {
+    ignored = ensureEnvIgnored();
+    note(`             new key written to ${envPath()}`);
+    if (ignored.kind === "added") {
+      note(`             .env added to ${ignored.gitignore} so it cannot be committed`);
+    } else if (ignored.kind === "already") {
+      note(`             .env is already ignored by git`);
+    } else if (ignored.kind === "failed") {
+      note(`             ⚠ could not check .gitignore (${ignored.reason}) — make sure .env is ignored`);
+      remaining.push({
+        what: "keep the private key out of git",
+        why: `.env holds a private key and this could not confirm it is ignored: ${ignored.reason}`,
+        who: "you",
+      });
+    }
+  }
 
   // ── Gas ─────────────────────────────────────────────────────────────────
   // A rate-limited faucet is not a failure of the setup; it is a queue. It is
@@ -213,6 +236,7 @@ await run(async () => {
       writeReady: report.writeReady,
       done,
       remaining,
+      ...(ignored === undefined ? {} : { envIgnored: ignored }),
       tradeCommand: TRADE_COMMAND,
     },
     { rendered: true },

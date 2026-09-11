@@ -96,11 +96,14 @@ while publishing to npm remains a separate, deliberate decision.
 **The prompt to hand someone**, for Claude Code, Codex, or anything with a
 shell:
 
-> Run `npm install github:WaterXProtocol/waterx-agent`, then `npx waterx skill`,
-> and do what it says.
+> Run `npm install github:WaterXProtocol/waterx-agent`, then
+> `npx waterx next --json`, and do what it says.
 
-Two commands and no paths — `waterx skill` prints the instructions from wherever
-the package landed, and they begin by telling the agent to run `npx waterx next`.
+`next` works on a package with no configuration at all and routes itself to
+`bootstrap`, which reports what is still missing and who can supply it. The
+agent does not have to plan the onboarding, and does not need to find a
+document first — though `npx waterx skill` prints these instructions if it
+wants them.
 
 `bootstrap` does every setup step that does not need a person — a wallet, gas
 if the wallet needs any, finding and recording the account id — and returns the

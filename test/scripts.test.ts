@@ -77,3 +77,37 @@ describe("the .env this package writes", () => {
     expect(source).not.toMatch(/import\.meta\.url/);
   });
 });
+
+/**
+ * Every command the documentation tells someone to run has to exist.
+ *
+ * This is not hypothetical tidiness. A recommended prompt shipped naming
+ * `waterx skill`, which existed only on an unmerged branch; the person who
+ * followed it got "no such command" as the very first thing this package ever
+ * said to them, and had to recover by guessing. Docs and `package.json` drift
+ * silently in that direction — a command is easy to write about before it is
+ * written, and nothing else notices.
+ */
+describe("commands named in the documentation", () => {
+  const scripts = new Set(
+    Object.keys(JSON.parse(readFileSync("package.json", "utf8")).scripts as Record<string, unknown>),
+  );
+
+  it("all exist in package.json", () => {
+    const missing: string[] = [];
+    for (const doc of ["README.md", "SKILL.md", "AGENT_INSTRUCTIONS.md", "AGENT.md", ".env.example"]) {
+      const text = readFileSync(doc, "utf8");
+      // Both spellings this package uses for itself.
+      const named = [
+        ...text.matchAll(/(?:npx waterx|node bin\/waterx\.mjs)\s+([a-z][a-z0-9:-]*)/g),
+        ...text.matchAll(/pnpm (?:--silent )?run ([a-z][a-z0-9:-]*)/g),
+      ].map((m) => m[1] as string);
+      for (const command of new Set(named)) {
+        // Placeholders that stand in for a real name, not commands themselves.
+        if (command === "build" || command === "install") continue;
+        if (!scripts.has(command)) missing.push(`${doc} names \`${command}\`, which is not a script`);
+      }
+    }
+    expect([...new Set(missing)], missing.join("\n")).toEqual([]);
+  });
+});

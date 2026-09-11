@@ -239,20 +239,21 @@ checkout and tell it to read `SKILL.md`. Installing only saves that sentence.
 
 Paste this into Claude Code, Codex, or anything else with a shell:
 
-> Run `npm install github:WaterXProtocol/waterx-agent`, then `npx waterx skill`,
-> and do what it says.
+> Run `npm install github:WaterXProtocol/waterx-agent`, then
+> `npx waterx next --json`, and do what it says.
 
-Two commands, no paths. `waterx skill` prints these instructions from wherever
-the package landed, and the first thing they say is to run `npx waterx next`,
-which reports what is still missing and what to offer. The agent does not have
-to plan the onboarding.
+`next` works on a package with no configuration at all and routes itself to
+`bootstrap`, which reports what is still missing and who can supply it. The
+agent does not have to plan the onboarding, and does not need to find a
+document first — though `npx waterx skill` prints these instructions if it
+wants them.
 
 Use `npm`, not `pnpm` — pnpm refuses a git install that needs a build
 (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`). If install scripts are blocked where
 you are, install a tarball instead; the rest is identical:
 
-> Run `npm install <url-to-waterx-agent-0.1.0.tgz>`, then `npx waterx skill`,
-> and do what it says.
+> Run `npm install <url-to-waterx-agent-0.1.0.tgz>`, then
+> `npx waterx next --json`, and do what it says.
 
 Once an operator has funded the account:
 
