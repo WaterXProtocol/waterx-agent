@@ -22,6 +22,7 @@ import {
 } from "../errors.ts";
 import { SignerError } from "../chain/signer.ts";
 import type { Outcome } from "./contract.ts";
+import { invoke } from "./contract.ts";
 
 export function classify(error: unknown): Outcome {
   const base = {
@@ -43,15 +44,15 @@ export function classify(error: unknown): Outcome {
       reconcileRequired: true,
       nextCommand:
         error.submissionId !== undefined
-          ? `pnpm run reconcile -- --id ${error.submissionId} --json`
+          ? invoke("reconcile", "--id", error.submissionId, "--json")
           : error.digest !== undefined
-            ? `pnpm run reconcile -- --digest ${error.digest} --json`
+            ? invoke("reconcile", "--digest", error.digest, "--json")
             : // Neither is known, which is itself the reason to reconcile
               // broadly: if anything did go out, it recorded itself before it
               // left, and `--all` is what finds it. Leaving `nextCommand`
               // unset here told an agent to work out its own next move in the
               // one situation where it must not.
-              `pnpm run reconcile -- --all --json`,
+              invoke("reconcile", "--all", "--json"),
       details: { digest: error.digest, submissionId: error.submissionId },
     };
   }

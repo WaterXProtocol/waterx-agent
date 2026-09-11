@@ -2,8 +2,12 @@
   "name": "waterx-agent",
   "version": "0.1.0",
   "type": "module",
+  "bin": {
+    "waterx": "bin/waterx.mjs"
+  },
   "private": true,
   "scripts": {
+    "bootstrap": "tsx scripts/setup/bootstrap.ts",
     "doctor": "tsx scripts/setup/doctor.ts",
     "preview": "tsx scripts/agent/preview.ts",
     "approve": "tsx scripts/agent/approve.ts",

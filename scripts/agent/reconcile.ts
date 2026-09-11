@@ -19,7 +19,7 @@
  */
 import { Reconciler } from "../../src/runner/reconcile.ts";
 import { find, settle, unsettled, type SubmissionStatus } from "../../src/agent/submissions.ts";
-import { succeeded } from "../../src/cli/contract.ts";
+import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { UsageError } from "../../src/errors.ts";
 import { explorerTxUrl } from "../../src/config.ts";
 import { initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
@@ -159,7 +159,7 @@ await run(async () => {
       retryable: false,
       reconcileRequired: true,
       awaitingApproval: false,
-      nextCommand: `pnpm run reconcile -- --id ${stillUnknown[0]?.submissionId ?? ""} --json`,
+      nextCommand: invoke("reconcile", "--id", stillUnknown[0]?.submissionId ?? "", "--json"),
       details: { unresolved: stillUnknown },
     });
     return;
@@ -177,7 +177,7 @@ function expect(handle: string): SubmissionStatus {
   const found = find(handle);
   if (found === undefined) {
     throw new UsageError(
-      `No submission ${handle}. \`pnpm run reconcile -- --all\` settles everything outstanding.`,
+      `No submission ${handle}. \`${invoke("reconcile", "--all")}\` settles everything outstanding.`,
     );
   }
   return found;

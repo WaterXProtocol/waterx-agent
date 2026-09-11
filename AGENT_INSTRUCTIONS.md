@@ -11,17 +11,23 @@ Read it once, then work from the JSON envelopes.
 ## 1. How to call anything
 
 ```bash
-pnpm --silent run <command> -- --json
+node bin/waterx.mjs <command> [options] --json
 ```
 
-- `--silent` — suppresses the package manager banner, which is written to
-  stdout and would otherwise be the first thing your JSON parser sees.
+From the repository root.
+
 - `--json` — exactly one JSON document on stdout and nothing else, for the whole
   life of the process. Everything human-readable goes to stderr.
-- `--` — separates the package-manager's arguments from the command's.
+- `bin/waterx.mjs` rather than `pnpm run` — the package manager writes a banner
+  to stdout, which is the first thing your parser would see.
+  `node bin/waterx.mjs <command> --json` is equivalent, and one forgotten word
+  away from an unparseable response.
 
-If stdout does not parse as JSON, you called it without one of those. Do not
-try to repair the output; fix the call.
+If stdout does not parse as JSON, you called it another way. Do not try to
+repair the output; fix the call.
+
+Every `nextCommand` in an envelope is already spelled this way and is meant to
+be run verbatim.
 
 ## 2. The envelope
 
@@ -79,10 +85,10 @@ unhandled throw, so `1` means "this crashed", never "this decided".
 Reads need no key and sign nothing. Run them freely.
 
 ```bash
-pnpm --silent run doctor --json      # is anything blocking reads or writes?
-pnpm --silent run balance --json     # freeMargin is what a new order may commit
-pnpm --silent run positions --json
-pnpm --silent run ticker -- --ticker BTC --json
+node bin/waterx.mjs doctor --json      # is anything blocking reads or writes?
+node bin/waterx.mjs balance --json     # freeMargin is what a new order may commit
+node bin/waterx.mjs positions --json
+node bin/waterx.mjs ticker --ticker BTC --json
 ```
 
 Check `writeReady` **before** previewing a write. A preview on a process with
@@ -97,7 +103,7 @@ false` names exactly what is missing — a key, an account id, a policy — in
 ### preview
 
 ```bash
-pnpm --silent run preview -- --action open-long --ticker SUI \
+node bin/waterx.mjs preview --action open-long --ticker SUI \
   --collateral 10 --leverage 2 --slippage 0.5 --json
 ```
 
@@ -115,7 +121,7 @@ does not know how large a trade should be must ask, not guess. Say so plainly:
 ### approve
 
 ```bash
-pnpm --silent run approve -- --id apr_… --approver "<the user's name>" --json
+node bin/waterx.mjs approve --id apr_… --approver "<the user's name>" --json
 ```
 
 A person's decision, recorded with their name and the time. Run it **only**
@@ -124,7 +130,7 @@ after the user has seen the preview and agreed to it, and pass their name.
 To record a refusal instead — which is kept, not deleted:
 
 ```bash
-pnpm --silent run approve -- --id apr_… --approver "<name>" --reject --reason "too large" --json
+node bin/waterx.mjs approve --id apr_… --approver "<name>" --reject --reason "too large" --json
 ```
 
 An approval expires (10 minutes by default, `WATERX_APPROVAL_TTL_SECONDS`),
@@ -134,7 +140,7 @@ previewed again, never approved late.
 ### execute
 
 ```bash
-pnpm --silent run execute -- --id apr_… --json
+node bin/waterx.mjs execute --id apr_… --json
 ```
 
 Submits the approved plan **unchanged**. Nothing is re-derived — the size and
@@ -144,8 +150,8 @@ one transaction; a second `execute` on the same id is refused.
 ### reconcile
 
 ```bash
-pnpm --silent run reconcile -- --id sub_… --json     # one submission
-pnpm --silent run reconcile -- --all --json          # everything outstanding
+node bin/waterx.mjs reconcile --id sub_… --json     # one submission
+node bin/waterx.mjs reconcile --all --json          # everything outstanding
 ```
 
 Answers "did it land?" from the chain, and "what became of the order?" from the
@@ -167,7 +173,7 @@ does not exist.
    the key. Do not read `.env` to answer a question about "the wallet"; the
    address is what people mean, and `doctor` prints it.
 7. **Clear your outstanding submissions before trading again.**
-   `pnpm --silent run approvals --json` lists any that nobody settled.
+   `node bin/waterx.mjs approvals --json` lists any that nobody settled.
 
 ## 6. The ambiguous case, in detail
 
@@ -201,31 +207,44 @@ approval was marked consumed at the same moment. So:
 
 ## 7. Setting up wallet, account, delegation and risk limits
 
-These are a person's job, but you may be asked to walk someone through them.
+One command does everything that can be done without a person, and returns the
+rest as structured work:
 
 ```bash
-pnpm install
-cp .env.example .env
-
-pnpm --silent run generate-wallet --json   # writes SUI_PRIVATE_KEY to .env
-pnpm --silent run fund-sui --json          # testnet GAS only — not collateral
-pnpm --silent run doctor --json
-pnpm --silent run create-account -- --name my-agent --yes --json
-pnpm --silent run accounts --json          # put the id in WATERX_ACCOUNT_ID
-pnpm --silent run deposit -- --amount 100 --yes --json
+node bin/waterx.mjs bootstrap --json
 ```
 
-Collateral is a backing asset the wallet already holds (mock USDC or mock
-USDsui on testnet — `pnpm --silent run info --json` lists them). On testnet the
-credit faucet is whitelist-gated, so a fresh wallet needs an operator to
-whitelist it or to send it funds. `fund-sui` covers gas and nothing else.
+It generates a wallet if there is none, asks the testnet faucet for gas only if
+the wallet actually needs some, finds or records the account id in `.env`, and
+reports free margin. It signs **nothing** unless you add
+`--create-account --yes`, and even then only account creation, which moves no
+funds. It never deposits — that commits money, and money is a decision.
 
-**Risk limits.** `pnpm --silent run limits --json` reports the execution policy
-and the ceilings in force. To write a scope file for unattended
+Read `data.remaining`. Each entry is `{ what, why, who, command }`, and `who` is
+the field that matters: `"you"` means run the command, `"an operator"` means
+stop and ask a human at the venue. Relay those verbatim rather than
+paraphrasing — the reasons are specific and the paraphrase usually loses them.
+
+```json
+{
+  "what": "trading collateral",
+  "why": "gas is not collateral, and testnet's credit faucet is whitelist-gated — there is no self-service route",
+  "who": "an operator"
+}
+```
+
+**Gas is not collateral.** Gas pays for transactions and the faucet gives it
+out. Collateral is a backing asset the wallet must already hold — mock USDC or
+mock USDsui on testnet — and there is no self-service route to it. A wallet can
+have plenty of gas and be unable to trade at all. This is the step that
+surprises people; say it plainly rather than retrying `deposit`.
+
+**Risk limits.** `node bin/waterx.mjs limits --json` reports the execution
+policy and the ceilings in force. To write a scope file for unattended
 (`delegated-auto`) trading:
 
 ```bash
-pnpm --silent run limits -- --write policy.json \
+node bin/waterx.mjs limits --write policy.json \
   --accounts 0x… --markets BTCUSD,ETHUSD --sides long \
   --max-collateral-per-order 50 --max-cumulative-collateral 200 \
   --max-leverage 5 --max-slippage-percent 1 \

@@ -114,3 +114,21 @@ export const succeeded = (message: string, extra: Partial<Outcome> = {}): Outcom
   awaitingApproval: false,
   ...extra,
 });
+
+/**
+ * How to spell a command this package hands back for someone to run next.
+ *
+ * Every `nextCommand` is written to be **copied verbatim**, so it has to be an
+ * invocation that keeps the contract. `pnpm run <command>` does not: the
+ * package manager writes its own banner to stdout, and the promise of one JSON
+ * document dies on the first thing an agent pastes. The instructions all say
+ * `pnpm --silent run`, which makes the correctness of the output depend on a
+ * word nobody would notice missing — and these strings were emitting the
+ * unsilenced form.
+ *
+ * `bin/waterx.mjs` has no package manager in it and writes nothing of its own,
+ * so it cannot be got wrong. Spelled with `node` rather than as a bare
+ * executable because that works the same everywhere.
+ */
+export const invoke = (command: string, ...args: string[]): string =>
+  ["node bin/waterx.mjs", command, ...args].join(" ");

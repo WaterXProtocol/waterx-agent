@@ -23,7 +23,7 @@ import { createInterface } from "node:readline/promises";
 
 import { approve, reject, statusOf } from "../../src/agent/approvals.ts";
 import { previewOf } from "../../src/agent/plan.ts";
-import { succeeded } from "../../src/cli/contract.ts";
+import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { UsageError } from "../../src/errors.ts";
 import { demand, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
@@ -44,7 +44,7 @@ await run(async () => {
 
   if (status === undefined) {
     throw new UsageError(
-      `No previewed plan ${id}. Run \`pnpm run approvals\` to list them, or preview again.`,
+      `No previewed plan ${id}. Run \`${invoke("approvals")}\` to list them, or preview again.`,
     );
   }
 
@@ -103,7 +103,7 @@ await run(async () => {
   }
 
   approve(id, who);
-  const executeCommand = `pnpm run execute -- --id ${id} --json`;
+  const executeCommand = invoke("execute", "--id", id, "--json");
   note(`Approved. Next: ${executeCommand}`);
   show({
     approvalId: id,

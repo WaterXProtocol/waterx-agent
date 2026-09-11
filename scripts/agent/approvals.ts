@@ -7,7 +7,7 @@
  */
 import { list } from "../../src/agent/approvals.ts";
 import { list as submissions } from "../../src/agent/submissions.ts";
-import { succeeded } from "../../src/cli/contract.ts";
+import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
@@ -69,7 +69,7 @@ await run(async () => {
           retryable: false,
           reconcileRequired: true,
           awaitingApproval: false,
-          nextCommand: "pnpm run reconcile -- --all --json",
+          nextCommand: invoke("reconcile", "--all", "--json"),
         },
   );
 });

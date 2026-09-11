@@ -35,6 +35,19 @@ on-chain source of truth for those bitmasks — not for transaction building.
 
 ## Driving it from an agent
 
+**The prompt to hand someone**, for Claude Code, Codex, or anything with a
+shell:
+
+> Clone `git@github.com:Bucket-Protocol/waterx-agent.git`, run `pnpm install`,
+> read `SKILL.md`, then run `node bin/waterx.mjs bootstrap --json` and tell me
+> what is still missing before I can trade on testnet.
+
+`bootstrap` does every setup step that does not need a person — a wallet, gas
+if the wallet needs any, finding and recording the account id — and returns the
+rest as structured work items saying *what*, *why*, and *who can supply it*.
+Which is how an agent learns to stop and ask instead of retrying: testnet
+collateral is whitelist-gated and comes back as `who: "an operator"`.
+
 [SKILL.md](SKILL.md) is the entry point, and it installs into Claude Code,
 Codex, an `AGENTS.md`, or any runtime with a shell tool — see *Installing this
 skill* at the end of it. [AGENT_INSTRUCTIONS.md](AGENT_INSTRUCTIONS.md) is the

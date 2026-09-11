@@ -27,6 +27,7 @@ import { previewOf, type TradePlan } from "../../src/agent/plan.ts";
 import { requestApproval } from "../../src/agent/approvals.ts";
 import { UsageError } from "../../src/errors.ts";
 import type { WaterXAgent } from "../../src/agent/agent.ts";
+import { invoke } from "../../src/cli/contract.ts";
 
 const ACTIONS = [
   "open-long",
@@ -90,8 +91,8 @@ await run(async () => {
     preview,
   });
 
-  const approveCommand = `pnpm run approve -- --id ${request.id} --approver <who> --json`;
-  const executeCommand = `pnpm run execute -- --id ${request.id} --json`;
+  const approveCommand = invoke("approve", "--id", request.id, "--approver <who>", "--json");
+  const executeCommand = invoke("execute", "--id", request.id, "--json");
 
   render(preview, agent, request.expiresAt);
 

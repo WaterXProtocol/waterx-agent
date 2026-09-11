@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { classify } from "../src/cli/classify.ts";
-import { EXIT } from "../src/cli/contract.ts";
+import { EXIT, invoke } from "../src/cli/contract.ts";
 import { SignerError } from "../src/chain/signer.ts";
 import {
   AmbiguousSubmissionError,
@@ -35,6 +35,9 @@ describe("classify", () => {
     expect(outcome.retryable, "a retry here duplicates a trade").toBe(false);
     expect(outcome.nextCommand).toContain("reconcile");
     expect(outcome.nextCommand).toContain("sub_1");
+    // Runnable as printed: no package-manager banner to break the one-document
+    // guarantee the caller is about to rely on.
+    expect(outcome.nextCommand).not.toContain("pnpm run");
   });
 
   it("still hands over a reconcile command when it knows no digest", () => {
@@ -46,7 +49,10 @@ describe("classify", () => {
     expect(outcome.status).toBe("ambiguous");
     expect(outcome.submitted, "conservative: may have been").toBe(true);
     expect(outcome.retryable).toBe(false);
-    expect(outcome.nextCommand).toBe("pnpm run reconcile -- --all --json");
+    // Spelled the way `invoke` spells it, because `nextCommand` is meant to be
+    // run verbatim — an emitted command that needs editing is not a next
+    // command, it is a hint.
+    expect(outcome.nextCommand).toBe(invoke("reconcile", "--all", "--json"));
   });
 
   it("calls a policy refusal a policy refusal, with nothing submitted", () => {

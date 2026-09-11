@@ -32,7 +32,7 @@ import { markConsumed, statusOf } from "../../src/agent/approvals.ts";
 import { recordSubmission } from "../../src/agent/submissions.ts";
 import { previewOf } from "../../src/agent/plan.ts";
 import { AmbiguousSubmissionError, ConfigError, UsageError } from "../../src/errors.ts";
-import { succeeded } from "../../src/cli/contract.ts";
+import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { explorerTxUrl } from "../../src/config.ts";
 import { demand, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
@@ -51,7 +51,7 @@ await run(async () => {
   const id = demand(args.id, "--id", "which approved plan to submit");
   const status = statusOf(id);
   if (status === undefined) {
-    throw new UsageError(`No previewed plan ${id}. Run \`pnpm run approvals\` to list them.`);
+    throw new UsageError(`No previewed plan ${id}. Run \`${invoke("approvals")}\` to list them.`);
   }
 
   // Already spent. This is the duplicate-order case, so it is reported with the
@@ -71,7 +71,7 @@ await run(async () => {
       awaitingApproval: false,
       ...(status.submissionId === undefined
         ? {}
-        : { nextCommand: `pnpm run reconcile -- --id ${status.submissionId} --json` }),
+        : { nextCommand: invoke("reconcile", "--id", status.submissionId, "--json") }),
       details: { digest, submissionId: status.submissionId },
     });
     return;
@@ -93,7 +93,7 @@ await run(async () => {
       retryable: false,
       reconcileRequired: false,
       awaitingApproval: true,
-      nextCommand: `pnpm run approve -- --id ${id} --approver <who> --json`,
+      nextCommand: invoke("approve", "--id", id, "--approver <who>", "--json"),
     });
     return;
   }
