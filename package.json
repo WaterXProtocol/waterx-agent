@@ -34,6 +34,7 @@
     "pack:check": "tsx scripts/dev/pack-check.ts",
     "bootstrap": "tsx scripts/setup/bootstrap.ts",
     "next": "tsx scripts/agent/next.ts",
+    "skill": "tsx scripts/agent/skill.ts",
     "doctor": "tsx scripts/setup/doctor.ts",
     "preview": "tsx scripts/agent/preview.ts",
     "approve": "tsx scripts/agent/approve.ts",

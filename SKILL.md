@@ -1,6 +1,6 @@
 ---
 name: waterx-agent
-description: Trade WaterX perpetuals on Sui from the command line — read market and account state, preview a write, have a person approve it, execute it, and reconcile a submission whose result nobody saw. Use when asked to check WaterX markets, positions, orders or account balances; to open, close, reduce or increase a perpetual position; to place, amend or cancel an order; to set up a WaterX wallet, account, delegate or risk limits; or to find out whether a WaterX transaction went through. Requires a checkout of the waterx-agent repository.
+description: Trade WaterX perpetuals on Sui from the command line — read market and account state, preview a write, have a person approve it, execute it, and reconcile a submission whose result nobody saw. Use when asked to check WaterX markets, positions, orders or account balances; to open, close, reduce or increase a perpetual position; to place, amend or cancel an order; to set up a WaterX wallet, account, delegate or risk limits; or to find out whether a WaterX transaction went through. Install with `npm install github:WaterXProtocol/waterx-agent`, or work from a checkout.
 ---
 
 # WaterX agent
