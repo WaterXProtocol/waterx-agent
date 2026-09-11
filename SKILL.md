@@ -239,12 +239,21 @@ checkout and tell it to read `SKILL.md`. Installing only saves that sentence.
 
 Paste this into Claude Code, Codex, or anything else with a shell:
 
-> Clone `git@github.com:Bucket-Protocol/waterx-agent.git`, run `pnpm install`,
-> read `SKILL.md`, then run `node bin/waterx.mjs bootstrap --json` and tell me
-> what is still missing before I can trade on testnet.
+> Run `npm install github:WaterXProtocol/waterx-agent`, then `npx waterx skill`,
+> and do what it says.
 
-That gets to a set-up checkout and an exact list of what remains — which, on a
-fresh wallet, is testnet collateral, and no agent can arrange that (see below).
+Two commands, no paths. `waterx skill` prints these instructions from wherever
+the package landed, and the first thing they say is to run `npx waterx next`,
+which reports what is still missing and what to offer. The agent does not have
+to plan the onboarding.
+
+Use `npm`, not `pnpm` — pnpm refuses a git install that needs a build
+(`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`). If install scripts are blocked where
+you are, install a tarball instead; the rest is identical:
+
+> Run `npm install <url-to-waterx-agent-0.1.0.tgz>`, then `npx waterx skill`,
+> and do what it says.
+
 Once an operator has funded the account:
 
 > Show me SUI on WaterX, then preview a $10 long at 2x with 0.5% slippage.

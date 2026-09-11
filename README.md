@@ -96,9 +96,11 @@ while publishing to npm remains a separate, deliberate decision.
 **The prompt to hand someone**, for Claude Code, Codex, or anything with a
 shell:
 
-> Clone `git@github.com:Bucket-Protocol/waterx-agent.git`, run `pnpm install`,
-> read `SKILL.md`, then run `node bin/waterx.mjs bootstrap --json` and tell me
-> what is still missing before I can trade on testnet.
+> Run `npm install github:WaterXProtocol/waterx-agent`, then `npx waterx skill`,
+> and do what it says.
+
+Two commands and no paths — `waterx skill` prints the instructions from wherever
+the package landed, and they begin by telling the agent to run `npx waterx next`.
 
 `bootstrap` does every setup step that does not need a person — a wallet, gas
 if the wallet needs any, finding and recording the account id — and returns the
