@@ -25,9 +25,11 @@ import {
   PERM_CANCEL_ORDER,
   PERM_CLOSE_POSITION,
   PERM_DECREASE_POSITION,
+  PERM_DEPOSIT_COLLATERAL,
   PERM_INCREASE_POSITION,
   PERM_OPEN_POSITION,
   PERM_PLACE_ORDER,
+  PERM_WITHDRAW_COLLATERAL,
 } from "@waterx/sdk";
 
 import type { DelegateData } from "../api/types.ts";
@@ -90,16 +92,34 @@ export const perpGrantCommand = (input: {
   input.invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
 
 /**
- * What the agent asks for: trading, and nothing else.
+ * What the agent asks for: the perp trading mask, and nothing outside perps.
  *
- * `PERM_ALL_TRADING` covers opening, closing, sizing and orders. It does not
- * include `PERM_DEPOSIT_COLLATERAL` or `PERM_WITHDRAW_COLLATERAL`, and it must
- * not: moving funds is the owner's, and an agent that could do it would remove
- * the only guarantee this arrangement rests on.
+ * `PERM_ALL_TRADING` (255) covers opening, closing, sizing, orders **and
+ * position margin** — `PERM_DEPOSIT_COLLATERAL` and `PERM_WITHDRAW_COLLATERAL`
+ * are in it, and this used to claim they were not.
+ *
+ * That claim was wrong twice over. The agent does ask for them, because
+ * `addMargin` and `removeMargin` are actions it offers; and those two bits move
+ * collateral **between the account and an open position**, not out of the
+ * account. Saying "we never ask for them" understated the grant on a consent
+ * screen, which is the worst direction to be wrong in.
+ *
+ * What the agent cannot do is take money out, and that does not rest on a bit
+ * being absent. Account deposit and withdrawal **refuse a `delegateSender`
+ * outright** at the API, and the framework-level `Delegate.permissions` field —
+ * which carries the withdraw/manage/receive bits — must stay `PERM_NONE` for a
+ * delegate; perp authority is read from the per-protocol slot instead. A
+ * delegate therefore cannot withdraw whatever mask it holds.
  */
 export const REQUESTED_PERP_PERMISSIONS = PERM_ALL_TRADING;
 
-/** The bits, named, so a person can read what they are being asked to sign. */
+/**
+ * The bits, named, so a person can read what they are being asked to sign.
+ *
+ * Every bit in the requested mask appears here. A list shorter than the mask is
+ * a consent screen that undersells the grant, which is how this file described
+ * itself until the two margin bits were counted.
+ */
 export const REQUESTED_PERMISSION_NAMES: Readonly<Record<string, number>> = {
   OPEN_POSITION: PERM_OPEN_POSITION,
   CLOSE_POSITION: PERM_CLOSE_POSITION,
@@ -107,6 +127,9 @@ export const REQUESTED_PERMISSION_NAMES: Readonly<Record<string, number>> = {
   DECREASE_POSITION: PERM_DECREASE_POSITION,
   PLACE_ORDER: PERM_PLACE_ORDER,
   CANCEL_ORDER: PERM_CANCEL_ORDER,
+  // Margin on an OPEN POSITION, not funds out of the account.
+  DEPOSIT_COLLATERAL: PERM_DEPOSIT_COLLATERAL,
+  WITHDRAW_COLLATERAL: PERM_WITHDRAW_COLLATERAL,
 };
 
 /** Where the handshake has got to. */
@@ -290,7 +313,8 @@ export function delegationStatus(input: {
     granted: mine.permissionList,
     state: "granted",
     headline:
-      `${delegateAddress} may trade ${accountId} on behalf of ${ownerAddress}. It cannot ` +
-      `withdraw or grant authority — those stayed owner-only on chain.`,
+      `${delegateAddress} may trade ${accountId} on behalf of ${ownerAddress}, including moving ` +
+      `margin on open positions. It cannot take money OUT of the account or grant authority: ` +
+      `account deposit and withdrawal refuse a delegate outright, whatever mask it holds.`,
   };
 }
