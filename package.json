@@ -35,6 +35,7 @@
     "bootstrap": "tsx scripts/setup/bootstrap.ts",
     "next": "tsx scripts/agent/next.ts",
     "skill": "tsx scripts/agent/skill.ts",
+    "onboard": "tsx scripts/agent/onboard.ts",
     "doctor": "tsx scripts/setup/doctor.ts",
     "preview": "tsx scripts/agent/preview.ts",
     "approve": "tsx scripts/agent/approve.ts",

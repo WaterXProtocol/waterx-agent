@@ -16,6 +16,8 @@ export type {
   ReducePositionParams,
 } from "./agent/agent.ts";
 export { assertNotCrossing, MarketRegistry } from "./agent/markets.ts";
+export { appUrl, delegationStatus, REQUESTED_PERMISSION_NAMES, REQUESTED_PERP_PERMISSIONS } from "./agent/delegation.ts";
+export type { DelegationState, DelegationStatus } from "./agent/delegation.ts";
 export { decide } from "./agent/guidance.ts";
 export type { Guidance, Situation, State, Suggestion } from "./agent/guidance.ts";
 export { buildTx, previewOf } from "./agent/plan.ts";
@@ -54,7 +56,7 @@ export type { SignerRequest, SignerResponse } from "./chain/signer-protocol.ts";
 export { generateWallet, getOrCreateWallet, loadWallet, saveToEnv } from "./chain/wallet.ts";
 export type { WalletInfo } from "./chain/wallet.ts";
 
-export { explorerTxUrl, loadConfig, requireAccountId } from "./config.ts";
+export { explorerTxUrl, isDefaultExtraPackage, loadConfig, requireAccountId } from "./config.ts";
 export type { AgentConfig, ExecutionPolicy, Network } from "./config.ts";
 
 export {

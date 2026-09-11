@@ -26,6 +26,7 @@ import {
   LEG_ARG_HANDLING,
   ORDER_ARG_BINDINGS,
   TYPE_BINDINGS,
+  assertLayoutConfirmed,
   assertTransactionMatches,
   entrypointsOf,
 } from "../src/chain/verify.ts";
@@ -2408,5 +2409,55 @@ describe("the leg check accounts for every constructor argument", () => {
       (LEG_ARG_HANDLING as Record<string, string | undefined>).isLong = saved;
     }
     expect(() => assertTransactionMatches(bytes, authorized, SIGNER, DEPLOYMENT)).not.toThrow();
+  });
+});
+
+/**
+ * Do not place what you cannot take back.
+ *
+ * Every other check in `verify.ts` is about the transaction in hand. This one
+ * is about the transaction you will need *next*: a resting order whose
+ * cancellation cannot be signed sits on the book with no way off it except
+ * filling. It surfaced on mainnet, where `cancel_order_request` is unconfirmed
+ * while `place_order_request` is not, so the agent would have placed happily
+ * and then been unable to retract.
+ */
+describe("an action that needs a way back", () => {
+  const resting: WriteIntent = {
+    action: "placeLimitOrder",
+    accountId: `0x${"a".repeat(64)}`,
+    increasesExposure: true,
+    ticker: "SUIUSD",
+  };
+
+  it("refuses a resting order when the cancel is unconfirmed", () => {
+    // `mainnet` is the deployment where that is true today.
+    expect(() => assertLayoutConfirmed(resting, [], "mainnet")).toThrow(
+      /the call that takes it back/,
+    );
+  });
+
+  it("states the evidence rather than only the verdict", () => {
+    // An operator deciding whether to accept this should be deciding with the
+    // facts: six sibling entrypoints in the same module are confirmed.
+    expect(() => assertLayoutConfirmed(resting, [], "mainnet")).toThrow(/corroboration, not proof/);
+  });
+
+  it("allows it once the cancel is named deliberately", () => {
+    expect(() =>
+      assertLayoutConfirmed(resting, ["trading::cancel_order_request"], "mainnet"),
+    ).not.toThrow();
+  });
+
+  it("costs nothing where the cancel is confirmed", () => {
+    // testnet has both, so the rule is silent there — a coupling that fired
+    // everywhere would just be an outage.
+    expect(() => assertLayoutConfirmed(resting, [], "testnet")).not.toThrow();
+  });
+
+  it("does not restrain a market order, which needs no cancel", () => {
+    expect(() =>
+      assertLayoutConfirmed({ ...resting, action: "openLong" }, [], "mainnet"),
+    ).not.toThrow();
   });
 });

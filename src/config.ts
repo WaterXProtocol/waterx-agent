@@ -60,6 +60,45 @@ const DEFAULT_CONFIG_URL: Record<Network, string> = {
   mainnet: "https://config.waterx.app/mainnet.json",
 };
 
+/**
+ * Package exceptions mainnet cannot trade without, shipped as a default.
+ *
+ * The mainnet config document does not list three packages the backend reaches:
+ * the Pyth Lazer oracle, which **every order** calls, and two coin types that
+ * appear only as type arguments. Without them the verifier refuses every
+ * mainnet write — correctly, because a call from a package nobody can name is
+ * exactly what it exists to stop.
+ *
+ * The alternative was to make each user paste a line `doctor` prints. That is
+ * worse, not better: pasting three opaque ids you cannot evaluate is not
+ * informed consent, and it puts the exception somewhere nobody reviews. Here it
+ * is version-controlled, diffable, explained, and `doctor` reports it as a
+ * standing exception in force rather than passing silently.
+ *
+ * `=*` on the Lazer package grants its calls with nothing holding them to a
+ * shape — see `deployment.ts` for why no narrower form can express a
+ * third-party package. The other two are bare ids, which cover a type argument
+ * and no call at all.
+ *
+ * These come out the day the config document lists them. `pnpm run doctor`
+ * says so every time it runs.
+ */
+const DEFAULT_EXTRA_PACKAGES: Readonly<Record<Network, readonly string[]>> = {
+  testnet: [],
+  mainnet: [
+    // pyth_lazer::parse_and_verify_le_ecdsa_update_v2 — reached by every order.
+    "0xefbfd064480777699fd9c557a5804d72ace7bc82661fdc8d1f1a44ea6d92ee10=*",
+    // USDC, as a type argument on deposit, withdraw and WLP mint.
+    "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7",
+    // The WLP reward coin, as a type argument on a mint.
+    "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270",
+  ],
+};
+
+/** Whether an exception is one this package ships rather than one an operator named. */
+export const isDefaultExtraPackage = (network: Network, entry: string): boolean =>
+  DEFAULT_EXTRA_PACKAGES[network].includes(entry);
+
 export interface AgentConfig {
   network: Network;
   /** Backend REST base URL, no trailing slash. */
@@ -199,8 +238,25 @@ function isRefusableEntrypoint(name: string, network: Network): boolean {
   return Object.values(ACTION_RULES).some((rule) => rule.entrypoint === name);
 }
 
+/**
+ * The network to use when nobody said.
+ *
+ * Mainnet, which reverses the usual default and is the safer answer here for a
+ * reason worth stating: testnet does not work. Its gas faucet is rate-limited
+ * to the point of refusing most first attempts, its collateral faucet is
+ * whitelist-gated so no amount of retrying produces trading funds, and its
+ * keeper has not been filling orders — so a correct order rests forever and
+ * nothing becomes a position. Defaulting to it sent every new user down a road
+ * with three walls across it.
+ *
+ * This is not a decision to trade with real money. Mainnet's execution policy
+ * still defaults to `read-only`: what works out of the box is READING a live
+ * deployment, and writing there stays something a person types.
+ */
+const DEFAULT_NETWORK: Network = "mainnet";
+
 function parseNetwork(raw: string | undefined): Network {
-  const value = (raw ?? "testnet").trim().toLowerCase();
+  const value = (raw ?? DEFAULT_NETWORK).trim().toLowerCase();
   if (value === "testnet" || value === "mainnet") return value;
   throw new Error(
     `Invalid network "${raw}". Expected "testnet" or "mainnet" (WATERX_NETWORK / SUI_NETWORK).`,
@@ -280,12 +336,17 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     grpcUrl: overrides.grpcUrl ?? stated(process.env.SUI_GRPC_URL) ?? DEFAULT_GRPC_URL[network],
     configUrl:
       overrides.configUrl ?? stated(process.env.WATERX_CONFIG_URL) ?? DEFAULT_CONFIG_URL[network],
+    // Named exceptions REPLACE the shipped ones rather than adding to them: an
+    // operator who writes the variable is stating the whole set deliberately,
+    // and silently unioning would make it impossible to narrow a default.
     extraPackages:
       overrides.extraPackages ??
-      (process.env.WATERX_EXTRA_PACKAGES ?? "")
-        .split(",")
-        .map((id) => id.trim())
-        .filter((id) => id.length > 0),
+      (stated(process.env.WATERX_EXTRA_PACKAGES) === undefined
+        ? DEFAULT_EXTRA_PACKAGES[network]
+        : (process.env.WATERX_EXTRA_PACKAGES ?? "")
+            .split(",")
+            .map((id) => id.trim())
+            .filter((id) => id.length > 0)),
     // Validated whichever way it arrives. An override skipped the parser
     // entirely, so a programmatic caller could name an entrypoint that is
     // captured, unreachable or misspelt and get a setting that reads as

@@ -103,7 +103,7 @@ import { fromBase64 } from "@mysten/sui/utils";
 import { ExecutionPolicyError } from "../errors.ts";
 import type { WriteIntent } from "../policy.ts";
 import { ABI, KNOWN_FUNCTIONS, SDK_VERSION } from "./abi.generated.ts";
-import { corpusFor } from "./corpus.ts";
+import { corpusFor, corroborationNote } from "./corpus.ts";
 import type { Network } from "../config.ts";
 import {
   exceptionCovers,
@@ -2279,12 +2279,56 @@ function assertGasIsRight(
  * gas, and there is no reason to do that work for an action that is going to
  * be refused either way.
  */
+/**
+ * Actions that leave something behind which another action has to take away.
+ *
+ * Placing a resting order whose cancellation this agent cannot sign is strictly
+ * worse than not placing it: the order sits on the book, and the one command
+ * that would remove it refuses. Nothing else in this file would have noticed —
+ * every check here is about the transaction in hand, and this hazard is about
+ * the one you will need *next*.
+ *
+ * It came up on mainnet, where `cancel_order_request` is unconfirmed while
+ * `place_order_request` is not, so the agent would happily place and then be
+ * unable to retract. On testnet both are confirmed and this costs nothing.
+ */
+export const NEEDS_A_WAY_BACK: Readonly<Record<string, { entrypoint: string; because: string }>> = {
+  placeLimitOrder: {
+    entrypoint: "trading::cancel_order_request",
+    because: "a resting order that cannot be cancelled can only be got rid of by letting it fill",
+  },
+  placeTpSl: {
+    entrypoint: "trading::cancel_order_request",
+    because:
+      "a bracket that cannot be cancelled stays attached until the position it protects is closed",
+  },
+};
+
 export function assertLayoutConfirmed(
   intent: WriteIntent,
   allowUnconfirmed: readonly string[],
   network: Network,
 ): void {
   const unconfirmed = corpusFor(network).uncaptured;
+
+  // Checked before the action's own layout, because it is the less obvious
+  // failure: the action itself is fine, and what is missing is the way out.
+  const wayBack = NEEDS_A_WAY_BACK[intent.action];
+  if (
+    wayBack !== undefined &&
+    Object.hasOwn(unconfirmed, wayBack.entrypoint) &&
+    !allowUnconfirmed.includes(wayBack.entrypoint)
+  ) {
+    throw refuse(
+      intent,
+      `this would rest on the book, and ${wayBack.entrypoint} — the call that takes it back — ` +
+        `has never been confirmed against this deployment, so cancelling would refuse. ` +
+        `${wayBack.because}. ${corroborationNote(network, wayBack.entrypoint)} Either capture it ` +
+        `(\`pnpm run capture-corpus\`) or accept it deliberately in ` +
+        `WATERX_ALLOW_UNCONFIRMED_ABI — but do not place what you cannot retract by accident.`,
+    );
+  }
+
   const entrypoint = ACTION_RULES[intent.action]?.entrypoint;
   const why =
     entrypoint !== undefined && Object.hasOwn(unconfirmed, entrypoint)
@@ -2295,8 +2339,9 @@ export function assertLayoutConfirmed(
     intent,
     `${String(entrypoint)} has never been confirmed against this deployment: ${why}. Its ` +
       `argument layout comes from the SDK alone — authoritative, but never seen from this ` +
-      `deployment. Re-run \`pnpm run capture-corpus\` once it can be built, or name this ` +
-      `entrypoint in WATERX_ALLOW_UNCONFIRMED_ABI.`,
+      `deployment. ${corroborationNote(network, String(entrypoint))} Re-run ` +
+      `\`pnpm run capture-corpus\` once it can be built, or name this entrypoint in ` +
+      `WATERX_ALLOW_UNCONFIRMED_ABI.`,
   );
 }
 

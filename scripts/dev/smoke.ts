@@ -27,6 +27,7 @@ const READS: [string, string[]][] = [
   ["doctor", []],
   ["next", []],
   ["skill", []],
+  ["onboard", []],
   // `--skip-faucet` makes it read-only: without `--create-account --yes` it
   // signs nothing, and this is the command the recommended prompt runs first.
   ["bootstrap", ["--skip-faucet"]],

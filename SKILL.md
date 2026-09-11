@@ -64,6 +64,7 @@ and **ask for anything in `needsFromUser` instead of choosing it**.
 | `unsettled` | Something was sent and nobody knows what happened. Reconcile before anything else. |
 | `awaiting-approval` | A preview is waiting on them. Show it and ask. |
 | `not-set-up` | Run `bootstrap` and relay what is still missing — some of it needs an operator. |
+| `not-delegated` | The owner has not granted this wallet permission, or the grant is stale. Run `onboard` and relay it — only they can fix it. |
 | `read-only` | Nothing can be signed. On mainnet that is the default and changing it is their decision. |
 | `no-collateral` | Set up, but nothing to commit. Gas is not collateral; this one needs an operator. |
 | `ready` | Ask what they want to do, and for the numbers. |
@@ -113,8 +114,8 @@ agreeing to it.
 2. **Never approve your own preview.** `approve` records a person's name. Run
    it only after the user has seen the preview and said yes, and pass their
    name — not yours.
-3. **Never open a position on mainnet on your own initiative.** Mainnet
-   defaults to `read-only`, and it stays that way unless a person has
+3. **Never open a position on mainnet on your own initiative.** Mainnet is the
+   default network and defaults to `read-only`, and it stays that way unless a person has
    deliberately changed `WATERX_EXECUTION_POLICY`. If a preview reports
    `"network": "mainnet"`, say so prominently before asking for approval — that
    is real money, and the person approving must know which network they are on.
@@ -161,6 +162,7 @@ Exit codes carry the same answer: `0` ok, `2` usage, `3` config, `4` auth,
 | `funds` | Deposit and withdrawal **history** — not balances; use `balance` |
 | `accounts`, `delegates` | Which accounts this wallet owns, and who may act on them |
 | `limits` | The execution policy and risk ceilings this process is bound by |
+| `onboard` | The delegate handshake: what the owner still has to grant, and where |
 | `approvals` | Previewed plans, who approved them, and anything unsettled |
 
 **Write — always through preview → approve → execute.**

@@ -21,6 +21,7 @@ const ok: Situation = {
   positions: 0,
   orders: 0,
   blockers: [],
+  network: "testnet",
 };
 
 describe("what to do next", () => {
@@ -88,6 +89,19 @@ describe("what to do next", () => {
     expect(noGas.headline).toContain("no gas");
     expect(noGas.suggestions[0]?.command).toContain("fund-sui");
 
+    // On mainnet there is no faucet, and `fund-sui` refuses there — naming it
+    // would spend a turn on a command that cannot work.
+    const mainnetNoGas = decide({
+      ...ok,
+      network: "mainnet",
+      address: "0xabc",
+      configured: false,
+      missing: { signer: false, gas: true, account: true },
+    });
+    expect(mainnetNoGas.headline).toContain("no faucet on mainnet");
+    expect(mainnetNoGas.headline).toContain("0xabc");
+    expect(mainnetNoGas.suggestions.map((x) => x.command).join(" ")).not.toContain("fund-sui");
+
     const blocked = decide({
       ...ok,
       configured: false,
@@ -102,6 +116,41 @@ describe("what to do next", () => {
     expect(g.state).toBe("no-collateral");
     expect(g.headline).toContain("Gas is not collateral");
     expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("--action open-long");
+  });
+
+  it("will not offer a trade the chain is going to refuse", () => {
+    // A missing or stale grant makes every write abort on chain, and the
+    // refusal arrives as a generic 6002 long after the agent has told the user
+    // it is placing an order. No policy and no funding changes that — the owner
+    // has to act, and they are not at this terminal.
+    for (const state of ["awaiting-grant", "not-granted", "stale-grant", "insufficient"]) {
+      const g = decide({
+        ...ok,
+        delegation: { state, headline: `delegation is ${state}`, grantUrl: "https://x" },
+      });
+      expect(g.state, state).toBe("not-delegated");
+      expect(g.suggestions.map((x) => x.command).join(" ")).toContain("onboard");
+      expect(g.suggestions.map((x) => x.command).join(" "), state).not.toContain("preview");
+    }
+  });
+
+  it("gets out of the way once the grant is real", () => {
+    for (const state of ["granted", "owner-key"]) {
+      const g = decide({
+        ...ok,
+        delegation: { state, headline: "fine", grantUrl: "https://x" },
+      });
+      expect(g.state, state).toBe("ready");
+    }
+  });
+
+  it("still settles an in-flight submission before discussing a grant", () => {
+    const g = decide({
+      ...ok,
+      open: 1,
+      delegation: { state: "not-granted", headline: "no", grantUrl: "https://x" },
+    });
+    expect(g.state).toBe("unsettled");
   });
 
   it("treats read-only as a decision, not as unfinished setup", () => {

@@ -80,6 +80,14 @@ Runs straight from TypeScript through `tsx`, with no build step between an edit
 and a run — the shim prefers sources when they are present, which they are only
 in a checkout.
 
+**Mainnet is the default network.** Testnet does not work — its gas faucet
+refuses most first attempts, its collateral faucet is whitelist-gated so
+retrying never produces trading funds, and its keeper has not been filling
+orders. Defaulting there sent every new user down a road with three walls
+across it. This is a decision about which deployment to *read*: mainnet's
+execution policy still defaults to `read-only`, so writing is a separate thing
+a person types. `WATERX_NETWORK=testnet` switches back.
+
 Configuration belongs to the caller: `.env` and the `.waterx/` ledgers are read
 and written in the **working directory**, never inside the package.
 
@@ -274,6 +282,67 @@ A write returns when the request is on chain. A keeper fills it afterwards, and
 on testnet that sweep is sometimes not running at all. `pnpm run orders` shows
 the resting request; `pnpm run positions` shows what was actually filled. Do not
 read a successful `execute` as a position.
+
+## Trading someone else's account
+
+The arrangement this is built for: a person keeps their own key and their own
+account, and grants a **separate** wallet — the agent's — permission to trade
+on it. The agent holds only the delegate key.
+
+```bash
+node bin/waterx.mjs onboard --json
+```
+
+It reports where the handshake has got to and what the next move is. The grant
+itself is the owner's act, made on chain from their own wallet at
+`https://waterx.app/en/account`, and revocable there; this command reads it and
+never makes it. An agent that could grant itself authority would not be a
+delegate arrangement.
+
+What the agent asks for is `OPEN_POSITION`, `CLOSE_POSITION`,
+`INCREASE_POSITION`, `DECREASE_POSITION`, `PLACE_ORDER`, `CANCEL_ORDER` — and
+never `DEPOSIT_COLLATERAL` or `WITHDRAW_COLLATERAL`. **Funds-out and authority
+changes are owner-only on chain** since the delegate-phishing hardening, so a
+delegate can trade the account and cannot withdraw from it or grant anyone else
+access — whatever its mask says, and whatever a bug here does. That is the
+entire reason `delegated-auto` is a bounded risk rather than a promise.
+
+Two states are worth knowing about, because both look like success:
+
+- **A stale grant** lands in the superseded `TradingRequest<CREDIT>` slot. It
+  reads as fully permissioned and aborts `EUnauthorized` on every order,
+  surfacing as a generic `6002`. `onboard` and `doctor` both name it.
+- **A failed lookup is not a revocation.** An unreadable chain is reported as
+  unconfirmed, never as "the owner took it away".
+
+The one thing the agent cannot do for itself is find the account: the backend
+answers "who may act on this account?" and has no reverse lookup, so the owner
+states the account id once (`WATERX_ACCOUNT_ID`). Everything after that is
+checked against the chain rather than believed.
+
+### What mainnet cannot do yet
+
+`cancelOrder` and `updateOrder` are unconfirmed there — capturing a layout needs
+a transaction the deployment will build, and both need a resting order that does
+not exist on any account this repo can reach. Everything else in the perp and
+account flow is confirmed: market orders, closing, reducing, increasing, margin,
+deposit, withdraw, delegates.
+
+That gap has a consequence worth stating, because the code acts on it:
+**placing a resting order is refused while its cancellation is unconfirmed.** An
+order on the book whose retraction cannot be signed can only be got rid of by
+letting it fill, which is strictly worse than not placing it. `placeLimitOrder`
+and `placeTpSl` therefore refuse on mainnet until someone either captures
+`trading::cancel_order_request` or names it deliberately in
+`WATERX_ALLOW_UNCONFIRMED_ABI`.
+
+The refusal states its evidence rather than only its verdict: six other
+entrypoints in the same package and module *are* confirmed against mainnet and
+all matched the SDK. That is corroboration, not proof — the SDK could describe
+one function wrongly while describing its neighbours correctly — and it is the
+difference between "we have never checked anything here" and "we checked six
+siblings and this one needed conditions we could not create". An operator
+deciding whether to accept it should decide with that in front of them.
 
 ## Execution policy
 

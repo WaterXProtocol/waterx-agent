@@ -15,7 +15,7 @@ import { HttpClient } from "./api/http.ts";
 import { ReadApi } from "./api/read.ts";
 import { TxApi } from "./api/tx.ts";
 import type { AppInfo } from "./api/types.ts";
-import { type AgentConfig, loadConfig, signsAsDelegate } from "./config.ts";
+import { type AgentConfig, isDefaultExtraPackage, loadConfig, signsAsDelegate } from "./config.ts";
 import { ExecutionPolicyError } from "./errors.ts";
 import { createSigner, signerReadiness } from "./chain/create-signer.ts";
 import type { SignerProvider } from "./chain/signer.ts";
@@ -28,7 +28,7 @@ import {
   normalizePackage,
   parseExceptions,
 } from "./chain/deployment.ts";
-import { ACTION_RULES, usesByPackage } from "./chain/verify.ts";
+import { ACTION_RULES, NEEDS_A_WAY_BACK, usesByPackage } from "./chain/verify.ts";
 import { KNOWN_FUNCTIONS } from "./chain/abi.generated.ts";
 import { corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
 import { PolicyGate } from "./policy.ts";
@@ -384,6 +384,13 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       // Packages whose exception cannot be qualified, because the SDK declares
       // none of the modules they serve. Named so the widening is a stated fact
       // rather than something an operator infers from a missing `=`.
+      // Which of the accepted exceptions this package ships, as opposed to ones
+      // the operator wrote. A default nobody typed still deserves to be seen.
+      const shipped = named.filter((id) =>
+        config.extraPackages.some(
+          (entry) => normalizePackage(entry.split("=")[0] ?? "") === id && isDefaultExtraPackage(config.network, entry),
+        ),
+      );
       const unqualified = unlisted.filter(
         (id) => (uses.get(id)?.size ?? 0) > 0 && sdkPackageFor(uses.get(id)) === undefined,
       );
@@ -419,10 +426,14 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
             ? warn(
                 "packages",
                 `${String(called.size)} packages reached by ${via}; ${String(named.length)} of ` +
-                  `them are accepted only because WATERX_EXTRA_PACKAGES names them ` +
-                  `(${named.map((id) => `0x${id.slice(0, 8)}…`).join(", ")}). That is a standing ` +
-                  `exception to "every call belongs to this deployment" — drop it once the ` +
-                  `config document lists them.`,
+                  `them are accepted only because they are named as exceptions ` +
+                  `(${named.map((id) => `0x${id.slice(0, 8)}…`).join(", ")})` +
+                  (shipped.length === 0
+                    ? ""
+                    : `, ${String(shipped.length)} of those shipped as a default by this package ` +
+                      `rather than named by you`) +
+                  `. That is a standing exception to "every call belongs to this deployment" — ` +
+                  `drop it once the config document lists them.`,
               )
             : ok(
                 "packages",
@@ -473,15 +484,31 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     // raw entrypoints — the previous line named three of ten, including
     // `withdrawal_queue::route_wormhole`, which no action reaches at all, and
     // omitted the five position paths that were actually blocked.
-    const blocked = Object.entries(ACTION_RULES)
-      .filter(([, rule]) => Object.hasOwn(corpus.uncaptured, rule.entrypoint))
-      .filter(([, rule]) => !config.allowUnconfirmed.includes(rule.entrypoint))
-      .map(([action]) => action);
+    const unconfirmed = (entrypoint: string): boolean =>
+      Object.hasOwn(corpus.uncaptured, entrypoint) &&
+      !config.allowUnconfirmed.includes(entrypoint);
+
+    const blocked = Object.keys(ACTION_RULES).filter(
+      (action) =>
+        unconfirmed(ACTION_RULES[action]?.entrypoint ?? "") ||
+        // Shared with the signing path rather than restated: an action that
+        // leaves a resting order refuses when the call that takes it back is
+        // unconfirmed, and a preflight that listed it as working would be
+        // disagreeing with the check it exists to mirror.
+        unconfirmed(NEEDS_A_WAY_BACK[action]?.entrypoint ?? ""),
+    );
     // Every blocked action. Filtering by `EXITS` here mirrored a rule the
     // signer no longer applies — the layout requirement covers exits too — and
     // a diagnostic that models the check rather than sharing it drifts the
     // moment the check changes.
     const refused = blocked;
+    // What a reader actually needs alongside a list of refusals: the list of
+    // what still works. A bare refusal list reads as "this is broken" when the
+    // truth is usually "these three of twenty are unavailable".
+    const working = Object.keys(ACTION_RULES)
+      .filter((action) => !blocked.includes(action))
+      .filter((action) => CORE_ACTIONS.has(action))
+      .sort();
     const unchecked = Object.keys(corpus.uncaptured).filter((entrypoint) =>
       Object.values(ACTION_RULES).some((rule) => rule.entrypoint === entrypoint),
     );
@@ -516,10 +543,17 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
                 `deployment on ${corpus.capturedAt}; ${String(unchecked.length)} never were ` +
                 `(${String(refused.length)} actions reach them). ` +
                 (refused.length > 0
-                  ? `These actions refuse until they are: ${refused.join(", ")}` +
+                  ? // Order matters: the "none of which" clause qualifies the REFUSED
+                    // list, and putting the working list between them attached it
+                    // to the wrong one.
+                    `These actions refuse until they are: ${refused.join(", ")}` +
                     (refused.some((action) => CORE_ACTIONS.has(action))
-                      ? ". "
-                      : " — none of which is part of onboarding or perp trading. ") +
+                      ? "."
+                      : " — none of which is part of onboarding or perp trading.") +
+                    (working.length === 0
+                      ? " "
+                      : ` Everything else works, including ${working.slice(0, 6).join(", ")}` +
+                        (working.length > 6 ? ` and ${String(working.length - 6)} more. ` : ". ")) +
                     `Re-run ` +
                     `\`pnpm run capture-corpus\`, or accept them explicitly:\n` +
                     `        WATERX_ALLOW_UNCONFIRMED_ABI=` +
