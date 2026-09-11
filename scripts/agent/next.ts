@@ -11,9 +11,11 @@
  * collateral. Those are not errors here, they are answers.
  */
 import { list as listApprovals } from "../../src/agent/approvals.ts";
+import { delegationStatus } from "../../src/agent/delegation.ts";
 import { decide } from "../../src/agent/guidance.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
+import { signsAsDelegate } from "../../src/config.ts";
 import { runDoctor } from "../../src/doctor.ts";
 import { succeeded } from "../../src/cli/contract.ts";
 import { initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
@@ -23,6 +25,7 @@ parseArgs({}, "next");
 await run(async () => {
   const agent = initAgent();
   const report = await runDoctor();
+  const account = agent.config.accountId;
 
   // Gas, because an account cannot be created without it and "create the
   // account" is useless advice to a wallet that cannot pay for the transaction.
@@ -31,10 +34,28 @@ await run(async () => {
       ? await gasBalance(agent.config, agent.signer.address)
       : undefined;
 
+  // Only when this process holds a delegate key: signing as the owner has no
+  // handshake to be part-way through.
+  let delegation: { state: string; headline: string; grantUrl: string } | undefined;
+  if (report.signerReady && signsAsDelegate(agent.config, agent.signer.address)) {
+    let delegates;
+    try {
+      delegates = account === undefined ? undefined : await agent.read.delegates(account);
+    } catch {
+      delegates = undefined;
+    }
+    const status = delegationStatus({
+      delegateAddress: agent.signer.address,
+      ...(agent.config.ownerAddress === undefined ? {} : { ownerAddress: agent.config.ownerAddress }),
+      ...(account === undefined ? {} : { accountId: account }),
+      ...(delegates === undefined ? {} : { delegates }),
+    });
+    delegation = { state: status.state, headline: status.headline, grantUrl: status.grantUrl };
+  }
+
   const open = unsettled();
   const pending = listApprovals().filter((a) => a.state === "pending");
 
-  const account = agent.config.accountId;
   let freeMargin: number | undefined;
   let positions = 0;
   let orders = 0;
@@ -55,6 +76,9 @@ await run(async () => {
       report.signerReady &&
       agent.config.accountId !== undefined &&
       !report.checks.some((c) => c.status === "fail"),
+    network: agent.config.network,
+    ...(report.signerReady ? { address: agent.signer.address } : {}),
+    ...(delegation === undefined ? {} : { delegation }),
     missing: {
       signer: !report.signerReady,
       // `undefined` is "could not ask", not "empty" — reporting a fullnode
@@ -91,6 +115,7 @@ await run(async () => {
       freeMargin: freeMargin ?? null,
       gasSui: gas ?? null,
       exposure: { positions, orders },
+      ...(delegation === undefined ? {} : { delegation }),
       unsettledSubmissions: open.length,
       pendingApprovals: pending.length,
       readReady: report.readReady,

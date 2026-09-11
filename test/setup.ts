@@ -14,3 +14,18 @@ const OWNED = /^(WATERX_|SUI_PRIVATE_KEY$|SUI_NETWORK$|SUI_GRPC_URL$)/;
 for (const name of Object.keys(process.env)) {
   if (OWNED.test(name)) delete process.env[name];
 }
+
+/**
+ * Then state the network, rather than inheriting the default.
+ *
+ * Almost every fixture here describes **testnet** — the recorded argument
+ * layouts, the seeded deployment, the package ids the executor checks against.
+ * The default network is mainnet, and once it became so these tests were
+ * silently checking testnet fixtures against a mainnet configuration and
+ * failing for a reason that had nothing to do with what they assert.
+ *
+ * Pinning it makes the dependency visible: a test that wants the default asks
+ * for it explicitly (see `test/config.test.ts`), and every other one says which
+ * deployment it is about.
+ */
+process.env.WATERX_NETWORK = "testnet";

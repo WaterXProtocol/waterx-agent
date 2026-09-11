@@ -26,6 +26,7 @@ export type State =
   | "unsettled"
   | "awaiting-approval"
   | "not-set-up"
+  | "not-delegated"
   | "read-only"
   | "no-collateral"
   | "ready";
@@ -78,11 +79,30 @@ export interface Situation {
    * user a message to say the same thing.
    */
   missing: { signer: boolean; gas: boolean; account: boolean };
+  /**
+   * The delegate handshake, when this process holds a delegate key.
+   *
+   * `undefined` when it holds the owner's own key, where there is nothing to
+   * grant. A grant that is absent or stale makes every write abort on chain, so
+   * it has to outrank "ready" — otherwise the agent offers a trade that the
+   * chain will refuse, and the refusal arrives as a generic 6002.
+   */
+  delegation?: { state: string; headline: string; grantUrl: string };
   readOnly: boolean;
   freeMargin: number | undefined;
   positions: number;
   orders: number;
   blockers: string[];
+  /**
+   * Which deployment this is about.
+   *
+   * Gas advice is not the same on both, and the default network is now mainnet.
+   * "Ask the faucet" is a sentence that only means anything on testnet; on
+   * mainnet it names a command that refuses and a source that does not exist.
+   */
+  network: "testnet" | "mainnet";
+  /** The address that needs gas, so the advice can name it. */
+  address?: string;
 }
 
 /**
@@ -133,9 +153,11 @@ export function decide(s: Situation): Guidance {
       return {
         state: "not-set-up",
         headline:
-          `No signing key, so nothing can be written. Bootstrap generates one and asks the ` +
-          `faucet for gas; it signs nothing.`,
-        suggestions: [{ what: "generate a wallet and get gas", command: invoke("bootstrap", "--json") }],
+          `No signing key, so nothing can be written. Bootstrap generates one; it signs nothing` +
+          (s.network === "testnet" ? " and asks the testnet faucet for gas." : "."),
+        suggestions: [
+          { what: "generate a wallet", command: invoke("bootstrap", "--json") },
+        ],
       };
     }
     if (s.missing.gas) {
@@ -144,14 +166,28 @@ export function decide(s: Situation): Guidance {
       // command, watches it fail on gas selection, asks what to do next, and
       // is told to create the account. The loop is the symptom; not knowing
       // gas exists is the cause.
-      return {
-        state: "not-set-up",
-        headline:
-          `The wallet holds no gas, so nothing can be sent — including creating an account. On ` +
-          `testnet the public faucet supplies it and is often busy; this is a queue, not a ` +
-          `fault, so wait and try again.`,
-        suggestions: [{ what: "ask the faucet for gas", command: invoke("fund-sui", "--json") }],
-      };
+      // The remedy differs by deployment, and getting it wrong wastes a turn:
+      // there is no faucet on mainnet, and `fund-sui` refuses there rather than
+      // doing something useful.
+      return s.network === "testnet"
+        ? {
+            state: "not-set-up",
+            headline:
+              `The wallet holds no gas, so nothing can be sent — including creating an account. ` +
+              `The public testnet faucet supplies it and is often busy; this is a queue, not a ` +
+              `fault, so wait and try again.`,
+            suggestions: [{ what: "ask the faucet for gas", command: invoke("fund-sui", "--json") }],
+          }
+        : {
+            state: "not-set-up",
+            headline:
+              `The wallet holds no SUI, so nothing can be sent — including creating an account. ` +
+              `There is no faucet on mainnet: someone has to send SUI to ` +
+              `${s.address ?? "the agent wallet"}. A small amount covers a lot of transactions.`,
+            suggestions: [
+              { what: "check the balance once it has been sent", command: invoke("next", "--json") },
+            ],
+          };
     }
     if (s.missing.account) {
       return {
@@ -174,6 +210,20 @@ export function decide(s: Situation): Guidance {
         `Reads work, writes do not: ${s.blockers.join(", ")}. These are checks the signing path ` +
         `makes for itself, so they refuse a write rather than merely warning.`,
       suggestions: [{ what: "the full preflight, with the fix for each", command: invoke("doctor", "--json") }],
+    };
+  }
+
+  // Before `read-only` and before collateral: a grant that is missing or in the
+  // superseded slot makes every write abort on chain, and no amount of policy
+  // or funding changes that. The owner has to act, and they are not at this
+  // terminal.
+  if (s.delegation !== undefined && s.delegation.state !== "granted" && s.delegation.state !== "owner-key") {
+    return {
+      state: "not-delegated",
+      headline: s.delegation.headline,
+      suggestions: [
+        { what: "the handshake, and what the owner has to do", command: invoke("onboard", "--json") },
+      ],
     };
   }
 

@@ -23,6 +23,44 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe("the default network", () => {
+  it("is mainnet, because testnet does not work", () => {
+    // Testnet's gas faucet refuses most first attempts, its collateral faucet
+    // is whitelist-gated so retrying never produces trading funds, and its
+    // keeper has not been filling — a correct order rests forever. Defaulting
+    // there sent every new user down a road with three walls across it.
+    vi.stubEnv("WATERX_NETWORK", "");
+    vi.stubEnv("SUI_NETWORK", "");
+    expect(loadConfig().network).toBe("mainnet");
+  });
+
+  it("still refuses to write there without someone saying so", () => {
+    // Defaulting to mainnet is a decision about which deployment to READ. The
+    // policy default is what keeps it from being a decision about spending.
+    vi.stubEnv("WATERX_NETWORK", "");
+    expect(loadConfig().executionPolicy).toBe("read-only");
+  });
+
+  it("ships the package exceptions mainnet cannot trade without", () => {
+    // The mainnet config document does not list the Pyth Lazer package every
+    // order calls. Shipped rather than pasted: an opaque id a user cannot
+    // evaluate is not informed consent, and it lands somewhere nobody reviews.
+    vi.stubEnv("WATERX_NETWORK", "mainnet");
+    const shipped = loadConfig().extraPackages;
+    expect(shipped.some((e) => e.endsWith("=*"))).toBe(true);
+    expect(shipped.length).toBeGreaterThan(0);
+    // And testnet ships none, because its config document is complete.
+    vi.stubEnv("WATERX_NETWORK", "testnet");
+    expect(loadConfig().extraPackages).toEqual([]);
+  });
+
+  it("lets a named set REPLACE the shipped one, so a default can be narrowed", () => {
+    vi.stubEnv("WATERX_NETWORK", "mainnet");
+    vi.stubEnv("WATERX_EXTRA_PACKAGES", "0xabc");
+    expect(loadConfig().extraPackages).toEqual(["0xabc"]);
+  });
+});
+
 describe("WATERX_ALLOW_UNCONFIRMED_ABI", () => {
   // Taken from the corpus, not named. The set of unconfirmed entrypoints
   // shrinks every time `capture-corpus` finds conditions it could not build

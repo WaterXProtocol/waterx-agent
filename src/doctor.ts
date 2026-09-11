@@ -15,7 +15,7 @@ import { HttpClient } from "./api/http.ts";
 import { ReadApi } from "./api/read.ts";
 import { TxApi } from "./api/tx.ts";
 import type { AppInfo } from "./api/types.ts";
-import { type AgentConfig, loadConfig, signsAsDelegate } from "./config.ts";
+import { type AgentConfig, isDefaultExtraPackage, loadConfig, signsAsDelegate } from "./config.ts";
 import { ExecutionPolicyError } from "./errors.ts";
 import { createSigner, signerReadiness } from "./chain/create-signer.ts";
 import type { SignerProvider } from "./chain/signer.ts";
@@ -384,6 +384,13 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       // Packages whose exception cannot be qualified, because the SDK declares
       // none of the modules they serve. Named so the widening is a stated fact
       // rather than something an operator infers from a missing `=`.
+      // Which of the accepted exceptions this package ships, as opposed to ones
+      // the operator wrote. A default nobody typed still deserves to be seen.
+      const shipped = named.filter((id) =>
+        config.extraPackages.some(
+          (entry) => normalizePackage(entry.split("=")[0] ?? "") === id && isDefaultExtraPackage(config.network, entry),
+        ),
+      );
       const unqualified = unlisted.filter(
         (id) => (uses.get(id)?.size ?? 0) > 0 && sdkPackageFor(uses.get(id)) === undefined,
       );
@@ -419,10 +426,14 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
             ? warn(
                 "packages",
                 `${String(called.size)} packages reached by ${via}; ${String(named.length)} of ` +
-                  `them are accepted only because WATERX_EXTRA_PACKAGES names them ` +
-                  `(${named.map((id) => `0x${id.slice(0, 8)}…`).join(", ")}). That is a standing ` +
-                  `exception to "every call belongs to this deployment" — drop it once the ` +
-                  `config document lists them.`,
+                  `them are accepted only because they are named as exceptions ` +
+                  `(${named.map((id) => `0x${id.slice(0, 8)}…`).join(", ")})` +
+                  (shipped.length === 0
+                    ? ""
+                    : `, ${String(shipped.length)} of those shipped as a default by this package ` +
+                      `rather than named by you`) +
+                  `. That is a standing exception to "every call belongs to this deployment" — ` +
+                  `drop it once the config document lists them.`,
               )
             : ok(
                 "packages",
