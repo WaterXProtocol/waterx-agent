@@ -255,6 +255,14 @@ paraphrasing — the reasons are specific and the paraphrase usually loses them.
 }
 ```
 
+**The agent is normally a delegate.** The owner keeps their account and their
+funds; this wallet gets permission to trade it and nothing else. A delegate
+needs **no SUI** — the backend sponsors its transactions — no account of its
+own, and no collateral of its own, and it cannot withdraw. So the answer to
+"what does the agent need?" is usually "the owner's grant, and nothing else".
+Never tell a user to send money to the agent's wallet unless they have
+deliberately chosen the owner path with `bootstrap --create-account --yes`.
+
 **Gas is not collateral.** Gas pays for transactions and the faucet gives it
 out. Collateral is a backing asset the wallet must already hold — mock USDC or
 mock USDsui on testnet — and there is no self-service route to it. A wallet can

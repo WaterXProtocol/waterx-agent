@@ -26,6 +26,7 @@ export type State =
   | "unsettled"
   | "awaiting-approval"
   | "not-set-up"
+  | "awaiting-grant"
   | "not-delegated"
   | "read-only"
   | "no-collateral"
@@ -101,6 +102,24 @@ export interface Situation {
    * mainnet it names a command that refuses and a source that does not exist.
    */
   network: "testnet" | "mainnet";
+  /**
+   * Which arrangement this process is in, which decides what it needs.
+   *
+   * The two are not variations on one setup, they are different setups, and
+   * treating them as one is how this told a would-be delegate to fund a wallet
+   * and create an account it will never use:
+   *
+   * - `delegate` — the owner keeps their account and their funds, and grants
+   *   this wallet permission to trade it. It needs **no gas** (the backend
+   *   sponsors a delegate's transactions), no account of its own, and no
+   *   collateral of its own.
+   * - `owner` — this wallet IS the account holder. It needs SUI for gas, an
+   *   account, and collateral, and it can withdraw its own funds.
+   * - `undecided` — a wallet exists and nobody has said which. The delegate
+   *   path is offered first: it moves no money to the agent and the agent
+   *   cannot withdraw.
+   */
+  mode: "delegate" | "owner" | "undecided";
   /** The address that needs gas, so the advice can name it. */
   address?: string;
 }
@@ -160,6 +179,33 @@ export function decide(s: Situation): Guidance {
         ],
       };
     }
+    // Before gas and before an account, because on the delegate path neither is
+    // ever needed. Asking a would-be delegate to fund a wallet is asking them
+    // to solve a problem they do not have.
+    if (s.mode === "undecided") {
+      return {
+        state: "awaiting-grant",
+        headline:
+          `There is a wallet and nothing has been granted to it yet. The usual arrangement is ` +
+          `that the account owner grants THIS address permission to trade their account — they ` +
+          `keep the funds, this wallet cannot withdraw them, and it needs no SUI of its own ` +
+          `because the backend sponsors a delegate's transactions. Ask them to grant it, then ` +
+          `set WATERX_OWNER_ADDRESS and WATERX_ACCOUNT_ID to what they give you.`,
+        suggestions: [
+          {
+            what: "the address to hand over, and where the owner grants it",
+            command: invoke("onboard", "--json"),
+          },
+          {
+            what:
+              "or make this wallet an account holder in its own right — it then needs SUI for " +
+              "gas and collateral of its own, and can withdraw",
+            command: invoke("bootstrap", "--create-account", "--yes", "--json"),
+          },
+        ],
+      };
+    }
+
     if (s.missing.gas) {
       // Before the account, because the account cannot be created without it.
       // Told "create the account" by a wallet with no SUI, an agent runs the
@@ -242,7 +288,9 @@ export function decide(s: Situation): Guidance {
       state: "no-collateral",
       headline:
         `Set up and able to sign, but there is no free margin to commit. Gas is not collateral — ` +
-        `on testnet the credit faucet is whitelist-gated, so this one needs an operator.`,
+        (s.network === "testnet"
+          ? `on testnet the credit faucet is whitelist-gated, so this one needs an operator.`
+          : `the wallet needs USDC or USDsui of its own, which on mainnet you send to it.`),
       suggestions: [
         { what: "check what the account holds", command: invoke("balance", "--json") },
         {

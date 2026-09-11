@@ -64,7 +64,8 @@ and **ask for anything in `needsFromUser` instead of choosing it**.
 | `unsettled` | Something was sent and nobody knows what happened. Reconcile before anything else. |
 | `awaiting-approval` | A preview is waiting on them. Show it and ask. |
 | `not-set-up` | Run `bootstrap` and relay what is still missing — some of it needs an operator. |
-| `not-delegated` | The owner has not granted this wallet permission, or the grant is stale. Run `onboard` and relay it — only they can fix it. |
+| `awaiting-grant` | A wallet exists and nothing has been granted to it. Give the address to the account owner — they grant it on the web. The agent needs no SUI, no account and no collateral of its own. |
+| `not-delegated` | The owner granted nothing, or the grant is stale. Run `onboard` and relay it — only they can fix it. |
 | `read-only` | Nothing can be signed. On mainnet that is the default and changing it is their decision. |
 | `no-collateral` | Set up, but nothing to commit. Gas is not collateral; this one needs an operator. |
 | `ready` | Ask what they want to do, and for the numbers. |
@@ -204,9 +205,13 @@ commit money it does not have.
 - **An order is a request, not a fill.** A write returns when the request is on
   chain; a keeper fills it afterwards. `positions` may be empty while `orders`
   shows the request. Say "submitted", not "filled", until you have checked.
-- **Collateral is not gas.** `fund-sui` gets testnet gas. Trading collateral is
-  a backing asset the wallet must already hold; on testnet the credit faucet is
-  whitelist-gated, so a fresh wallet needs an operator.
+- **The agent is normally a *delegate*, and a delegate needs nothing.** The
+  owner keeps their account and their funds and grants this wallet permission to
+  trade. It needs no SUI (the backend sponsors a delegate's transactions), no
+  account of its own and no collateral of its own — and it **cannot withdraw**,
+  which is the point. Do not ask the user to fund the agent's wallet.
+- **Gas and collateral only matter on the owner path**, where this wallet holds
+  the account itself. That is opt-in: `bootstrap --create-account --yes`.
 - **Some actions refuse under default settings, by design.** Their argument
   layouts have never been confirmed against that deployment, and the verifier
   will not read positions nobody measured. On testnet that is `burnWlp`,
