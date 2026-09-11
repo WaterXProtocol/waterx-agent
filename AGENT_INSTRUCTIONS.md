@@ -84,6 +84,16 @@ unhandled throw, so `1` means "this crashed", never "this decided".
 
 Reads need no key and sign nothing. Run them freely.
 
+**Start every turn with `next`.** It is the only command that answers "where am
+I and what should I offer?", and it answers in the order the states must be
+resolved — so an agent that follows it cannot offer a trade to someone with a
+transaction in flight. `suggestions[].needsFromUser` names the values you must
+ask for rather than choose.
+
+```bash
+node bin/waterx.mjs next --json
+```
+
 ```bash
 node bin/waterx.mjs doctor --json      # is anything blocking reads or writes?
 node bin/waterx.mjs balance --json     # freeMargin is what a new order may commit

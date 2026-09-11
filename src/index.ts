@@ -16,6 +16,8 @@ export type {
   ReducePositionParams,
 } from "./agent/agent.ts";
 export { assertNotCrossing, MarketRegistry } from "./agent/markets.ts";
+export { decide } from "./agent/guidance.ts";
+export type { Guidance, Situation, State, Suggestion } from "./agent/guidance.ts";
 export { buildTx, previewOf } from "./agent/plan.ts";
 export type {
   BuildRequest,

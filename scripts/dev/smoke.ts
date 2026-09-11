@@ -25,6 +25,7 @@ import { EXIT, type Status } from "../../src/cli/contract.ts";
 /** Commands an agent may call freely. Nothing here can produce a signature. */
 const READS: [string, string[]][] = [
   ["doctor", []],
+  ["next", []],
   // `--skip-faucet` makes it read-only: without `--create-account --yes` it
   // signs nothing, and this is the command the recommended prompt runs first.
   ["bootstrap", ["--skip-faucet"]],

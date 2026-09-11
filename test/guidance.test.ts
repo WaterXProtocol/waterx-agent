@@ -1,0 +1,122 @@
+/**
+ * The order in which states are resolved, which is the safety property.
+ *
+ * Every one of these is a claim about what an agent will offer a person. The
+ * dangerous direction is always the same: offering a trade before something
+ * outstanding has been settled. So the tests are mostly about *precedence* —
+ * that a worse state hides a better one — rather than about wording.
+ */
+import { describe, expect, it } from "vitest";
+
+import { decide, type Situation } from "../src/agent/guidance.ts";
+
+const ok: Situation = {
+  open: 0,
+  firstUnsettled: undefined,
+  pending: [],
+  configured: true,
+  readOnly: false,
+  freeMargin: 100,
+  positions: 0,
+  orders: 0,
+  blockers: [],
+};
+
+describe("what to do next", () => {
+  it("offers trading only when everything else is clear", () => {
+    const g = decide(ok);
+    expect(g.state).toBe("ready");
+    expect(g.suggestions[0]?.command).toContain("preview");
+  });
+
+  it("never offers a trade while a submission is unsettled", () => {
+    // The whole reason this file exists. An agent that checks "can I trade?"
+    // before "is anything in flight?" opens the same position twice.
+    const g = decide({ ...ok, open: 1, firstUnsettled: "sub_1" });
+    expect(g.state).toBe("unsettled");
+    expect(g.suggestions.map((s) => s.command).join(" ")).toContain("reconcile");
+    expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("preview");
+  });
+
+  it("puts an unsettled submission ahead of every other problem", () => {
+    // Including a broken configuration. A transaction whose effect is unknown
+    // is more urgent than one that cannot be sent.
+    const g = decide({
+      ...ok,
+      open: 1,
+      pending: [{ id: "apr_1", action: "openLong" }],
+      configured: false,
+      readOnly: true,
+      freeMargin: 0,
+      blockers: ["abi corpus"],
+    });
+    expect(g.state).toBe("unsettled");
+  });
+
+  it("surfaces a waiting approval before anything new", () => {
+    const g = decide({ ...ok, pending: [{ id: "apr_1", action: "openLong" }] });
+    expect(g.state).toBe("awaiting-approval");
+    expect(g.suggestions[0]?.command).toContain("apr_1");
+    // And says whose name goes on it, rather than letting the agent use its own.
+    expect(g.suggestions[0]?.command).toContain("<their name>");
+  });
+
+  it("sends an unconfigured caller to bootstrap, not to a trade", () => {
+    const g = decide({ ...ok, configured: false, blockers: ["account"] });
+    expect(g.state).toBe("not-set-up");
+    expect(g.headline).toContain("account");
+    expect(g.suggestions.map((s) => s.command).join(" ")).toContain("bootstrap");
+  });
+
+  it("does not offer a trade with no collateral, and says who can fix it", () => {
+    const g = decide({ ...ok, freeMargin: 0 });
+    expect(g.state).toBe("no-collateral");
+    expect(g.headline).toContain("Gas is not collateral");
+    expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("--action open-long");
+  });
+
+  it("treats read-only as a decision, not as unfinished setup", () => {
+    // These were the same thing when the state was keyed on doctor's
+    // `writeReady`, which folds the policy in with the signer and the account.
+    // Someone who had chosen read-only — the default on mainnet — was told to
+    // run `bootstrap`, which would have found nothing to fix.
+    const g = decide({ ...ok, readOnly: true });
+    expect(g.state).toBe("read-only");
+    expect(g.headline).toContain("deliberately");
+    expect(g.suggestions.map((x) => x.command).join(" ")).not.toContain("bootstrap");
+  });
+
+  it("still calls a read-only process unconfigured when it also is", () => {
+    const g = decide({ ...ok, readOnly: true, configured: false, blockers: ["account"] });
+    expect(g.state).toBe("not-set-up");
+  });
+
+  it("offers to manage what is already open", () => {
+    const g = decide({ ...ok, positions: 2, orders: 1 });
+    const commands = g.suggestions.map((s) => s.command).join(" ");
+    expect(commands).toContain("close-position");
+    expect(commands).toContain("cancel-order");
+  });
+
+  it("names the numbers the user must supply, everywhere it could guess one", () => {
+    // The code half of "stop and ask". Any suggestion that takes a size, a
+    // leverage or a slippage has to say so, or an agent fills it in.
+    for (const situation of [ok, { ...ok, positions: 1, orders: 1 }]) {
+      for (const suggestion of decide(situation).suggestions) {
+        const takesANumber = /<n>|<id>/.test(suggestion.command);
+        if (takesANumber) {
+          expect(suggestion.needsFromUser, suggestion.command).toBeDefined();
+          expect(suggestion.needsFromUser?.length, suggestion.command).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it("emits commands that can be run as printed", () => {
+    // `nextCommand` and these share the rule: a package-manager banner on
+    // stdout breaks the one-document guarantee the caller is about to rely on.
+    for (const suggestion of decide(ok).suggestions) {
+      expect(suggestion.command).toMatch(/^node bin\/waterx\.mjs /);
+    }
+  });
+});

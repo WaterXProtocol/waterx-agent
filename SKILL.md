@@ -27,6 +27,26 @@ to stdout, which breaks the one-document guarantee — `pnpm --silent run
 <command> -- --json` also works, but it depends on a flag that is easy to omit
 and impossible to notice missing.
 
+## Guiding a person: start every turn here
+
+```bash
+node bin/waterx.mjs next --json
+```
+
+One read that answers "where am I, and what should I offer?" — and answers it
+in the order the states have to be resolved, so you cannot offer a trade to
+someone who has a transaction in flight. Relay `headline`, offer `suggestions`,
+and **ask for anything in `needsFromUser` instead of choosing it**.
+
+| `state` | What to say |
+|---|---|
+| `unsettled` | Something was sent and nobody knows what happened. Reconcile before anything else. |
+| `awaiting-approval` | A preview is waiting on them. Show it and ask. |
+| `not-set-up` | Run `bootstrap` and relay what is still missing — some of it needs an operator. |
+| `read-only` | Nothing can be signed. On mainnet that is the default and changing it is their decision. |
+| `no-collateral` | Set up, but nothing to commit. Gas is not collateral; this one needs an operator. |
+| `ready` | Ask what they want to do, and for the numbers. |
+
 ## The loop you must follow
 
 **read → preview → approve → execute**, and **reconcile** if anything is
@@ -38,7 +58,7 @@ unclear.
 node bin/waterx.mjs bootstrap --json
 
 # 1. read — no key needed, nothing is signed
-node bin/waterx.mjs doctor --json
+node bin/waterx.mjs next --json         # where am I, what should I offer?
 node bin/waterx.mjs balance --json      # freeMargin is what a new order may commit
 node bin/waterx.mjs positions --json
 

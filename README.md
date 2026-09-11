@@ -573,8 +573,15 @@ Every command takes `--json` (one JSON document on stdout, nothing else) and
 *human* shortcut; an automated caller goes through `preview` → `approve` →
 `execute` instead, and never passes `--yes`.
 
-**The agent path** — `preview` · `approve` · `execute` · `reconcile` ·
-`approvals` · `limits`
+**The agent path** — `bootstrap` · `next` · `preview` · `approve` · `execute` ·
+`reconcile` · `approvals` · `limits`
+
+`next` is where a guiding agent starts each turn: one read that says which of
+six states applies, what to tell the person, and what to offer — in the order
+the states have to be resolved, so a trade is never offered ahead of a
+transaction still in flight. The precedence lives in `src/agent/guidance.ts`
+and is tested, because it is a safety property rather than a presentation
+choice.
 
 **Setup** — `doctor` · `generate-wallet` · `fund-sui` · `create-account` ·
 `deposit` · `withdraw` · `add-delegate` · `remove-delegate`

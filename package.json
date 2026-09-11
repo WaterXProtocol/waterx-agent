@@ -8,6 +8,7 @@
   "private": true,
   "scripts": {
     "bootstrap": "tsx scripts/setup/bootstrap.ts",
+    "next": "tsx scripts/agent/next.ts",
     "doctor": "tsx scripts/setup/doctor.ts",
     "preview": "tsx scripts/agent/preview.ts",
     "approve": "tsx scripts/agent/approve.ts",
