@@ -7,7 +7,7 @@
  * a grant in the superseded authority slot, which reads as fully permissioned
  * and aborts on chain, and a failed lookup, which is not a revocation.
  */
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   CONSOLE_ENDPOINTS,
@@ -196,5 +196,75 @@ describe("the delegate handshake", () => {
       delegates: [grant()],
     });
     expect(status.state).toBe("granted");
+  });
+});
+
+/**
+ * The override has to change the ADVICE, not just the link.
+ *
+ * `perpAuthorizeUrl()` fed only the review URL while every headline went on
+ * prescribing the CLI, so an operator who configured a working authorize page
+ * was still told to put their private key in a terminal. Nothing exercised the
+ * variable until a real install report did.
+ */
+describe("a configured authorize page", () => {
+  const AGENT = `0x${"a".repeat(64)}`;
+  const PAGE = "https://waterx.app/en/agent/authorize/perp";
+
+  afterEach(() => {
+    delete process.env.WATERX_PERP_AUTHORIZE_URL;
+  });
+
+  it("sends the owner to the browser instead of a terminal", () => {
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.headline).toContain(PAGE);
+    expect(status.headline).toContain("signs with their wallet");
+  });
+
+  it("carries the agent address in the link, so the page cannot be aimed at the wrong one", () => {
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.headline).toContain(`${PAGE}?agent=${AGENT}`);
+  });
+
+  it("still names the CLI, because a browser is not always wanted", () => {
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      grantCommand: "npx waterx add-delegate --delegate 0xagent --yes --json",
+    });
+
+    expect(status.headline).toContain("npx waterx add-delegate");
+  });
+
+  it("prescribes the CLI when no page is configured, and says why", () => {
+    // No default: the console's own authorize page grants prediction markets
+    // and states that it does not grant perps, so there is nothing to point at.
+    const status = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      grantCommand: "npx waterx add-delegate --delegate 0xagent --yes --json",
+    });
+
+    expect(status.headline).toContain("npx waterx add-delegate");
+    expect(status.headline).toContain("does not grant perps");
+    expect(status.headline).not.toContain("signs with their wallet");
+  });
+
+  it("keeps review pointed at the delegates page even when a grant page exists", () => {
+    // Granting and revoking are different places; the override is only the
+    // first. Collapsing them is what made it inert.
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.headline).toContain("https://waterx.app/en/account");
   });
 });
