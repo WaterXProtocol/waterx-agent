@@ -208,15 +208,21 @@ commit money it does not have.
 - **The agent is normally a *delegate*, and a delegate needs nothing.** The
   owner keeps their account and their funds and grants this wallet permission to
   trade. It needs no SUI (the backend sponsors a delegate's transactions), no
-  account of its own and no collateral of its own — and it **cannot withdraw**,
-  which is the point. Do not ask the user to fund the agent's wallet.
+  account of its own and no collateral of its own — and it **cannot take money
+  out of the account**, which is the point. The grant does include
+  `WITHDRAW_COLLATERAL` (and `DEPOSIT_COLLATERAL`): those move margin between
+  the account and an *open position*, never out of the account — account
+  withdrawal refuses a delegate outright, whatever mask it holds. Say that when
+  you relay the permission list, or it reads as a contradiction. Do not ask the
+  user to fund the agent's wallet.
 - **Gas and collateral only matter on the owner path**, where this wallet holds
   the account itself. That is opt-in: `bootstrap --create-account --yes`.
 - **Some actions refuse under default settings, by design.** Their argument
   layouts have never been confirmed against that deployment, and the verifier
   will not read positions nobody measured. On testnet that is `burnWlp`,
   `cancelWlpBurn` and `claimWlpRewards`; on mainnet it is also `cancelOrder` and
-  `updateOrder`. `doctor` names them for the network you are on. This is
+  `updateOrder` — and therefore `placeLimitOrder` and `placeTpSl`, because the
+  agent will not place an order it has no confirmed way to cancel. `doctor` names them for the network you are on. This is
   expected and is not a fault to work around.
 - **Mainnet needs setup that testnet does not** — a policy someone typed, and
   package exceptions `doctor` prints. Run `node bin/waterx.mjs doctor --json`
