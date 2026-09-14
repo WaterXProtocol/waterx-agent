@@ -199,7 +199,22 @@ export interface DelegationStatus {
   granted?: string[];
   /** Requested permissions the grant does not carry. */
   missing?: string[];
-  /** Where to review and revoke — Account → Delegates. Not where to grant. */
+  /** Where to review and revoke — Account → Delegates. Always the delegates page. */
+  reviewUrl: string;
+  /**
+   * Where the owner GRANTS, when a perp authorize page is configured — with the
+   * agent address already in the query string once there is a wallet. Absent
+   * otherwise: the console's own `/agent/authorize` grants prediction markets,
+   * not perps, so there is no default to point at.
+   */
+  authorizeUrl?: string;
+  /**
+   * @deprecated Same value as `reviewUrl`. Kept because it is in the `--json`
+   * output an external agent may already read. It briefly held the AUTHORIZE
+   * page whenever one was configured — a field whose meaning changed with the
+   * environment — and the onboard screen, trusting this comment, printed that
+   * page under "review/revoke". Read `reviewUrl` or `authorizeUrl` instead.
+   */
   grantUrl: string;
   /** The command the owner runs to grant, when there is a wallet to grant to. */
   grantCommand?: string;
@@ -233,20 +248,26 @@ export function delegationStatus(input: {
   // which the console does have today (verified from its own copy: "Revoke any
   // time from Account → Delegates").
   const authorizePage = perpAuthorizeUrl();
-  const grantUrl = authorizePage ?? delegatesUrl(input.network);
+  const reviewUrl = delegatesUrl(input.network);
   const { delegateAddress, ownerAddress, accountId } = input;
 
   if (delegateAddress === undefined) {
     return {
       state: "no-wallet",
       headline: "No agent wallet yet. `bootstrap` makes one; it signs nothing.",
-      grantUrl,
+      reviewUrl,
+      grantUrl: reviewUrl,
+      ...(authorizePage === undefined ? {} : { authorizeUrl: authorizePage }),
     };
   }
 
   const base = {
     delegateAddress,
-    grantUrl,
+    reviewUrl,
+    grantUrl: reviewUrl,
+    ...(authorizePage === undefined
+      ? {}
+      : { authorizeUrl: `${authorizePage}?agent=${delegateAddress}` }),
     ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }),
   };
 
@@ -257,7 +278,7 @@ export function delegationStatus(input: {
       headline:
         `Give ${delegateAddress} to the account owner. To grant perp trading, ` +
         `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
-        `They can review and revoke it at ${delegatesUrl(input.network)} (Account → Delegates). ` +
+        `They can review and revoke it at ${reviewUrl} (Account → Delegates). ` +
         `Then tell you their address and account id.`,
     };
   }

@@ -7,6 +7,8 @@
  * a grant in the superseded authority slot, which reads as fully permissioned
  * and aborts on chain, and a failed lookup, which is not a revocation.
  */
+import { readFileSync } from "node:fs";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -222,6 +224,41 @@ describe("a configured authorize page", () => {
 
     expect(status.headline).toContain(PAGE);
     expect(status.headline).toContain("signs with their wallet");
+  });
+
+  it("exposes where to grant and where to review as separate fields", () => {
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.authorizeUrl).toBe(`${PAGE}?agent=${AGENT}`);
+    expect(status.reviewUrl).toBe("https://waterx.app/en/account");
+  });
+
+  it("keeps grantUrl meaning what its contract says: the review page", () => {
+    // It briefly held the authorize page whenever one was configured, and the
+    // onboard screen printed that page under "review/revoke".
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.grantUrl).toBe(status.reviewUrl);
+  });
+
+  it("has no authorizeUrl when no page is configured", () => {
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.authorizeUrl).toBeUndefined();
+    expect(status.grantUrl).toBe("https://waterx.app/en/account");
+  });
+
+  it("prints review/revoke from reviewUrl on the onboard screen, never from grantUrl", () => {
+    const source = readFileSync(new URL("../scripts/agent/onboard.ts", import.meta.url), "utf8");
+    const line = source.split("\n").find((l) => l.includes("review/revoke"));
+
+    expect(line).toBeDefined();
+    expect(line).toContain("status.reviewUrl");
+    expect(line).not.toContain("grantUrl");
   });
 
   it("does not promise a number of signatures", () => {
