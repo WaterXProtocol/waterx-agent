@@ -92,6 +92,42 @@ export const perpGrantCommand = (input: {
   input.invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
 
 /**
+ * How to tell the owner to grant — a page when there is one, the CLI when there
+ * is not.
+ *
+ * `perpAuthorizeUrl()` used to change only the REVIEW link while every headline
+ * went on prescribing the command. So the escape hatch existed and did not
+ * escape: an operator who pointed the agent at a working authorize page was
+ * still told to hand their private key to a CLI. A real install report caught
+ * it, which is the only reason it was found — the env var is exercised by
+ * nobody until the page ships.
+ *
+ * The CLI path is not deprecated by this. It is the only one that works when no
+ * page is configured, and it is honest about its cost: the owner puts their key
+ * in a terminal instead of keeping it in a browser wallet. That cost is the
+ * reason the page is being built, not an argument that the CLI is fine.
+ */
+export const grantInstruction = (input: {
+  agentWallet: string;
+  authorizeUrl?: string;
+  grantCommand?: string;
+}): string => {
+  const command = input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes";
+  if (input.authorizeUrl === undefined) {
+    return (
+      `the owner grants it with their own key: ${command}. Granting PERP permission is not ` +
+      `something the console does today — its \`/agent/authorize\` page covers prediction ` +
+      `markets and states that it does not grant perps`
+    );
+  }
+  return (
+    `the owner opens ${input.authorizeUrl}?agent=${input.agentWallet} and signs with their ` +
+    `wallet — one signature, no key leaves the browser. If they would rather not use the ` +
+    `browser, ${command} does the same thing with their key in a terminal`
+  );
+};
+
+/**
  * What the agent asks for: the perp trading mask, and nothing outside perps.
  *
  * `PERM_ALL_TRADING` (255) covers opening, closing, sizing, orders **and
@@ -188,10 +224,16 @@ export function delegationStatus(input: {
   /** `undefined` when the lookup has not been made; an empty array means none. */
   delegates?: readonly DelegateData[];
 }): DelegationStatus {
-  // Where to REVIEW and revoke — verified from the console's own copy ("Revoke
-  // any time from Account → Delegates"). Not where to grant: the console's
-  // authorize page covers prediction markets and says it does not cover perps.
-  const grantUrl = perpAuthorizeUrl() ?? delegatesUrl(input.network);
+  // Two different places, and conflating them is what made the override inert.
+  //
+  // `authorizePage` is where an owner GRANTS, and it exists only once somebody
+  // configures one — the console's own `/agent/authorize` covers prediction
+  // markets and says outright that it does not grant perps, so there is no
+  // default to fall back on. `delegatesUrl` is where they REVIEW and revoke,
+  // which the console does have today (verified from its own copy: "Revoke any
+  // time from Account → Delegates").
+  const authorizePage = perpAuthorizeUrl();
+  const grantUrl = authorizePage ?? delegatesUrl(input.network);
   const { delegateAddress, ownerAddress, accountId } = input;
 
   if (delegateAddress === undefined) {
@@ -213,12 +255,10 @@ export function delegationStatus(input: {
       ...base,
       state: "awaiting-grant",
       headline:
-        `Give ${delegateAddress} to the account owner. Granting PERP permission is not something ` +
-        `the console does today — its \`/agent/authorize\` page covers prediction markets and ` +
-        `states that it does not grant perps — so the owner grants it with their own key: ` +
-        `${input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes"}. They can ` +
-        `review and revoke it at ${grantUrl} (Account → Delegates). Then tell you their address ` +
-        `and account id.`,
+        `Give ${delegateAddress} to the account owner. To grant perp trading, ` +
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
+        `They can review and revoke it at ${delegatesUrl(input.network)} (Account → Delegates). ` +
+        `Then tell you their address and account id.`,
     };
   }
 
@@ -264,10 +304,9 @@ export function delegationStatus(input: {
       accountId,
       state: "not-granted",
       headline:
-        `${delegateAddress} is not a delegate of ${accountId}. The owner grants it with their ` +
-        `own key — ${input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes"} ` +
-        `— because the console's authorize page grants prediction markets and not perps. Until ` +
-        `they do, every write refuses on chain.`,
+        `${delegateAddress} is not a delegate of ${accountId}. To grant it, ` +
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
+        `Until they do, every write refuses on chain.`,
     };
   }
 
@@ -284,8 +323,8 @@ export function delegationStatus(input: {
       state: "stale-grant",
       headline:
         "The grant is in the superseded authority slot, so every perp action aborts on chain " +
-        `(EUnauthorized, surfaced as 6002). The owner must re-grant it: ` +
-        `${input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes"}.`,
+        `(EUnauthorized, surfaced as 6002). It has to be granted again: ` +
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}.`,
     };
   }
 
