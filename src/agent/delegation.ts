@@ -122,7 +122,7 @@ export const grantInstruction = (input: {
   }
   return (
     `the owner opens ${input.authorizeUrl}?agent=${input.agentWallet} and signs with their ` +
-    `wallet — one signature, no key leaves the browser. If they would rather not use the ` +
+    `wallet — the key never leaves the browser. If they would rather not use the ` +
     `browser, ${command} does the same thing with their key in a terminal`
   );
 };
