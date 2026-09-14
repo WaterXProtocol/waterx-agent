@@ -83,7 +83,8 @@ await run(async () => {
   note(`  note           the console's /agent/authorize page grants PREDICTION MARKETS and`);
   note(`                 states it does not grant perps — it will not work for this agent`);
   note(`  asks for       ${Object.keys(REQUESTED_PERMISSION_NAMES).join(", ")}`);
-  note(`  never asks for DEPOSIT_COLLATERAL, WITHDRAW_COLLATERAL — funds-out is owner-only on chain`);
+  note(`  cannot         take money OUT of the account, or grant authority — account deposit`);
+  note(`                 and withdrawal refuse a delegate outright, whatever mask it holds`);
   if (status.granted !== undefined) note(`  granted        ${status.granted.join(", ") || "none"}`);
   note("");
 

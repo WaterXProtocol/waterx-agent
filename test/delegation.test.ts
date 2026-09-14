@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   CONSOLE_ENDPOINTS,
+  REQUESTED_PERP_PERMISSIONS,
   delegatesUrl,
   delegationStatus,
   perpAuthorizeUrl,
@@ -71,14 +72,23 @@ describe("where an owner is sent", () => {
 });
 
 describe("the delegate handshake", () => {
-  it("asks the owner for trading, and never for funds-out", () => {
-    // The entire reason a delegate arrangement is a bounded risk: funds-out and
-    // authority changes stayed owner-only on chain. An agent that asked for
-    // them would be asking to remove the guarantee.
-    expect(ALL).toContain("OPEN_POSITION");
-    expect(ALL).toContain("CANCEL_ORDER");
-    expect(ALL).not.toContain("DEPOSIT_COLLATERAL");
-    expect(ALL).not.toContain("WITHDRAW_COLLATERAL");
+  it("names every bit it asks for, so the consent screen is not short", () => {
+    // This claimed the two margin bits were not requested while requesting them
+    // — PERM_ALL_TRADING is 255 and includes both. A names list shorter than
+    // the mask undersells the grant, which is the worst direction to be wrong
+    // in on a screen someone signs.
+    const named = Object.values(REQUESTED_PERMISSION_NAMES).reduce((a, b) => a | b, 0);
+    expect(named).toBe(REQUESTED_PERP_PERMISSIONS);
+  });
+
+  it("asks for position margin, which is not funds-out", () => {
+    // DEPOSIT_/WITHDRAW_COLLATERAL move margin between the account and an open
+    // position. Taking money OUT of the account is a different operation, and
+    // it refuses a delegate outright rather than being gated by a bit.
+    expect(ALL).toContain("DEPOSIT_COLLATERAL");
+    expect(ALL).toContain("WITHDRAW_COLLATERAL");
+    expect(ALL).not.toContain("MINT_WLP");
+    expect(ALL).not.toContain("REDEEM_WLP");
   });
 
   it("has nothing to hand over before there is a wallet", () => {
@@ -175,8 +185,7 @@ describe("the delegate handshake", () => {
       delegates: [grant()],
     });
     expect(status.state).toBe("granted");
-    expect(status.headline).toContain("cannot");
-    expect(status.headline).toContain("withdraw");
+    expect(status.headline).toContain("cannot take money OUT");
   });
 
   it("matches addresses without caring about case", () => {

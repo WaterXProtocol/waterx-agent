@@ -329,13 +329,19 @@ grant itself is the owner's act, made on chain from their own wallet at
 never makes it. An agent that could grant itself authority would not be a
 delegate arrangement.
 
-What the agent asks for is `OPEN_POSITION`, `CLOSE_POSITION`,
-`INCREASE_POSITION`, `DECREASE_POSITION`, `PLACE_ORDER`, `CANCEL_ORDER` — and
-never `DEPOSIT_COLLATERAL` or `WITHDRAW_COLLATERAL`. **Funds-out and authority
-changes are owner-only on chain** since the delegate-phishing hardening, so a
-delegate can trade the account and cannot withdraw from it or grant anyone else
-access — whatever its mask says, and whatever a bug here does. That is the
-entire reason `delegated-auto` is a bounded risk rather than a promise.
+What the agent asks for is the perp trading mask (`PERM_ALL_TRADING`, 255):
+opening, closing, sizing, orders, **and position margin** —
+`DEPOSIT_COLLATERAL` and `WITHDRAW_COLLATERAL` are in it, and they move
+collateral between the account and an open position rather than out of the
+account.
+
+What a delegate cannot do is take money out, and that does not rest on a bit
+being absent. **Account deposit and withdrawal refuse a `delegateSender`
+outright**, and the framework-level permission field that carries the
+withdraw/manage/receive bits must stay `PERM_NONE` for a delegate — perp
+authority is read from a separate per-protocol slot. So a delegate cannot
+withdraw whatever mask it holds. That is the entire reason `delegated-auto` is
+a bounded risk rather than a promise.
 
 Two states are worth knowing about, because both look like success:
 
