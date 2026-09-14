@@ -224,6 +224,17 @@ describe("a configured authorize page", () => {
     expect(status.headline).toContain("signs with their wallet");
   });
 
+  it("does not promise a number of signatures", () => {
+    // It cannot keep that promise: when sponsorship fails the transaction is
+    // rebuilt as self-pay and the wallet asks again. The authorize page's own
+    // copy was corrected for exactly this; the agent must not reintroduce it.
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.headline).not.toMatch(/one signature/iu);
+  });
+
   it("carries the agent address in the link, so the page cannot be aimed at the wrong one", () => {
     process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
 
