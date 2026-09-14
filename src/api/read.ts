@@ -11,13 +11,14 @@ import type {
   AccountData,
   AppInfo,
   CandleTimeframe,
-  WlpPeriod,
+  DelegatedAccountsResponse,
   DelegateData,
   HistoryResponse,
   MarketInfo,
   OrderResponse,
   Position,
   TickerData,
+  WlpPeriod,
 } from "./types.ts";
 
 export class ReadApi {
@@ -80,6 +81,17 @@ export class ReadApi {
 
   delegates(accountId: string): Promise<DelegateData[]> {
     return this.http.get<DelegateData[]>("/account/delegate", { account: accountId });
+  }
+
+  /**
+   * Accounts that currently delegate to `delegate` — the reverse of `delegates`.
+   *
+   * The backend verifies each against chain state, but this is still a list of
+   * candidates to confirm, not an account to trade: anyone can add any address
+   * as a delegate of their own account. `discoverGrants` re-reads each one.
+   */
+  delegatedAccounts(delegate: string): Promise<DelegatedAccountsResponse> {
+    return this.http.get<DelegatedAccountsResponse>("/account/delegated", { delegate });
   }
 
   overview(accountId: string): Promise<unknown> {

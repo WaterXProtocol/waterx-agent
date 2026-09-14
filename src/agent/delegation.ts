@@ -279,7 +279,7 @@ export function delegationStatus(input: {
         `Give ${delegateAddress} to the account owner. To grant perp trading, ` +
         `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
         `They can review and revoke it at ${reviewUrl} (Account → Delegates). ` +
-        `Then tell you their address and account id.`,
+        `Once they have signed, \`discover\` finds the account — no id to copy.`,
     };
   }
 

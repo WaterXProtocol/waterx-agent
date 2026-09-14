@@ -81,9 +81,17 @@ describe("what to do next", () => {
     expect(g.headline).toContain("cannot withdraw");
     expect(g.headline).toContain("no SUI of its own");
     expect(g.suggestions[0]?.command).toContain("onboard");
-    // The owner path stays available, and says what it costs.
-    expect(g.suggestions[1]?.command).toContain("--create-account");
-    expect(g.suggestions[1]?.what).toContain("SUI for gas");
+    // The delegate path is two steps now: hand over the address, then find the
+    // account the owner granted instead of asking them to copy its id back.
+    // Asserted by content and relative order, not by index — the property is
+    // "delegate steps come before the owner alternative", not "slot 1".
+    const commands = g.suggestions.map((s) => s.command);
+    const discover = commands.findIndex((c) => c.includes("discover"));
+    const ownerPath = g.suggestions.findIndex((s) => s.command.includes("--create-account"));
+    expect(discover).toBe(1);
+    // The owner path stays available, after the delegate steps, and says what it costs.
+    expect(ownerPath).toBeGreaterThan(discover);
+    expect(g.suggestions[ownerPath]?.what).toContain("SUI for gas");
   });
 
   it("does not ask a would-be delegate for gas", () => {

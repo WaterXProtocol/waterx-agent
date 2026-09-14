@@ -426,3 +426,23 @@ export interface HistoryResponse {
   nextCursor: string | null;
   hasMore: boolean;
 }
+
+/** One account that currently delegates to the queried address (`GET /account/delegated`). */
+export interface DelegatedAccount {
+  accountId: string;
+  /** From the backend's account-creation index; `null` until that row is indexed. */
+  ownerAddress: string | null;
+  delegate: DelegateData;
+}
+
+/**
+ * `GET /account/delegated` — accounts delegating to an address, each verified
+ * against chain state by the backend. It lists; it never chooses.
+ */
+export interface DelegatedAccountsResponse {
+  accounts: DelegatedAccount[];
+  /** Candidates the backend could not read. Not the same as "not granted". */
+  unverifiedAccounts: string[];
+  /** More candidates existed than the backend verifies in one response. */
+  truncated: boolean;
+}

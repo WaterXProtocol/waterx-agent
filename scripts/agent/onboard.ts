@@ -37,6 +37,12 @@ await run(async () => {
   // The address only when a key exists. Asking for it otherwise would load one
   // that is not there and fail with a message about wallets.
   const delegateAddress = ready.ready ? agent.signer.address : undefined;
+  // Derived from the account when only WATERX_ACCOUNT_ID is configured.
+  try {
+    await agent.resolveIdentity();
+  } catch {
+    // Left unset: reported below as unconfirmed, never guessed.
+  }
   const ownerAddress = agent.config.ownerAddress;
   const accountId = agent.config.accountId;
 
@@ -105,7 +111,9 @@ await run(async () => {
       ? invoke("bootstrap", "--json")
       : status.state === "granted"
         ? invoke("next", "--json")
-        : invoke("onboard", "--json");
+        : status.state === "awaiting-grant"
+          ? invoke("discover", "--wait", "300", "--json")
+          : invoke("onboard", "--json");
 
   show(
     {
