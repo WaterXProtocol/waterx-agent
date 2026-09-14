@@ -77,11 +77,23 @@ await run(async () => {
   }
   if (status.ownerAddress !== undefined) note(`  owner          ${status.ownerAddress}`);
   if (status.accountId !== undefined) note(`  account        ${status.accountId}`);
-  note(`  the owner runs ${status.grantCommand ?? "(needs a wallet first)"}`);
-  note(`                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account`);
-  note(`  review/revoke  ${status.grantUrl}  (Account → Delegates)`);
-  note(`  note           the console's /agent/authorize page grants PREDICTION MARKETS and`);
-  note(`                 states it does not grant perps — it will not work for this agent`);
+  if (status.authorizeUrl !== undefined) {
+    // A page is configured, so that is the way in and the CLI is the fallback.
+    // Printing the CLI first — and the "authorize page will not work" note —
+    // under a working perp authorize URL told the owner the opposite of the
+    // headline two lines above it.
+    note(`  owner grants   ${status.authorizeUrl}`);
+    note(`                 in their browser, signing with their own wallet`);
+    note(`  or, terminal   ${status.grantCommand ?? "(needs a wallet first)"}`);
+    note(`                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account`);
+  } else {
+    note(`  the owner runs ${status.grantCommand ?? "(needs a wallet first)"}`);
+    note(`                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account`);
+    note(`  note           the console's /agent/authorize page grants PREDICTION MARKETS and`);
+    note(`                 states it does not grant perps — it will not work for this agent`);
+  }
+  // Where to review is not where to grant, whatever is configured.
+  note(`  review/revoke  ${status.reviewUrl}  (Account → Delegates)`);
   note(`  asks for       ${Object.keys(REQUESTED_PERMISSION_NAMES).join(", ")}`);
   note(`  cannot         take money OUT of the account, or grant authority — account deposit`);
   note(`                 and withdrawal refuse a delegate outright, whatever mask it holds`);
