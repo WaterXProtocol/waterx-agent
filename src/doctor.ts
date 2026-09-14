@@ -32,6 +32,8 @@ import { ACTION_RULES, NEEDS_A_WAY_BACK, usesByPackage } from "./chain/verify.ts
 import { KNOWN_FUNCTIONS } from "./chain/abi.generated.ts";
 import { corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
 import { PolicyGate } from "./policy.ts";
+import { normalizeSuiAddress } from "@mysten/sui/utils";
+import { accountObjectReader } from "./chain/account-object.ts";
 
 export interface DoctorCheck {
   name: string;
@@ -117,6 +119,33 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // A missing key is a `warn`, not a `fail`. Every read below still works, and
   // reporting a fresh clone as broken sent people looking for a fault that was
   // just an empty `.env`.
+  // ── Owner ─────────────────────────────────────────────────────────────
+  // Before the signer check, which labels the key "owner" or "delegate" by
+  // comparing it with this. WATERX_ACCOUNT_ID alone is enough: the owner is on
+  // the account object. A configured owner that disagrees with the chain is the
+  // failure worth naming — every delegate write would claim the wrong principal.
+  if (config.accountId !== undefined) {
+    try {
+      const account = await accountObjectReader(config)(config.accountId);
+      if (config.ownerAddress === undefined) {
+        config.ownerAddress = account.owner;
+        checks.push(ok("owner", `${account.owner} — read from ${config.accountId}`));
+      } else if (normalizeSuiAddress(config.ownerAddress) !== account.owner) {
+        checks.push(
+          fail(
+            "owner",
+            `WATERX_OWNER_ADDRESS is ${config.ownerAddress}, but ${config.accountId} is owned by ` +
+              `${account.owner} on chain. Remove WATERX_OWNER_ADDRESS — the owner is read from the account.`,
+          ),
+        );
+      } else {
+        checks.push(ok("owner", `${account.owner} — matches ${config.accountId} on chain`));
+      }
+    } catch (error) {
+      checks.push(warn("owner", `could not read ${config.accountId} from chain — ${describe(error)}`));
+    }
+  }
+
   const readiness = signerReadiness(config);
   let signer: SignerProvider | undefined;
   let ownerAddress: string | undefined = config.ownerAddress;
@@ -588,7 +617,9 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
           config.accountId === undefined
             ? warn(
                 "account",
-                `no WaterX account for ${ownerAddress} — run \`pnpm run create-account\``,
+                `no WaterX account owned by ${ownerAddress}. The usual setup is a delegate: the ` +
+                  `owner grants this wallet (\`onboard\` says where) and \`discover\` finds their ` +
+                  `account. Only if this wallet should own one: \`create-account\`.`,
               )
             : fail(
                 "account",

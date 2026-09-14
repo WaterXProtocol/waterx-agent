@@ -189,12 +189,17 @@ export function decide(s: Situation): Guidance {
           `There is a wallet and nothing has been granted to it yet. The usual arrangement is ` +
           `that the account owner grants THIS address permission to trade their account — they ` +
           `keep the funds, this wallet cannot withdraw them, and it needs no SUI of its own ` +
-          `because the backend sponsors a delegate's transactions. Ask them to grant it, then ` +
-          `set WATERX_OWNER_ADDRESS and WATERX_ACCOUNT_ID to what they give you.`,
+          `because the backend sponsors a delegate's transactions. Ask them to grant it; then ` +
+          `\`discover\` finds the account on its own. Nobody has to copy an account id or an ` +
+          `owner address — but a person does have to confirm the account before it is adopted.`,
         suggestions: [
           {
             what: "the address to hand over, and where the owner grants it",
             command: invoke("onboard", "--json"),
+          },
+          {
+            what: "once the owner has signed: find the account that granted this wallet",
+            command: invoke("discover", "--wait", "300", "--json"),
           },
           {
             what:

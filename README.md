@@ -113,9 +113,11 @@ agent does not have to plan the onboarding, and does not need to find a
 document first — though `npx waterx skill` prints these instructions if it
 wants them.
 
-`bootstrap` does every setup step that does not need a person — a wallet, gas
-if the wallet needs any, finding and recording the account id — and returns the
-rest as structured work items saying *what*, *why*, and *who can supply it*.
+`bootstrap` does every setup step that does not need a person — a wallet, and
+on the owner path gas and the account — and returns the rest as structured work
+items saying *what*, *why*, and *who can supply it*. For a delegate, the rest is
+the owner's grant; after it, `discover` finds the account and a person `adopt`s
+it, so nobody copies an account id or an owner address by hand.
 Which is how an agent learns to stop and ask instead of retrying: testnet
 collateral is whitelist-gated and comes back as `who: "an operator"`.
 
@@ -324,10 +326,10 @@ Either way, the owner reviews and revokes from **Account → Delegates** in the
 console, and revocation takes effect on chain immediately.
 
 `onboard` reports where the handshake has got to and what the next move is. The
-grant itself is the owner's act, made on chain from their own wallet at
-`https://waterx.app/agent/authorize?agent=<the agent wallet>`, and revocable there; this command reads it and
-never makes it. An agent that could grant itself authority would not be a
-delegate arrangement.
+grant itself is the owner's act, made on chain from their own wallet — through
+the authorize page `WATERX_PERP_AUTHORIZE_URL` names, or the command above — and
+revocable from Account → Delegates; this command reads it and never makes it. An
+agent that could grant itself authority would not be a delegate arrangement.
 
 What the agent asks for is the perp trading mask (`PERM_ALL_TRADING`, 255):
 opening, closing, sizing, orders, **and position margin** —
@@ -351,10 +353,29 @@ Two states are worth knowing about, because both look like success:
 - **A failed lookup is not a revocation.** An unreadable chain is reported as
   unconfirmed, never as "the owner took it away".
 
-The one thing the agent cannot do for itself is find the account: the backend
-answers "who may act on this account?" and has no reverse lookup, so the owner
-states the account id once (`WATERX_ACCOUNT_ID`). Everything after that is
-checked against the chain rather than believed.
+### Finding the account, and choosing it
+
+Once the owner has granted the wallet, the agent finds the account itself:
+
+```bash
+npx waterx discover --wait 300 --json   # which accounts grant this wallet, confirmed on chain
+npx waterx adopt --account <id> --approver <your name> --json
+```
+
+`discover` asks the backend's delegate index (`GET /account/delegated`) and,
+where that is not deployed, recent on-chain grant events — then reads every
+candidate account from chain, so a removed or expired grant never counts and the
+owner comes from the account object rather than from anyone's typing. It lists;
+it never adopts. An address can be made a delegate of **anyone's** account
+without its consent, so finding a grant is not knowing which account to trade.
+`adopt` is that choice, made by a named person: it re-checks the grant, writes
+`WATERX_ACCOUNT_ID`, and records who chose.
+
+`WATERX_OWNER_ADDRESS` is no longer needed. The owner is read from the account
+at run time and a delegate key is recognised by comparing it with that owner;
+set it only to pin the owner explicitly, and `doctor` fails if it disagrees
+with the chain. Everything after that is checked against the chain rather than
+believed.
 
 ### What mainnet cannot do yet
 

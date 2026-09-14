@@ -31,6 +31,7 @@ import {
 import { ExecutionPolicyError, UsageError } from "../errors.ts";
 import { assertNotCrossing, MarketRegistry } from "./markets.ts";
 import { type BuildRequest, buildTx, type PlanContext, type TradePlan } from "./plan.ts";
+import { accountObjectReader, type AccountObjectReader } from "../chain/account-object.ts";
 
 /** Default slippage bound on market-priced actions, in percent. */
 const DEFAULT_SLIPPAGE_PERCENT = 0.5;
@@ -98,6 +99,12 @@ export interface AgentOptions {
    * `SIGNER_PROTOCOL` command when one is set, otherwise the `.env` keypair.
    */
   signer?: SignerProvider;
+  /**
+   * Reads an Account object from chain. Injected in tests; defaults to a gRPC
+   * reader for the configured network. Used to derive the owner when only
+   * WATERX_ACCOUNT_ID is configured.
+   */
+  readAccount?: AccountObjectReader;
 }
 
 export class WaterXAgent {
@@ -110,6 +117,8 @@ export class WaterXAgent {
   readonly #supplied: SignerProvider | undefined;
   #signer: SignerProvider | undefined;
   #writer: { gate: PolicyGate; executor: TxExecutor } | undefined;
+  #readAccount: AccountObjectReader | undefined;
+  #identity: Promise<void> | undefined;
 
   /**
    * Nothing about signing happens here.
@@ -132,6 +141,7 @@ export class WaterXAgent {
     this.tx = new TxApi(http);
     this.markets = new MarketRegistry(this.read);
     this.#supplied = options.signer;
+    this.#readAccount = options.readAccount;
   }
 
   /**
@@ -165,6 +175,17 @@ export class WaterXAgent {
    * moment a write is actually intended.
    */
   #write(): { gate: PolicyGate; executor: TxExecutor } {
+    // The gate decides at construction whether this process is a delegate, by
+    // comparing the owner with the signer. An account with no owner settled yet
+    // would be judged an owner key by default — so the build is refused rather
+    // than decided on a missing fact. Every write path awaits resolveIdentity()
+    // first; reaching this line without it is a bug in this file.
+    if (this.config.accountId !== undefined && this.config.ownerAddress === undefined) {
+      throw new Error(
+        "internal: the write plane was reached before resolveIdentity() settled the account's " +
+          "owner, so whether this process signs as a delegate is not yet known.",
+      );
+    }
     if (this.#writer === undefined) {
       const signer = this.signer;
       const gate = new PolicyGate(
@@ -189,7 +210,9 @@ export class WaterXAgent {
 
   /** The address that signs. Equals the owner unless a delegate key is loaded. */
   get address(): string {
-    return this.executor.address;
+    // The signer's address directly: going through `executor` would build the
+    // write plane just to read a value the signer already holds.
+    return this.signer.address;
   }
 
   /**
@@ -201,6 +224,35 @@ export class WaterXAgent {
    */
   get ownerAddress(): string {
     return this.config.ownerAddress ?? this.signer.address;
+  }
+
+  /**
+   * Settle who this agent acts for, before anything is signed.
+   *
+   * WATERX_ACCOUNT_ID is enough. The owner is a field on the Account object, so
+   * it is read from chain rather than asked for: a second value a person has to
+   * copy is a second value they can copy wrong, and a delegate with the wrong
+   * owner claims the wrong principal on every write.
+   *
+   * An explicitly configured WATERX_OWNER_ADDRESS is still honoured without a
+   * read, so existing setups gain no new failure mode; `doctor` checks it
+   * against the chain. Derived at most once per process — and a failed read is
+   * not cached, so the next attempt tries again rather than repeating an outage.
+   */
+  resolveIdentity(): Promise<void> {
+    this.#identity ??= this.#deriveOwner().catch((error: unknown) => {
+      this.#identity = undefined;
+      throw error;
+    });
+    return this.#identity;
+  }
+
+  async #deriveOwner(): Promise<void> {
+    const accountId = this.config.accountId;
+    if (accountId === undefined || this.config.ownerAddress !== undefined) return;
+    this.#readAccount ??= accountObjectReader(this.config);
+    const account = await this.#readAccount(accountId);
+    this.config.ownerAddress = account.owner;
   }
 
   /** The account this agent trades. Throws when `WATERX_ACCOUNT_ID` is unset. */
@@ -225,6 +277,7 @@ export class WaterXAgent {
    * preview path could not exist before this.
    */
   async submit(plan: TradePlan, options: WriteOptions = {}): Promise<ExecuteResult> {
+    await this.resolveIdentity();
     // Resolved once, before the gate runs: reaching `executor` is what loads
     // the key, and doing it inside the build closure would put that after the
     // authorization decision rather than before it.
@@ -975,6 +1028,7 @@ export class WaterXAgent {
   async planWithdraw(
     params: WriteOptions & { assetType: string; amount: string | number; toAddress?: string },
   ): Promise<TradePlan> {
+    await this.resolveIdentity();
     this.assertOwnerSigned("withdraw");
     const intent: WriteIntent = {
       action: "withdraw",
@@ -1033,6 +1087,7 @@ export class WaterXAgent {
       stakingPermissions?: number;
     },
   ): Promise<TradePlan> {
+    await this.resolveIdentity();
     this.assertOwnerSigned("addDelegate");
     // Sent explicitly rather than left to the backend's default: a mask the
     // agent did not choose is one it cannot bound, and the grant would then be
@@ -1084,6 +1139,7 @@ export class WaterXAgent {
 
   /** The plan removeDelegate submits. Derives everything; authorizes and builds nothing. */
   async planRemoveDelegate(params: WriteOptions & { delegate: string }): Promise<TradePlan> {
+    await this.resolveIdentity();
     this.assertOwnerSigned("removeDelegate");
     const intent: WriteIntent = {
       action: "removeDelegate",
@@ -1112,6 +1168,7 @@ export class WaterXAgent {
 
   /** The plan removeAllDelegates submits. Derives everything; authorizes and builds nothing. */
   async planRemoveAllDelegates(params: WriteOptions = {}): Promise<TradePlan> {
+    await this.resolveIdentity();
     this.assertOwnerSigned("removeAllDelegates");
     const intent: WriteIntent = {
       action: "removeAllDelegates",
@@ -1242,7 +1299,10 @@ export class WaterXAgent {
    * `owner` is a parameter so this stays a read: without one it falls back to
    * `ownerAddress`, which loads the key only when no owner was configured.
    */
-  accounts(owner?: string): Promise<AccountData[]> {
+  async accounts(owner?: string): Promise<AccountData[]> {
+    // Without an explicit owner the configured account's owner is the one
+    // asked about — which, for a delegate, has to be read before it is known.
+    if (owner === undefined) await this.resolveIdentity();
     return this.read.accounts(owner ?? this.ownerAddress);
   }
 
@@ -1264,7 +1324,7 @@ export class WaterXAgent {
     if (this.executor.delegateSender !== undefined) {
       throw new ExecutionPolicyError(
         `${intent} is owner-only on chain; this process is signing as a delegate ` +
-          `(WATERX_OWNER_ADDRESS is set). Run it with the owner key.`,
+          `(the configured account belongs to another wallet). Run it with the owner key.`,
       );
     }
   }

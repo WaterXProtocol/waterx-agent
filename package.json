@@ -38,6 +38,8 @@
     "next": "tsx scripts/agent/next.ts",
     "skill": "tsx scripts/agent/skill.ts",
     "onboard": "tsx scripts/agent/onboard.ts",
+    "discover": "tsx scripts/agent/discover.ts",
+    "adopt": "tsx scripts/agent/adopt.ts",
     "doctor": "tsx scripts/setup/doctor.ts",
     "preview": "tsx scripts/agent/preview.ts",
     "approve": "tsx scripts/agent/approve.ts",

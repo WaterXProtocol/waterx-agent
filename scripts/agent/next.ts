@@ -27,6 +27,17 @@ await run(async () => {
   const report = await runDoctor();
   const account = agent.config.accountId;
 
+  // The owner is read from the account when it is not configured. Settle it
+  // before asking whether this process is a delegate, or a wallet that only
+  // has WATERX_ACCOUNT_ID would be described as the account's owner.
+  if (report.readReady) {
+    try {
+      await agent.resolveIdentity();
+    } catch {
+      // An unreadable account is reported by the checks below; an owner is not guessed.
+    }
+  }
+
   // Gas, because an account cannot be created without it and "create the
   // account" is useless advice to a wallet that cannot pay for the transaction.
   const gas =

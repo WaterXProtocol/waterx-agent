@@ -48,6 +48,7 @@ import { assertCorpusDescribes, loadDeployment } from "./deployment.ts";
 import { corpusFor } from "./corpus.ts";
 import { assertLayoutConfirmed, assertTransactionMatches } from "./verify.ts";
 import type { TxResponse } from "../api/types.ts";
+import { signsAsDelegate } from "../config.ts";
 
 export interface ExecuteOptions {
   /** Log breadcrumb for sponsored submissions; conventionally `agent/<intent>`. */
@@ -117,9 +118,16 @@ export class TxExecutor {
     return this.config.ownerAddress ?? this.address;
   }
 
-  /** Set when signing as a delegate; the backend requires it to be absent otherwise. */
+  /**
+   * Set when signing as a delegate; the backend requires it to be absent otherwise.
+   *
+   * A comparison, not the presence of `ownerAddress`. The owner is derived from
+   * the account when it is not configured, so an owner key trading its own
+   * account HAS an `ownerAddress` — its own address. Testing presence would send
+   * that owner's writes as a delegate of itself.
+   */
   get delegateSender(): string | undefined {
-    return this.config.ownerAddress === undefined ? undefined : this.address;
+    return signsAsDelegate(this.config, this.address) ? this.address : undefined;
   }
 
   /** Body fields every tx-build request carries. Spread this into each request. */
