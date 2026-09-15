@@ -2,7 +2,7 @@
   "version": 2,
   "networks": {
     "mainnet": {
-      "capturedAt": "2026-09-10",
+      "capturedAt": "2026-09-15",
       "network": "sui_mainnet",
       "sdkVersion": "4.3.3",
       "packages": {
@@ -240,20 +240,20 @@
               "isLong": "01",
               "isStopOrder": "00",
               "reduceOnly": "00",
-              "size": "e6dd597b020000000000000000000000",
+              "size": "b5d28ca4020000000000000000000000",
               "triggerPrice": "00",
               "linkedPositionId": "00",
-              "acceptablePrice": "01b076f82e00000000",
+              "acceptablePrice": "0178391c2c00000000",
               "collateralAmount": "00093d0000000000"
             },
             "positions": [
               "01",
               "00",
               "00",
-              "e6dd597b020000000000000000000000",
+              "b5d28ca4020000000000000000000000",
               "00",
               "00",
-              "01b076f82e00000000",
+              "0178391c2c00000000",
               "00093d0000000000"
             ],
             "typeArguments": []
@@ -264,7 +264,7 @@
               "isLong": "00",
               "isStopOrder": "00",
               "reduceOnly": "01",
-              "size": "e6dd597b020000000000000000000000",
+              "size": "b5d28ca4020000000000000000000000",
               "triggerPrice": "0100105e5f000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -274,7 +274,7 @@
               "00",
               "00",
               "01",
-              "e6dd597b020000000000000000000000",
+              "b5d28ca4020000000000000000000000",
               "0100105e5f000000000000000000000000",
               "00",
               "00",
@@ -288,7 +288,7 @@
               "isLong": "00",
               "isStopOrder": "01",
               "reduceOnly": "01",
-              "size": "e6dd597b020000000000000000000000",
+              "size": "b5d28ca4020000000000000000000000",
               "triggerPrice": "010084d717000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -298,13 +298,39 @@
               "00",
               "01",
               "01",
-              "e6dd597b020000000000000000000000",
+              "b5d28ca4020000000000000000000000",
               "010084d717000000000000000000000000",
               "00",
               "00",
               "0000000000000000"
             ],
             "typeArguments": []
+          }
+        ],
+        "trading::cancel_order_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "orderId": "001c000000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "001c000000000000",
+              "00000000000000000000000000000000",
+              "ff",
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
           }
         ],
         "trading::close_position_request": [
@@ -314,7 +340,7 @@
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "positionId": "7d0c000000000000",
-              "acceptablePrice": "d0467f2a00000000"
+              "acceptablePrice": "48c6e82700000000"
             },
             "positions": [
               null,
@@ -324,7 +350,7 @@
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "7d0c000000000000",
-              "d0467f2a00000000",
+              "48c6e82700000000",
               null
             ],
             "typeArguments": [
@@ -340,8 +366,8 @@
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "positionId": "7d0c000000000000",
-              "size": "e6dd597b020000000000000000000000",
-              "acceptablePrice": "d0467f2a00000000"
+              "size": "b5d28ca4020000000000000000000000",
+              "acceptablePrice": "48c6e82700000000"
             },
             "positions": [
               null,
@@ -351,8 +377,8 @@
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "7d0c000000000000",
-              "e6dd597b020000000000000000000000",
-              "d0467f2a00000000",
+              "b5d28ca4020000000000000000000000",
+              "48c6e82700000000",
               null
             ],
             "typeArguments": [
@@ -396,8 +422,8 @@
               "orderId": "00",
               "positionId": "7d0c000000000000",
               "collateralAmount": "49420f0000000000",
-              "size": "e6dd597b020000000000000000000000",
-              "acceptablePrice": "b076f82e00000000"
+              "size": "b5d28ca4020000000000000000000000",
+              "acceptablePrice": "78391c2c00000000"
             },
             "positions": [
               null,
@@ -409,8 +435,8 @@
               "00",
               "7d0c000000000000",
               "49420f0000000000",
-              "e6dd597b020000000000000000000000",
-              "b076f82e00000000",
+              "b5d28ca4020000000000000000000000",
+              "78391c2c00000000",
               null
             ],
             "typeArguments": [
@@ -435,6 +461,37 @@
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               null,
               null,
+              null
+            ],
+            "typeArguments": [
+              "0xc70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4::usd::USD",
+              "0x183b4cbecf29d6de0a94a90547e16ec7c3de7100c0852fbfbe73e61eed97e5cc::wlp::WLP"
+            ]
+          }
+        ],
+        "trading::update_order_request": [
+          {
+            "package": "2d986babdac1ee98767c38c349d34402ddb85481152ac50ace0fc86e22b1fd47",
+            "sent": {
+              "ticker": "06535549555344",
+              "accountId": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "orderId": "001c000000000000",
+              "currentTriggerPrice": "80902029000000000000000000000000",
+              "newSize": "2c602041060000000000000000000000",
+              "newTriggerPrice": "47b50325000000000000000000000000"
+            },
+            "positions": [
+              null,
+              null,
+              null,
+              "06535549555344",
+              null,
+              "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "001c000000000000",
+              "80902029000000000000000000000000",
+              "03",
+              "2c602041060000000000000000000000",
+              "47b50325000000000000000000000000",
               null
             ],
             "typeArguments": [
@@ -499,8 +556,6 @@
       "uncaptured": {
         "lp_pool::cancel_redeem": "requires a pending redeem request",
         "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
-        "trading::cancel_order_request": "needs a resting order, and ORDER_ID named none",
-        "trading::update_order_request": "needs a resting order, and ORDER_ID named none",
         "waterx_staking::claim": "requires claimable rewards",
         "withdrawal_queue::route_wormhole": "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes"
       }

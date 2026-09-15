@@ -31,6 +31,14 @@
  *
  *   OWNER=0x… ACCT=0x… POSITION_OWNER=0x… POSITION_ACCT=0x… POSITION_ID=…
  *
+ * The order entrypoints need a RESTING order, and on mainnet creating one costs
+ * real money. `ORDER_OWNER` / `ORDER_ACCT` point them at an account that already
+ * has one, the same way — any account's resting order will do, because nothing
+ * is placed, cancelled or re-priced: the cancel and the update are built against
+ * it and read.
+ *
+ *   OWNER=0x… ACCT=0x… ORDER_OWNER=0x… ORDER_ACCT=0x… ORDER_ID=…
+ *
  * Nothing is signed or submitted by any of this. Every call is *built* and
  * read, so building against an account this process cannot sign for is exactly
  * as safe as building against one it can — and it is what keeps five of the
@@ -339,38 +347,60 @@ await capture(
 );
 
 const ORDER_ID = process.env.ORDER_ID;
+// Defaults to the main account, so the single-account invocation is unchanged.
+const orderAccount = process.env.ORDER_ACCT ?? accountId;
+const orderBody = { sender: process.env.ORDER_OWNER ?? sender, accountId: orderAccount };
+const ORDER_SHAPES = ["trading::cancel_order_request", "trading::update_order_request"];
 if (ORDER_ID !== undefined) {
-  const order = (await read.orders({ account: accountId })).find((o) => String(o.id) === ORDER_ID);
-  if (order !== undefined) {
+  const order = (await read.orders({ account: orderAccount })).find((o) => String(o.id) === ORDER_ID);
+  if (order === undefined) {
+    // Said rather than left to the catch-all below. "The id named no resting
+    // order" and "no order was named" send the next person to do different
+    // things, and the reason is the half of the record they act on.
+    for (const entrypoint of ORDER_SHAPES) {
+      skipped.set(entrypoint, `ORDER_ID ${ORDER_ID} was not resting on the account it was looked up on`);
+    }
+  } else {
+    // The order's own market, not a fixed one: the order is whatever was
+    // resting, on whichever account had it.
+    const T = str(order.ticker);
+    const A = addr(orderAccount);
     const CURRENT = BigInt(Math.round(order.triggerPrice * 1e9));
+    // A re-price has to stay on the side of the market the order already rests
+    // on, or the backend's dry run refuses the build — a crossing limit aborts
+    // on chain — and the entrypoint is recorded as uncapturable for what is
+    // really an argument error. Buy limits and sell stops rest below the
+    // market and move further below; the other two move further above. The
+    // odd offsets keep every value in the call distinct from every other.
+    const below = order.orderTypeTag === 0 || order.orderTypeTag === 3;
+    const NEW_TRIGGER = BigInt(Math.round(order.triggerPrice * (below ? 0.9 : 1.1) * 1e9)) + 7n;
+    const NEW_SIZE = BigInt(Math.floor(order.sizeInAsset * 0.5 * 1e9)) + 3n;
     await capture(
       {
-        "trading::cancel_order_request": [
-          { ticker: str("SUIUSD"), accountId: addr(accountId), orderId: u64(BigInt(ORDER_ID)) },
-        ],
+        "trading::cancel_order_request": [{ ticker: T, accountId: A, orderId: u64(BigInt(ORDER_ID)) }],
       },
-      () => tx.cancelOrder("SUIUSD", Number(ORDER_ID), { ...body }),
+      () => tx.cancelOrder(order.ticker, Number(ORDER_ID), { ...orderBody }),
     );
     await capture(
       {
         "trading::update_order_request": [
           {
-            ticker: str("SUIUSD"),
-            accountId: addr(accountId),
+            ticker: T,
+            accountId: A,
             orderId: u64(BigInt(ORDER_ID)),
             currentTriggerPrice: u128(CURRENT),
-            newSize: u128(19_400_000_003n),
-            newTriggerPrice: u128(440_000_007n),
+            newSize: u128(NEW_SIZE),
+            newTriggerPrice: u128(NEW_TRIGGER),
           },
         ],
       },
       () =>
-        tx.updateOrder("SUIUSD", Number(ORDER_ID), {
-          ...body,
+        tx.updateOrder(order.ticker, Number(ORDER_ID), {
+          ...orderBody,
           currentTriggerPrice: String(CURRENT),
           orderTypeTag: order.orderTypeTag,
-          newSize: "19400000003",
-          newTriggerPrice: "440000007",
+          newSize: String(NEW_SIZE),
+          newTriggerPrice: String(NEW_TRIGGER),
         }),
     );
   }
@@ -477,11 +507,9 @@ const POSITION_ENTRYPOINTS = new Set([
   "trading::deposit_collateral_request",
   "trading::withdraw_collateral_request",
 ]);
-const NEEDS_ORDER = "needs a resting order, and ORDER_ID named none";
-const ORDER_ENTRYPOINTS = new Set([
-  "trading::cancel_order_request",
-  "trading::update_order_request",
-]);
+const NEEDS_ORDER =
+  "needs a resting order, and ORDER_ID named none — ORDER_ACCT / ORDER_OWNER can point at any account that has one";
+const ORDER_ENTRYPOINTS = new Set(ORDER_SHAPES);
 
 const noAccount = accountId.trim() === "";
 for (const entrypoint of Object.keys(ABI)) {
@@ -553,7 +581,12 @@ function redact(record: { captured: Record<string, Instance[]> }, real: Record<s
     if (from === "".padStart(64, "0")) continue;
     // Distinct, valid hex, and obviously synthetic to anyone reading the file.
     const seed = PLACEHOLDERS[name] ?? "ee";
-    map.set(from, seed.repeat(32));
+    // First role wins. The optional roles default to the main account and its
+    // owner, so in a single-account capture the same id arrives several times;
+    // letting the last one win relabelled the main account as whichever
+    // optional role happened to be listed last, and turned every re-capture
+    // into a whole-file diff of placeholders.
+    if (!map.has(from)) map.set(from, seed.repeat(32));
   }
   const swap = (text: string): string => {
     let out = text;
@@ -577,6 +610,8 @@ const PLACEHOLDERS: Record<string, string> = {
   delegateAccount: "a3",
   delegateOwner: "51",
   delegate: "de",
+  orderAccount: "a4",
+  orderOwner: "52",
 };
 
 // Merged into the existing file, never over it. The record is keyed by network
@@ -600,6 +635,8 @@ redact(
     delegateAccount,
     delegateOwner: process.env.DELEGATE_OWNER ?? sender,
     delegate: delegateAddress,
+    orderAccount,
+    orderOwner: process.env.ORDER_OWNER ?? sender,
   },
 );
 

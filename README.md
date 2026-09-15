@@ -260,11 +260,12 @@ none of them has happened.
    `src/chain/abi-corpus.json` holds a record per network, and a network with
    no record refuses every write rather than reading positions nobody confirmed.
 
-As committed, mainnet has 17 of 23 entrypoints confirmed. `cancelOrder` and
-`updateOrder` are not among them — capturing those needs a resting mainnet
-order, which costs real money to create — so they refuse until someone captures
-them or names them in `WATERX_ALLOW_UNCONFIRMED_ABI`. Everything else in the
-perp and account flow is confirmed.
+As committed, mainnet has 19 of 23 entrypoints confirmed — the same set as
+testnet. Every perp and account action is among them, resting orders included.
+The four that are not are the WLP redemption, its cancellation and the staking
+claim, whose layouts need a pending redemption, an unstaked WLP balance or
+claimable rewards to build, and `withdrawal_queue::route_wormhole`, which no
+action reaches.
 
 To check the whole path without signing anything:
 
@@ -377,27 +378,31 @@ set it only to pin the owner explicitly, and `doctor` fails if it disagrees
 with the chain. Everything after that is checked against the chain rather than
 believed.
 
-### What mainnet cannot do yet
+### Orders that rest on the book
 
-`cancelOrder` and `updateOrder` are unconfirmed there — capturing a layout needs
-a transaction the deployment will build, and both need a resting order that does
-not exist on any account this repo can reach. Everything else in the perp and
-account flow is confirmed: market orders, closing, reducing, increasing, margin,
-deposit, withdraw, delegates.
+`cancelOrder` and `updateOrder` were the last perp actions mainnet could not
+confirm. Capturing a layout needs a transaction the deployment will build, and
+both need a resting order — which costs real money to create, and which no
+account this repo uses had. The capture does not need one of its own: it builds
+the cancel and the re-price against an order that is already resting, on
+whichever account holds it (`ORDER_ACCT` / `ORDER_OWNER`), reads the arguments
+back, and signs nothing. The order is not touched, and the account identifiers
+are redacted from the fixture like every other.
 
-That gap has a consequence worth stating, because the code acts on it:
-**placing a resting order is refused while its cancellation is unconfirmed.** An
-order on the book whose retraction cannot be signed can only be got rid of by
-letting it fill, which is strictly worse than not placing it. `placeLimitOrder`
-and `placeTpSl` therefore refuse on mainnet until someone either captures
-`trading::cancel_order_request` or names it deliberately in
-`WATERX_ALLOW_UNCONFIRMED_ABI`.
+The rule the gap produced stays, because the code acts on it: **placing a
+resting order is refused wherever its cancellation is unconfirmed.** An order on
+the book whose retraction cannot be signed can only be got rid of by letting it
+fill, which is strictly worse than not placing it. Both networks confirm the
+cancel today, so the rule is silent. A capture that loses it — it needs a
+resting order to exist somewhere on the deployment — makes `placeLimitOrder` and
+`placeTpSl` refuse again, until `trading::cancel_order_request` is captured or
+named deliberately in `WATERX_ALLOW_UNCONFIRMED_ABI`.
 
-The refusal states its evidence rather than only its verdict: six other
-entrypoints in the same package and module *are* confirmed against mainnet and
-all matched the SDK. That is corroboration, not proof — the SDK could describe
-one function wrongly while describing its neighbours correctly — and it is the
-difference between "we have never checked anything here" and "we checked six
+Such a refusal states its evidence rather than only its verdict: the other
+entrypoints in the same package and module that *are* confirmed, all of which
+matched the SDK. That is corroboration, not proof — the SDK could describe one
+function wrongly while describing its neighbours correctly — and it is the
+difference between "we have never checked anything here" and "we checked the
 siblings and this one needed conditions we could not create". An operator
 deciding whether to accept it should decide with that in front of them.
 
