@@ -16,10 +16,10 @@ import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs
 import { dirname, join, resolve } from "node:path";
 
 export type IgnoreOutcome =
-  /** `.env` was already ignored; nothing to do. */
+  /** `.env` and `.waterx/` were both already ignored; nothing to do. */
   | { kind: "already"; gitignore: string }
-  /** A rule was appended, or a `.gitignore` created. */
-  | { kind: "added"; gitignore: string }
+  /** The missing rules were appended, or a `.gitignore` created. `added` names them. */
+  | { kind: "added"; gitignore: string; added: string[] }
   /** Not inside a git repository, so nothing could be committed by accident. */
   | { kind: "not-a-repo" }
   /** Something stopped it. The caller is told; it is never silent. */
@@ -36,13 +36,26 @@ function repoRoot(from: string): string | undefined {
   }
 }
 
+/** Rules that already keep `.env` out, as people actually write them. */
+const COVERS_ENV = new Set([".env", "/.env", "*.env", ".env*"]);
+
+/** Rules that already keep `.waterx/` out. */
+const COVERS_STATE = new Set([".waterx", ".waterx/", "/.waterx", "/.waterx/", ".waterx/*", ".waterx/**"]);
+
 /**
- * Ensure `.env` is ignored by git, creating or appending to `.gitignore`.
+ * Ensure `.env` and `.waterx/` are ignored by git, creating or appending to
+ * `.gitignore`.
+ *
+ * Two rules, checked separately. `.waterx/` holds the approvals and adoptions
+ * ledgers and the pairing code, and it used to be added only alongside `.env`:
+ * a project that already ignored `.env` — which a careful person or agent sets
+ * up before the key is written — got "already" and no rule for `.waterx/`, so
+ * the next `git add .` committed who adopted which account.
  *
  * Deliberately does not shell out to `git check-ignore`: this runs right after
  * a key has been written, and a missing git binary is not a reason to leave it
  * exposed. Reading the file is enough for the case that matters — a project
- * with no rule for `.env` at all.
+ * with no rule at all.
  */
 export function ensureEnvIgnored(cwd = process.cwd()): IgnoreOutcome {
   const root = repoRoot(cwd);
@@ -51,17 +64,20 @@ export function ensureEnvIgnored(cwd = process.cwd()): IgnoreOutcome {
   const gitignore = join(root, ".gitignore");
   try {
     const existing = existsSync(gitignore) ? readFileSync(gitignore, "utf8") : "";
-    const ignored = existing
-      .split("\n")
-      .map((line) => line.trim())
-      .some((line) => line === ".env" || line === "*.env" || line === ".env*");
-    if (ignored) return { kind: "already", gitignore };
+    const lines = existing.split("\n").map((line) => line.trim());
+    const added = [
+      ...(lines.some((line) => COVERS_ENV.has(line)) ? [] : [".env"]),
+      ...(lines.some((line) => COVERS_STATE.has(line)) ? [] : [".waterx/"]),
+    ];
+    if (added.length === 0) return { kind: "already", gitignore };
 
     const note =
-      "\n# Added by waterx-agent: this holds a private key.\n.env\n.waterx/\n";
+      "\n# Added by waterx-agent: .env holds a private key; .waterx/ holds who adopted and " +
+      "approved what.\n" +
+      `${added.join("\n")}\n`;
     if (existing === "") writeFileSync(gitignore, note.trimStart(), "utf8");
     else appendFileSync(gitignore, existing.endsWith("\n") ? note.trimStart() : note, "utf8");
-    return { kind: "added", gitignore };
+    return { kind: "added", gitignore, added };
   } catch (cause) {
     return { kind: "failed", reason: cause instanceof Error ? cause.message : String(cause) };
   }

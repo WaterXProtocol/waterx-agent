@@ -14,6 +14,11 @@ import type { AgentConfig } from "../config.ts";
 
 export interface AccountDelegateEntry {
   address: string;
+  /**
+   * The label the owner's grant wrote. It carries no authority — and it is where
+   * a grant made through this agent's link carries the pairing code back.
+   */
+  alias: string;
   /** Unix ms after which the delegation confers nothing; `null` for never. */
   expiresAtMs: number | null;
 }
@@ -68,6 +73,7 @@ export function accountObjectReader(
       owner: normalizeSuiAddress(parsed.owner_address),
       delegates: parsed.delegates.map((d) => ({
         address: normalizeSuiAddress(d.delegate_address),
+        alias: d.alias,
         expiresAtMs: d.expires_at_ms === null ? null : Number(d.expires_at_ms),
       })),
     };

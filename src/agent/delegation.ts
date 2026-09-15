@@ -75,6 +75,17 @@ export const perpAuthorizeUrl = (): string | undefined =>
   process.env.WATERX_PERP_AUTHORIZE_URL?.trim() || undefined;
 
 /**
+ * The authorize link for one agent wallet, carrying its pairing code when it has one.
+ *
+ * `label` because the page already reads it and shows it to the owner. A page
+ * that also writes it into the grant is what brings the code back on chain,
+ * where `adopt` reads it; one that only shows it leaves the grant unpaired, and
+ * adoption falls back to a person's word — so the link is right either way.
+ */
+export const authorizeLink = (page: string, agentWallet: string, alias?: string): string =>
+  `${page}?agent=${agentWallet}` + (alias === undefined ? "" : `&label=${encodeURIComponent(alias)}`);
+
+/**
  * How an owner grants perp trading today: with their own key, through this
  * package.
  *
@@ -112,6 +123,8 @@ export const grantInstruction = (input: {
   agentWallet: string;
   authorizeUrl?: string;
   grantCommand?: string;
+  /** This wallet's pairing code, when one has been issued. */
+  alias?: string;
 }): string => {
   const command =
     input.grantCommand ?? invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
@@ -123,9 +136,14 @@ export const grantInstruction = (input: {
     );
   }
   return (
-    `the owner opens ${input.authorizeUrl}?agent=${input.agentWallet} and signs with their ` +
-    `wallet — the key never leaves the browser. If they would rather not use the ` +
-    `browser, ${command} does the same thing with their key in a terminal`
+    `the owner opens ${authorizeLink(input.authorizeUrl, input.agentWallet, input.alias)} and signs ` +
+    `with their wallet — the key never leaves the browser.` +
+    (input.alias === undefined
+      ? ""
+      : ` The link carries this agent's pairing code, ${input.alias}; a grant that carries it ` +
+        `back is one this agent can tell from anyone else's without a person vouching for it.`) +
+    ` If they would rather not use the browser, ${command} does the same thing with their key ` +
+    `in a terminal`
   );
 };
 
@@ -242,8 +260,9 @@ export function ownerGrantStep(agentWallet: string): {
     why:
       `nothing has been granted to ${agentWallet} yet. The account owner grants it trading ` +
       `permission from their own wallet; they keep the funds, and it needs no SUI of its own. ` +
-      `${DELEGATE_BOUNDARY} Once they have granted it, \`discover\` finds the account and a ` +
-      `person adopts it — nobody copies an id.`,
+      `${DELEGATE_BOUNDARY} Once they have granted it, \`discover\` finds the account — nobody ` +
+      `copies an id — and \`adopt\` takes it on the grant's own evidence when it carries this ` +
+      `agent's pairing code, or on a person's word when it does not.`,
     who: "the account owner",
     command: invoke("onboard", "--json"),
   };
@@ -317,6 +336,8 @@ export function delegationStatus(input: {
   label?: string;
   /** The exact command the owner runs to grant, spelled for where they are. */
   grantCommand?: string;
+  /** This wallet's pairing code, carried in the authorize link when there is one. */
+  alias?: string;
   /** `undefined` when the lookup has not been made; an empty array means none. */
   delegates?: readonly DelegateData[];
 }): DelegationStatus {
@@ -348,7 +369,7 @@ export function delegationStatus(input: {
     grantUrl: reviewUrl,
     ...(authorizePage === undefined
       ? {}
-      : { authorizeUrl: `${authorizePage}?agent=${delegateAddress}` }),
+      : { authorizeUrl: authorizeLink(authorizePage, delegateAddress, input.alias) }),
     ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }),
   };
 
@@ -358,7 +379,7 @@ export function delegationStatus(input: {
       state: "awaiting-grant",
       headline:
         `Give ${delegateAddress} to the account owner. To grant perp trading, ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }), ...(input.alias === undefined ? {} : { alias: input.alias }) })}. ` +
         `They can review and revoke it at ${reviewUrl} (Account → Delegates). ` +
         `Once they have signed, \`discover\` finds the account — no id to copy.`,
     };
@@ -407,7 +428,7 @@ export function delegationStatus(input: {
       state: "not-granted",
       headline:
         `${delegateAddress} is not a delegate of ${accountId}. To grant it, ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }), ...(input.alias === undefined ? {} : { alias: input.alias }) })}. ` +
         `Until they do, every write refuses on chain.`,
     };
   }
@@ -426,7 +447,7 @@ export function delegationStatus(input: {
       headline:
         "The grant is in the superseded authority slot, so every perp action aborts on chain " +
         `(EUnauthorized, surfaced as 6002). It has to be granted again: ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}.`,
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }), ...(input.alias === undefined ? {} : { alias: input.alias }) })}.`,
     };
   }
 

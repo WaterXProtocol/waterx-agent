@@ -13,6 +13,7 @@
 import { list as listApprovals } from "../../src/agent/approvals.ts";
 import { delegationStatus, perpGrantCommand } from "../../src/agent/delegation.ts";
 import { decide } from "../../src/agent/guidance.ts";
+import { loadPairing } from "../../src/agent/pairing.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
 import { signsAsDelegate } from "../../src/config.ts";
@@ -63,9 +64,11 @@ await run(async () => {
     } catch {
       delegates = undefined;
     }
+    const pairing = loadPairing(agent.signer.address, agent.config.network);
     const status = delegationStatus({
       network: agent.config.network,
       delegateAddress: agent.signer.address,
+      ...(pairing === undefined ? {} : { alias: pairing.alias }),
       grantCommand: perpGrantCommand({
         agentWallet: agent.signer.address,
         ...(account === undefined ? {} : { accountId: account }),

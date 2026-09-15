@@ -19,6 +19,8 @@ export interface Adoptable {
   accountId: string;
   /** Read from the Account object — what the agent will act on behalf of. */
   ownerAddress: string;
+  /** The label the grant wrote, read from chain now rather than from discovery earlier. */
+  alias: string;
   expiresAtMs: number | null;
 }
 
@@ -50,5 +52,10 @@ export async function verifyAdoptable(input: {
         `${new Date(entry.expiresAtMs).toISOString()}. The owner must remove it and grant again.`,
     );
   }
-  return { accountId: account.accountId, ownerAddress: account.owner, expiresAtMs: entry.expiresAtMs };
+  return {
+    accountId: account.accountId,
+    ownerAddress: account.owner,
+    alias: entry.alias,
+    expiresAtMs: entry.expiresAtMs,
+  };
 }

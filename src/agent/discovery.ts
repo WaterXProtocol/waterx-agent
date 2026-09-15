@@ -32,6 +32,8 @@ export interface DiscoveredGrant {
   accountId: string;
   /** From the Account object on chain — authoritative. */
   ownerAddress: string;
+  /** The label the grant wrote, from chain — where a pairing code comes back. */
+  alias: string;
   expiresAtMs: number | null;
 }
 
@@ -93,7 +95,12 @@ export async function discoverGrants(delegate: string, deps: DiscoveryDeps): Pro
     // Absent: granted once and since removed. Expired: present, confers nothing.
     if (entry === undefined) return;
     if (entry.expiresAtMs !== null && now >= entry.expiresAtMs) return;
-    grants.push({ accountId, ownerAddress: read.value.owner, expiresAtMs: entry.expiresAtMs });
+    grants.push({
+      accountId,
+      ownerAddress: read.value.owner,
+      alias: entry.alias,
+      expiresAtMs: entry.expiresAtMs,
+    });
   });
 
   return {

@@ -286,6 +286,19 @@ describe("a configured authorize page", () => {
     expect(status.headline).toContain(`${PAGE}?agent=${AGENT}`);
   });
 
+  it("carries this agent's pairing code in the link, as the label the page shows", () => {
+    // The page reads `label` and shows it to the owner; a page that writes it
+    // into the grant brings the code back on chain, where `adopt` checks it.
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+    const alias = "waterx-agent:K7Q2M9XDP4R8";
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT, alias });
+
+    expect(status.authorizeUrl).toBe(`${PAGE}?agent=${AGENT}&label=${encodeURIComponent(alias)}`);
+    expect(status.headline).toContain(status.authorizeUrl);
+    expect(status.headline).toContain(alias);
+  });
+
   it("still names the CLI, because a browser is not always wanted", () => {
     process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
 

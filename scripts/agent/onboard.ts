@@ -9,6 +9,10 @@
  * It reads; it never grants. The grant is the owner's act, made from their own
  * wallet, and an agent that could make it for them would be an agent that could
  * grant itself authority.
+ *
+ * The one thing it writes is local: this wallet's pairing code, minted the first
+ * time and reused after, which the authorize link carries and the owner's grant
+ * writes back on chain — so `adopt` can tell their grant from anybody else's.
  */
 import {
   DELEGATE_BOUNDARY,
@@ -18,15 +22,20 @@ import {
   REQUESTED_PERP_PERMISSIONS,
   requestedPermissions,
 } from "../../src/agent/delegation.ts";
+import { ensurePairing, type Pairing } from "../../src/agent/pairing.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
+import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
+import { UsageError } from "../../src/errors.ts";
 import type { DelegateData } from "../../src/api/types.ts";
 import { initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
   {
     label: {
-      desc: "A name for this agent, shown to the owner on the authorization screen",
+      desc:
+        "A name for this agent, shown to the owner on the authorize page and written into the " +
+        "grant with its pairing code. Used when the code is first minted",
     },
   },
   "onboard",
@@ -39,6 +48,23 @@ await run(async () => {
   // The address only when a key exists. Asking for it otherwise would load one
   // that is not there and fail with a message about wallets.
   const delegateAddress = ready.ready ? agent.signer.address : undefined;
+
+  // Minted before the link is printed, and once per wallet, so a link already
+  // handed to an owner keeps matching the grant they are about to sign.
+  let pairing: Pairing | undefined;
+  if (delegateAddress !== undefined) {
+    try {
+      pairing = ensurePairing({
+        delegate: delegateAddress,
+        network: agent.config.network,
+        ...(args.label === undefined ? {} : { label: args.label }),
+      }).pairing;
+    } catch (error) {
+      throw new UsageError(error instanceof Error ? error.message : String(error));
+    }
+    // `.waterx/` now holds the code; keep it and the ledgers beside it out of git.
+    ensureEnvIgnored();
+  }
   // Derived from the account when only WATERX_ACCOUNT_ID is configured.
   try {
     await agent.resolveIdentity();
@@ -72,6 +98,7 @@ await run(async () => {
           }),
         }),
     ...(delegateAddress === undefined ? {} : { delegateAddress }),
+    ...(pairing === undefined ? {} : { alias: pairing.alias }),
     ...(ownerAddress === undefined ? {} : { ownerAddress }),
     ...(accountId === undefined ? {} : { accountId }),
     ...(delegates === undefined ? {} : { delegates }),
@@ -82,6 +109,10 @@ await run(async () => {
   note("");
   if (status.delegateAddress !== undefined) {
     note(`  agent wallet   ${status.delegateAddress}`);
+  }
+  if (pairing !== undefined) {
+    note(`  pairing code   ${pairing.alias}`);
+    note(`                 the authorize page shows it; a grant that carries it back needs nobody to vouch for it`);
   }
   if (status.ownerAddress !== undefined) note(`  owner          ${status.ownerAddress}`);
   if (status.accountId !== undefined) note(`  account        ${status.accountId}`);
@@ -125,6 +156,7 @@ await run(async () => {
       ...status,
       network: agent.config.network,
       grantCommand: status.grantCommand ?? null,
+      pairingCode: pairing?.alias ?? null,
       requestedPerpPermissions: REQUESTED_PERP_PERMISSIONS,
       requestedPermissionNames: Object.keys(REQUESTED_PERMISSION_NAMES),
       // The same list with what each bit does, so an agent relaying it relays

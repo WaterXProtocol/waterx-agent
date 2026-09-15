@@ -32,13 +32,28 @@ describe("discoverGrants", () => {
         unverifiedAccounts: [],
         truncated: false,
       }),
-      readAccount: vi.fn().mockResolvedValue(account(acct(1), [{ address: ME, expiresAtMs: null }])),
+      readAccount: vi.fn().mockResolvedValue(account(acct(1), [{ address: ME, alias: "", expiresAtMs: null }])),
     });
 
     const result = await discoverGrants(ME, d);
 
     expect(result.source).toBe("backend");
-    expect(result.grants).toEqual([{ accountId: acct(1), ownerAddress: OWNER, expiresAtMs: null }]);
+    expect(result.grants).toEqual([{ accountId: acct(1), ownerAddress: OWNER, alias: "", expiresAtMs: null }]);
+  });
+
+  it("reports the alias each grant wrote, which is where a pairing code comes back", async () => {
+    const d = deps({
+      delegatedAccounts: vi.fn().mockResolvedValue({
+        accounts: [{ accountId: acct(1), ownerAddress: null, delegate: {} }],
+        unverifiedAccounts: [],
+        truncated: false,
+      }),
+      readAccount: vi.fn().mockResolvedValue(
+        account(acct(1), [{ address: ME, alias: "waterx-agent:K7Q2M9XDP4R8", expiresAtMs: null }]),
+      ),
+    });
+
+    expect((await discoverGrants(ME, d)).grants[0]?.alias).toBe("waterx-agent:K7Q2M9XDP4R8");
   });
 
   it("does not count a grant the chain no longer holds, or one that has expired", async () => {
@@ -53,7 +68,7 @@ describe("discoverGrants", () => {
       readAccount: vi.fn(async (id: string) =>
         id === acct(1)
           ? account(id, [])
-          : account(id, [{ address: ME, expiresAtMs: 999_999 }]),
+          : account(id, [{ address: ME, alias: "", expiresAtMs: 999_999 }]),
       ),
     });
 
@@ -64,7 +79,7 @@ describe("discoverGrants", () => {
     const d = deps({
       delegatedAccounts: vi.fn().mockRejectedValue(new Error("GET /account/delegated → HTTP 404")),
       recentGrantEvents: vi.fn().mockResolvedValue([acct(7)]),
-      readAccount: vi.fn().mockResolvedValue(account(acct(7), [{ address: ME, expiresAtMs: null }])),
+      readAccount: vi.fn().mockResolvedValue(account(acct(7), [{ address: ME, alias: "", expiresAtMs: null }])),
     });
 
     const result = await discoverGrants(ME, d);
@@ -97,7 +112,7 @@ describe("discoverGrants", () => {
         unverifiedAccounts: [],
         truncated: false,
       }),
-      readAccount: vi.fn(async (id: string) => account(id, [{ address: ME, expiresAtMs: null }])),
+      readAccount: vi.fn(async (id: string) => account(id, [{ address: ME, alias: "", expiresAtMs: null }])),
     });
 
     expect((await discoverGrants(ME, d)).grants).toHaveLength(2);
@@ -108,7 +123,7 @@ describe("discoverGrants", () => {
     const d = deps({
       delegatedAccounts: vi.fn().mockRejectedValue(new Error("down")),
       recentGrantEvents: vi.fn().mockResolvedValue([acct(5), upper(acct(5))]),
-      readAccount: vi.fn().mockResolvedValue(account(acct(5), [{ address: ME, expiresAtMs: null }])),
+      readAccount: vi.fn().mockResolvedValue(account(acct(5), [{ address: ME, alias: "", expiresAtMs: null }])),
     });
 
     const result = await discoverGrants(upper(ME), d);

@@ -20,7 +20,7 @@ describe("accountObjectReader", () => {
     await expect(read(ID)).rejects.toBeInstanceOf(AccountNotFoundError);
   });
 
-  it("decodes the owner and each delegate's expiry from the object", async () => {
+  it("decodes the owner and each delegate's alias and expiry from the object", async () => {
     // Round-trip through the SDK's own codec, so this tests the reader's
     // mapping and not a hand-encoded guess at the layout.
     const Account = wxaAccountCalls.Account as unknown as {
@@ -35,7 +35,7 @@ describe("accountObjectReader", () => {
         delegates: [
           {
             delegate_address: DELEGATE,
-            alias: "",
+            alias: "waterx-agent:K7Q2M9XDP4R8",
             permissions: 0,
             protocol_permissions: { contents: [] },
             expires_at_ms: "1700000000000",
@@ -56,6 +56,8 @@ describe("accountObjectReader", () => {
     const result = await read(ID);
 
     expect(result.owner).toBe(OWNER);
-    expect(result.delegates).toEqual([{ address: DELEGATE, expiresAtMs: 1_700_000_000_000 }]);
+    expect(result.delegates).toEqual([
+      { address: DELEGATE, alias: "waterx-agent:K7Q2M9XDP4R8", expiresAtMs: 1_700_000_000_000 },
+    ]);
   });
 });

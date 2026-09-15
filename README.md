@@ -360,17 +360,35 @@ Once the owner has granted the wallet, the agent finds the account itself:
 
 ```bash
 npx waterx discover --wait 300 --json   # which accounts grant this wallet, confirmed on chain
-npx waterx adopt --account <id> --approver <your name> --json
+npx waterx adopt --account <id> --json  # when the grant carries this agent's pairing code
 ```
 
 `discover` asks the backend's delegate index (`GET /account/delegated`) and,
 where that is not deployed, recent on-chain grant events — then reads every
 candidate account from chain, so a removed or expired grant never counts and the
 owner comes from the account object rather than from anyone's typing. It lists;
-it never adopts. An address can be made a delegate of **anyone's** account
-without its consent, so finding a grant is not knowing which account to trade.
-`adopt` is that choice, made by a named person: it re-checks the grant, writes
-`WATERX_ACCOUNT_ID`, and records who chose.
+it never adopts.
+
+An address can be made a delegate of **anyone's** account without its consent,
+so finding a grant is not knowing which account to trade. What settles it is
+evidence, and `adopt` records which kind it was:
+
+- **The pairing code.** `onboard` mints a code for this wallet and puts it in
+  the authorize link as `label`, and a console that supports it writes the
+  code into the owner's delegate entry on chain. A grant carrying it was made
+  through this agent's link — the agent cannot write it into somebody else's
+  account, and a stranger
+  who never saw the link cannot guess it — so `adopt --account <id>` takes it
+  without asking anyone. The code is public once a grant has used it, so if a
+  second grant carries it, one of them is a copy and a person decides instead.
+- **A person's word.** A grant without the code — built by a console or backend
+  that does not write it yet, or by anybody else — could be anyone's.
+  `adopt --account <id> --approver "<their name>"` takes it on that person's
+  say-so, and `.waterx/adoptions.jsonl` records it as an attestation: a name is a
+  claim, and nothing here verifies it.
+
+Either way `adopt` re-checks the grant on chain and writes `WATERX_ACCOUNT_ID`,
+and nothing else.
 
 `WATERX_OWNER_ADDRESS` is no longer needed. The owner is read from the account
 at run time and a delegate key is recognised by comparing it with that owner;

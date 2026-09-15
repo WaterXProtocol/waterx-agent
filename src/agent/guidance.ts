@@ -192,7 +192,8 @@ export function decide(s: Situation): Guidance {
           `keep the funds, and it needs no SUI of its own because the backend sponsors a ` +
           `delegate's transactions. ${DELEGATE_BOUNDARY} Ask them to grant it; then ` +
           `\`discover\` finds the account on its own. Nobody has to copy an account id or an ` +
-          `owner address — but a person does have to confirm the account before it is adopted.`,
+          `owner address, and when their grant carries this agent's pairing code nobody has to ` +
+          `vouch for the account either; otherwise a person confirms it before it is adopted.`,
         suggestions: [
           {
             what: "the address to hand over, and where the owner grants it",

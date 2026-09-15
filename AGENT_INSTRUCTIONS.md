@@ -255,6 +255,16 @@ the field that matters:
 Relay those verbatim rather than paraphrasing — the reasons are specific and the
 paraphrase usually loses them.
 
+**Adopting the account.** After the owner signs, `discover` finds the account.
+If the grant carries this agent's pairing code and no other grant does,
+`discover` ends `ok` with `adopt --account <id> --json` as its `nextCommand` —
+run it; nobody has to vouch for that grant. Otherwise the status is
+`needs-approval`: anyone can make this wallet a delegate of their own account,
+so show the person the account and the owner address **in full**, and adopt only
+with `--approver "<their name>"`, using the name they give you. Never supply one
+yourself. The record calls it their attestation, and a name you chose would make
+it a false one.
+
 ```json
 {
   "what": "trading collateral",
