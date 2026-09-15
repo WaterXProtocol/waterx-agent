@@ -19,7 +19,7 @@ describe("verifyAdoptable", () => {
     const result = await verifyAdoptable({
       accountId: ID,
       delegate: ME,
-      readAccount: reader({ delegates: [{ address: ME, expiresAtMs: null }] }),
+      readAccount: reader({ delegates: [{ address: ME, expiresAtMs: null, protocolPermissions: new Map() }] }),
     });
 
     expect(result).toEqual({ accountId: ID, ownerAddress: OWNER, expiresAtMs: null });
@@ -38,7 +38,7 @@ describe("verifyAdoptable", () => {
       verifyAdoptable({
         accountId: ID,
         delegate: ME,
-        readAccount: reader({ delegates: [{ address: ME, expiresAtMs: 5 }] }),
+        readAccount: reader({ delegates: [{ address: ME, expiresAtMs: 5, protocolPermissions: new Map() }] }),
         now: 10,
       }),
     ).rejects.toThrow(/expired/);
@@ -55,7 +55,7 @@ describe("verifyAdoptable", () => {
     const result = await verifyAdoptable({
       accountId: ID,
       delegate: upper,
-      readAccount: reader({ delegates: [{ address: ME, expiresAtMs: null }] }),
+      readAccount: reader({ delegates: [{ address: ME, expiresAtMs: null, protocolPermissions: new Map() }] }),
     });
 
     expect(result.ownerAddress).toBe(OWNER);

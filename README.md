@@ -350,7 +350,9 @@ Two states are worth knowing about, because both look like success:
 
 - **A stale grant** lands in the superseded `TradingRequest<CREDIT>` slot. It
   reads as fully permissioned and aborts `EUnauthorized` on every order,
-  surfacing as a generic `6002`. `onboard` and `doctor` both name it.
+  surfacing as a generic `6002`. `onboard` and `doctor` both name it, and
+  `doctor` reads the slot from the Account object on chain, so a healthy grant
+  is reported as confirmed rather than as unknown.
 - **A failed lookup is not a revocation.** An unreadable chain is reported as
   unconfirmed, never as "the owner took it away".
 
