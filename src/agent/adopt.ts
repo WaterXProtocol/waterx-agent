@@ -1,10 +1,10 @@
 /**
  * Whether an account can be adopted by this wallet: settled on chain, not taken on trust.
  *
- * `discover` found it; a person chose it; this is the last check before the
- * choice is written down. It re-reads the account because minutes may have
- * passed and the grant may be gone — and because the account id reached here
- * from a command line, which is not a source of truth.
+ * `discover` found it; this is the last check before it is written down. It
+ * re-reads the account because minutes may have passed and the grant may be
+ * gone — and because the account id reached here from a command line, which is
+ * not a source of truth.
  */
 import { normalizeSuiAddress } from "@mysten/sui/utils";
 

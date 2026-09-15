@@ -14,9 +14,8 @@
  * so a removed or expired grant never counts and the owner comes from the
  * object itself rather than from an index.
  *
- * It never chooses. `add_delegate` needs no consent from the delegate: anyone
- * can make this address a delegate of THEIR account. So one grant found is not
- * the account to trade — adopting it is a person's decision (`adopt`).
+ * It never chooses: adopting is `adopt`'s job. When more than one grant is
+ * found, which account the agent trades is a person's choice.
  */
 import { normalizeSuiAddress } from "@mysten/sui/utils";
 

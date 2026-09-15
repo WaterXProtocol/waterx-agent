@@ -29,7 +29,9 @@ describe("keeping the key out of git", () => {
     asRepo(dir);
     const result = ensureEnvIgnored(dir);
     expect(result.kind).toBe("added");
-    expect(readFileSync(join(dir, ".gitignore"), "utf8")).toContain(".env");
+    const written = readFileSync(join(dir, ".gitignore"), "utf8");
+    expect(written).toContain(".env");
+    expect(written).toContain(".waterx/");
   });
 
   it("appends to one that exists, without disturbing what is there", () => {
@@ -42,18 +44,39 @@ describe("keeping the key out of git", () => {
     expect(after).toContain(".env");
   });
 
-  it("leaves an already-ignored project alone", () => {
+  it("leaves a project that already ignores both alone", () => {
     asRepo(dir);
-    writeFileSync(join(dir, ".gitignore"), "# mine\n.env\n");
+    writeFileSync(join(dir, ".gitignore"), "# mine\n.env\n.waterx/\n");
     expect(ensureEnvIgnored(dir).kind).toBe("already");
-    expect(readFileSync(join(dir, ".gitignore"), "utf8")).toBe("# mine\n.env\n");
+    expect(readFileSync(join(dir, ".gitignore"), "utf8")).toBe("# mine\n.env\n.waterx/\n");
   });
 
-  it("recognises the wildcard spellings people actually use", () => {
+  it("still adds .waterx/ to a project that already ignored .env", () => {
+    // The gap a real install fell into: its agent wrote this .gitignore before
+    // the key existed, `.env` read as handled, and the ledger of who adopted
+    // which account was one `git add .` from being committed.
+    asRepo(dir);
+    const theirs = ".env\n.env.*\n!.env.example\nnode_modules/\n";
+    writeFileSync(join(dir, ".gitignore"), theirs);
+    const result = ensureEnvIgnored(dir);
+    expect(result).toMatchObject({ kind: "added", added: [".waterx/"] });
+    const after = readFileSync(join(dir, ".gitignore"), "utf8");
+    expect(after.startsWith(theirs)).toBe(true);
+    expect(after.match(/^\.env$/gmu)).toHaveLength(1);
+    expect(after).toContain(".waterx/");
+  });
+
+  it("recognises the spellings people actually use, for both", () => {
     for (const rule of ["*.env", ".env*"]) {
       const at = mkdtempSync(join(tmpdir(), "waterx-secrets-"));
       asRepo(at);
-      writeFileSync(join(at, ".gitignore"), `${rule}\n`);
+      writeFileSync(join(at, ".gitignore"), `${rule}\n.waterx/\n`);
+      expect(ensureEnvIgnored(at).kind, rule).toBe("already");
+    }
+    for (const rule of [".waterx", "/.waterx/", ".waterx/**"]) {
+      const at = mkdtempSync(join(tmpdir(), "waterx-secrets-"));
+      asRepo(at);
+      writeFileSync(join(at, ".gitignore"), `.env\n${rule}\n`);
       expect(ensureEnvIgnored(at).kind, rule).toBe("already");
     }
   });

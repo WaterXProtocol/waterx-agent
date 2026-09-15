@@ -2,10 +2,10 @@
  * Find the accounts that have granted this wallet, and confirm each on chain.
  *
  * The step after an owner signs. It used to be a person copying an account id
- * and an owner address into `.env`; now the wallet asks. It never adopts: an
- * address can be made a delegate of anyone's account without its consent, so
- * finding a grant is not knowing which account to trade. That is a person's
- * call, made with `adopt --approver`.
+ * and an owner address into `.env`; now the wallet asks. It never adopts — that
+ * is `adopt`, which re-checks the grant before writing anything. One grant found
+ * is handed straight to it. More than one is a choice between accounts, and a
+ * choice of whose money to trade is not something to guess, so that one is asked.
  */
 import { discoverGrants, type DiscoveryDeps } from "../../src/agent/discovery.ts";
 import { accountObjectReader } from "../../src/chain/account-object.ts";
@@ -101,7 +101,7 @@ await run(async () => {
   }
 
   const adoptCommand = (accountId: string): string =>
-    invoke("adopt", "--account", accountId, "--approver <who>", "--json");
+    invoke("adopt", "--account", accountId, "--json");
   const configured = agent.config.accountId?.toLowerCase();
 
   note("");
@@ -155,23 +155,19 @@ await run(async () => {
     return;
   }
 
-  // Found. Never adopted here: a grant needs no consent from this wallet, so
-  // "an account grants me" is not "the account I am meant to trade".
+  // Found. Never adopted here: `adopt` re-checks the grant and writes it down.
+  // One grant goes straight on; between several, which account to trade is a
+  // choice, and guessing it would be choosing whose money to trade at random.
   const [only] = result.grants;
   setOutcome(
     result.grants.length === 1 && only !== undefined
-      ? {
-          ...quiet,
-          status: "needs-approval",
-          message: `${only.accountId}, owned by ${only.ownerAddress}, grants this wallet. A person must confirm this is the account to trade — anyone can grant an address without its consent — and adopt it under their own name.`,
-          retryable: false,
-          awaitingApproval: true,
+      ? succeeded(`${only.accountId}, owned by ${only.ownerAddress}, grants this wallet. Adopt it.`, {
           nextCommand: adoptCommand(only.accountId),
-        }
+        })
       : {
           ...quiet,
           status: "needs-approval",
-          message: `${String(result.grants.length)} accounts grant this wallet. A person must choose which one it trades; do not pick one. Each grant lists its own adopt command.`,
+          message: `${String(result.grants.length)} accounts grant this wallet. Which one it trades is a choice, not a guess: ask which, then run that grant's adopt command.`,
           retryable: false,
           awaitingApproval: true,
         },

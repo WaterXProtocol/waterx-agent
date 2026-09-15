@@ -191,8 +191,8 @@ export function decide(s: Situation): Guidance {
           `that the account owner grants THIS address permission to trade their account — they ` +
           `keep the funds, and it needs no SUI of its own because the backend sponsors a ` +
           `delegate's transactions. ${DELEGATE_BOUNDARY} Ask them to grant it; then ` +
-          `\`discover\` finds the account on its own. Nobody has to copy an account id or an ` +
-          `owner address — but a person does have to confirm the account before it is adopted.`,
+          `\`discover\` finds the account on its own and \`adopt\` takes it. Nobody has to copy an ` +
+          `account id or an owner address.`,
         suggestions: [
           {
             what: "the address to hand over, and where the owner grants it",

@@ -430,7 +430,7 @@ export function requireAccountId(config: AgentConfig): string {
       // owner path spelled as if it were the only one, in a checkout's syntax.
       "No WaterX account configured. A delegate gets one from its owner: `onboard` says what to " +
         "ask them for, `discover` finds the account once they have granted this wallet, and " +
-        "`adopt` records which one a person chose — no id to copy. A wallet that should hold an " +
+        "`adopt` writes it down — no id to copy. A wallet that should hold an " +
         "account of its own creates it with `bootstrap --create-account --yes`, which writes " +
         "WATERX_ACCOUNT_ID itself.",
     );

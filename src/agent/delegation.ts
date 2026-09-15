@@ -17,7 +17,7 @@
  * What this module does NOT do is find the account or choose it. `discover`
  * finds the accounts that granted this wallet — the backend's delegate index
  * where it is deployed, recent grant events where it is not — and `adopt`
- * records which one a person chose. This module reads where the handshake has
+ * writes down the one it takes. This module reads where the handshake has
  * got to, and what it reports is checked against the chain rather than believed.
  */
 import {
@@ -242,8 +242,8 @@ export function ownerGrantStep(agentWallet: string): {
     why:
       `nothing has been granted to ${agentWallet} yet. The account owner grants it trading ` +
       `permission from their own wallet; they keep the funds, and it needs no SUI of its own. ` +
-      `${DELEGATE_BOUNDARY} Once they have granted it, \`discover\` finds the account and a ` +
-      `person adopts it — nobody copies an id.`,
+      `${DELEGATE_BOUNDARY} Once they have granted it, \`discover\` finds the account and ` +
+      `\`adopt\` takes it — nobody copies an id.`,
     who: "the account owner",
     command: invoke("onboard", "--json"),
   };
@@ -382,7 +382,7 @@ export function delegationStatus(input: {
       state: "awaiting-grant",
       headline:
         `The owner is ${ownerAddress} but no account has been adopted. Once they have granted ` +
-        `${delegateAddress}, \`discover\` finds the account and a person adopts it — no id to copy.`,
+        `${delegateAddress}, \`discover\` finds the account and \`adopt\` takes it — no id to copy.`,
     };
   }
 

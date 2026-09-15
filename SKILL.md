@@ -66,7 +66,7 @@ and **ask for anything in `needsFromUser` instead of choosing it**.
 | `unsettled` | Something was sent and nobody knows what happened. Reconcile before anything else. |
 | `awaiting-approval` | A preview is waiting on them. Show it and ask. |
 | `not-set-up` | Run `bootstrap` and relay what is still missing — some of it needs an operator. |
-| `awaiting-grant` | A wallet exists and nothing has been granted to it. Give the address to the account owner — `onboard` prints where they grant it. When they say they have signed, run `discover`: it finds the account, confirms the grant on chain, and reads the owner off the account. **It never adopts.** Anyone can grant an address without its consent, so show the person the account and owner it found and let *them* run `adopt --approver <their name>`; do not run it for them. The agent needs no SUI, no account and no collateral of its own. |
+| `awaiting-grant` | A wallet exists and nothing has been granted to it. Give the address to the account owner — `onboard` prints where they grant it. When they say they have signed, run `discover`: it finds the account, confirms the grant on chain, and reads the owner off the account. **It never adopts.** With one grant, its `nextCommand` is `adopt --account <id>` — run it; no name is needed, and `--approver` is only for a name the person gives you. With several, ask which account; never pick one. The agent needs no SUI, no account and no collateral of its own. |
 | `not-delegated` | The owner granted nothing, or the grant is stale. Run `onboard` and relay it — only they can fix it. |
 | `read-only` | Nothing can be signed. On mainnet that is the default and changing it is their decision. |
 | `no-collateral` | Set up, but nothing to commit. Gas is not collateral; this one needs an operator. |
@@ -167,7 +167,7 @@ Exit codes carry the same answer: `0` ok, `2` usage, `3` config, `4` auth,
 | `limits` | The execution policy and risk ceilings this process is bound by |
 | `onboard` | The delegate handshake: what the owner still has to grant, and where |
 | `discover` | Which accounts have granted this wallet — each confirmed on chain, owner read from the account. Lists; never chooses |
-| `adopt` | A person adopts one account by name (`--approver`). Re-checks the grant, writes `WATERX_ACCOUNT_ID`, records who chose |
+| `adopt` | Adopts one account: re-checks the grant, writes `WATERX_ACCOUNT_ID`, and records it under `--approver` if given, otherwise under a generated id marked as generated |
 | `approvals` | Previewed plans, who approved them, and anything unsettled |
 
 **Write — always through preview → approve → execute.**
