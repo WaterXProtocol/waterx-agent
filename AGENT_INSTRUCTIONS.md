@@ -22,18 +22,18 @@ the root — so ask rather than guessing a path.
 ## 1. How to call anything
 
 ```bash
-node bin/waterx.mjs <command> [options] --json
+npx waterx <command> [options] --json
 ```
 
-From a checkout; `npx waterx <command> … --json` from a project that installed
-the tarball. Identical otherwise.
+From a project that installed the package; `node bin/waterx.mjs <command> …
+--json` from a checkout. Identical otherwise.
 
 - `--json` — exactly one JSON document on stdout and nothing else, for the whole
   life of the process. Everything human-readable goes to stderr.
-- `bin/waterx.mjs` rather than `pnpm run` — the package manager writes a banner
-  to stdout, which is the first thing your parser would see.
-  `node bin/waterx.mjs <command> --json` is equivalent, and one forgotten word
-  away from an unparseable response.
+- `npx waterx` — or `bin/waterx.mjs` in a checkout — rather than `pnpm run`:
+  the package manager writes a banner to stdout, which is the first thing your
+  parser would see. `pnpm --silent run <command> -- --json` is equivalent, and
+  one forgotten word away from an unparseable response.
 
 If stdout does not parse as JSON, you called it another way. Do not try to
 repair the output; fix the call.
@@ -103,14 +103,14 @@ transaction in flight. `suggestions[].needsFromUser` names the values you must
 ask for rather than choose.
 
 ```bash
-node bin/waterx.mjs next --json
+npx waterx next --json
 ```
 
 ```bash
-node bin/waterx.mjs doctor --json      # is anything blocking reads or writes?
-node bin/waterx.mjs balance --json     # freeMargin is what a new order may commit
-node bin/waterx.mjs positions --json
-node bin/waterx.mjs ticker --ticker BTC --json
+npx waterx doctor --json      # is anything blocking reads or writes?
+npx waterx balance --json     # freeMargin is what a new order may commit
+npx waterx positions --json
+npx waterx ticker --ticker BTC --json
 ```
 
 Check `writeReady` **before** previewing a write. A preview on a process with
@@ -125,7 +125,7 @@ false` names exactly what is missing — a key, an account id, a policy — in
 ### preview
 
 ```bash
-node bin/waterx.mjs preview --action open-long --ticker SUI \
+npx waterx preview --action open-long --ticker SUI \
   --collateral 10 --leverage 2 --slippage 0.5 --json
 ```
 
@@ -143,7 +143,7 @@ does not know how large a trade should be must ask, not guess. Say so plainly:
 ### approve
 
 ```bash
-node bin/waterx.mjs approve --id apr_… --approver "<the user's name>" --json
+npx waterx approve --id apr_… --approver "<the user's name>" --json
 ```
 
 A person's decision, recorded with their name and the time. Run it **only**
@@ -152,7 +152,7 @@ after the user has seen the preview and agreed to it, and pass their name.
 To record a refusal instead — which is kept, not deleted:
 
 ```bash
-node bin/waterx.mjs approve --id apr_… --approver "<name>" --reject --reason "too large" --json
+npx waterx approve --id apr_… --approver "<name>" --reject --reason "too large" --json
 ```
 
 An approval expires (10 minutes by default, `WATERX_APPROVAL_TTL_SECONDS`),
@@ -162,7 +162,7 @@ previewed again, never approved late.
 ### execute
 
 ```bash
-node bin/waterx.mjs execute --id apr_… --json
+npx waterx execute --id apr_… --json
 ```
 
 Submits the approved plan **unchanged**. Nothing is re-derived — the size and
@@ -172,8 +172,8 @@ one transaction; a second `execute` on the same id is refused.
 ### reconcile
 
 ```bash
-node bin/waterx.mjs reconcile --id sub_… --json     # one submission
-node bin/waterx.mjs reconcile --all --json          # everything outstanding
+npx waterx reconcile --id sub_… --json     # one submission
+npx waterx reconcile --all --json          # everything outstanding
 ```
 
 Answers "did it land?" from the chain, and "what became of the order?" from the
@@ -195,7 +195,7 @@ does not exist.
    the key. Do not read `.env` to answer a question about "the wallet"; the
    address is what people mean, and `doctor` prints it.
 7. **Clear your outstanding submissions before trading again.**
-   `node bin/waterx.mjs approvals --json` lists any that nobody settled.
+   `npx waterx approvals --json` lists any that nobody settled.
 
 ## 6. The ambiguous case, in detail
 
@@ -233,7 +233,7 @@ One command does everything that can be done without a person, and returns the
 rest as structured work:
 
 ```bash
-node bin/waterx.mjs bootstrap --json
+npx waterx bootstrap --json
 ```
 
 It generates a wallet if there is none, asks the testnet faucet for gas only if
@@ -269,12 +269,12 @@ mock USDsui on testnet — and there is no self-service route to it. A wallet ca
 have plenty of gas and be unable to trade at all. This is the step that
 surprises people; say it plainly rather than retrying `deposit`.
 
-**Risk limits.** `node bin/waterx.mjs limits --json` reports the execution
+**Risk limits.** `npx waterx limits --json` reports the execution
 policy and the ceilings in force. To write a scope file for unattended
 (`delegated-auto`) trading:
 
 ```bash
-node bin/waterx.mjs limits --write policy.json \
+npx waterx limits --write policy.json \
   --accounts 0x… --markets BTCUSD,ETHUSD --sides long \
   --max-collateral-per-order 50 --max-cumulative-collateral 200 \
   --max-leverage 5 --max-slippage-percent 1 \

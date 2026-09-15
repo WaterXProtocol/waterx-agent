@@ -292,7 +292,7 @@ account, and grants a **separate** wallet — the agent's — permission to trad
 on it. The agent holds only the delegate key.
 
 ```bash
-node bin/waterx.mjs onboard --json
+npx waterx onboard --json
 ```
 
 A delegate needs **nothing**: no SUI, because the backend sponsors its
