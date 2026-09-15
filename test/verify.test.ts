@@ -30,6 +30,7 @@ import {
   assertTransactionMatches,
   entrypointsOf,
 } from "../src/chain/verify.ts";
+import { corpusFor, type NetworkCorpus } from "../src/chain/corpus.ts";
 import { ExecutionPolicyError } from "../src/errors.ts";
 import {
   UNBINDABLE_INTENT_FIELDS,
@@ -2430,34 +2431,59 @@ describe("an action that needs a way back", () => {
     ticker: "SUIUSD",
   };
 
+  /**
+   * Deployments with and without the gap, built rather than borrowed.
+   *
+   * These tests used to lean on mainnet's committed record having the gap, so
+   * the day its cancel was captured they would have failed for a reason that
+   * had nothing to do with the rule. The rule is about the gap; the gap is
+   * supplied here, on top of a real record so the siblings are real ones.
+   */
+  const CANCEL = "trading::cancel_order_request";
+  const measured = corpusFor("mainnet");
+  const noWayBack: NetworkCorpus = {
+    ...measured,
+    captured: Object.fromEntries(Object.entries(measured.captured).filter(([e]) => e !== CANCEL)),
+    uncaptured: { ...measured.uncaptured, [CANCEL]: "needs a resting order, and ORDER_ID named none" },
+  };
+  const wayBack: NetworkCorpus = {
+    ...measured,
+    uncaptured: Object.fromEntries(Object.entries(measured.uncaptured).filter(([e]) => e !== CANCEL)),
+  };
+
   it("refuses a resting order when the cancel is unconfirmed", () => {
-    // `mainnet` is the deployment where that is true today.
-    expect(() => assertLayoutConfirmed(resting, [], "mainnet")).toThrow(
+    expect(() => assertLayoutConfirmed(resting, [], "mainnet", noWayBack)).toThrow(
       /the call that takes it back/,
     );
   });
 
   it("states the evidence rather than only the verdict", () => {
     // An operator deciding whether to accept this should be deciding with the
-    // facts: six sibling entrypoints in the same module are confirmed.
-    expect(() => assertLayoutConfirmed(resting, [], "mainnet")).toThrow(/corroboration, not proof/);
+    // facts: sibling entrypoints in the same module are confirmed.
+    expect(() => assertLayoutConfirmed(resting, [], "mainnet", noWayBack)).toThrow(
+      /corroboration, not proof/,
+    );
+  });
+
+  it("says who can capture it, not a command an installed package cannot run", () => {
+    // "Re-run `pnpm run capture-corpus`" sent an installed reader after a
+    // maintainer tool `waterx` refuses to run, leaving the allowance as the only
+    // remedy anyone could act on.
+    expect(() => assertLayoutConfirmed(resting, [], "mainnet", noWayBack)).toThrow(/maintainer step/);
   });
 
   it("allows it once the cancel is named deliberately", () => {
-    expect(() =>
-      assertLayoutConfirmed(resting, ["trading::cancel_order_request"], "mainnet"),
-    ).not.toThrow();
+    expect(() => assertLayoutConfirmed(resting, [CANCEL], "mainnet", noWayBack)).not.toThrow();
   });
 
   it("costs nothing where the cancel is confirmed", () => {
-    // testnet has both, so the rule is silent there — a coupling that fired
-    // everywhere would just be an outage.
-    expect(() => assertLayoutConfirmed(resting, [], "testnet")).not.toThrow();
+    // A coupling that fired everywhere would just be an outage.
+    expect(() => assertLayoutConfirmed(resting, [], "mainnet", wayBack)).not.toThrow();
   });
 
   it("does not restrain a market order, which needs no cancel", () => {
     expect(() =>
-      assertLayoutConfirmed({ ...resting, action: "openLong" }, [], "mainnet"),
+      assertLayoutConfirmed({ ...resting, action: "openLong" }, [], "mainnet", noWayBack),
     ).not.toThrow();
   });
 });

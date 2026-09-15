@@ -13,6 +13,7 @@
  * minute ago is still the right one to check against.
  */
 import { ExecutionPolicyError } from "../errors.ts";
+import { CAPTURING_LAYOUTS } from "./corpus.ts";
 
 export interface Deployment {
   /**
@@ -374,8 +375,8 @@ export function assertCorpusDescribes(
     `The argument layouts this agent checks against were captured on ${capturedAt}, against a ` +
       `deployment that has since changed: ${moved.join(", ")}. Every positional check is now ` +
       `unverified against the running contract — a parameter may have moved, and a check ` +
-      `reading the old position would pass on the wrong value. Re-run ` +
-      `\`pnpm run capture-corpus\` and look at what changed before trading.`,
+      `reading the old position would pass on the wrong value — so writes refuse until the ` +
+      `layouts are captured again and someone has looked at what changed. ${CAPTURING_LAYOUTS}`,
   );
 }
 

@@ -79,6 +79,22 @@ export const hasCorpusFor = (network: Network): boolean =>
   file2.networks[network] !== undefined;
 
 /**
+ * Who captures argument layouts — said once, for every message that needs it.
+ *
+ * Capturing runs from a checkout of the repository, against accounts in the
+ * state each entrypoint needs, and an installed package does not carry the tool:
+ * `waterx capture-corpus` refuses by design. Every refusal and preflight used to
+ * end "re-run `pnpm run capture-corpus`", which sent a reader who had installed
+ * the package after a command they cannot run — and a careful agent, finding
+ * that closed, stopped at the only other remedy on offer, which was switching
+ * the check off. So this names who can do it and what an install gets instead.
+ */
+export const CAPTURING_LAYOUTS =
+  "Capturing layouts is a maintainer step — `pnpm run capture-corpus`, from a checkout of " +
+  "github.com/WaterXProtocol/waterx-agent — and an installed package picks them up by reinstalling " +
+  "once the capture is published.";
+
+/**
  * What else in the same contract module HAS been confirmed on this deployment.
  *
  * An uncaptured entrypoint is not one fact but two, and the fixture used to
@@ -101,8 +117,11 @@ export interface Corroboration {
   package: string | undefined;
 }
 
-export function corroborationFor(network: Network, entrypoint: string): Corroboration {
-  const record = corpusFor(network);
+export function corroborationFor(
+  network: Network,
+  entrypoint: string,
+  record: NetworkCorpus = corpusFor(network),
+): Corroboration {
   const pkg = ABI[entrypoint]?.pkg;
   const module = entrypoint.split("::")[0];
   if (pkg === undefined || module === undefined) return { siblings: [], package: pkg };
@@ -113,8 +132,12 @@ export function corroborationFor(network: Network, entrypoint: string): Corrobor
 }
 
 /** One sentence of evidence, or none when there is none. */
-export function corroborationNote(network: Network, entrypoint: string): string {
-  const { siblings, package: pkg } = corroborationFor(network, entrypoint);
+export function corroborationNote(
+  network: Network,
+  entrypoint: string,
+  record: NetworkCorpus = corpusFor(network),
+): string {
+  const { siblings, package: pkg } = corroborationFor(network, entrypoint, record);
   if (siblings.length === 0) {
     return `Nothing else in ${pkg ?? "its package"} has been confirmed here either.`;
   }

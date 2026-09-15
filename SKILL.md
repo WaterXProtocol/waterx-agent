@@ -223,11 +223,12 @@ commit money it does not have.
   the account itself. That is opt-in: `bootstrap --create-account --yes`.
 - **Some actions refuse under default settings, by design.** Their argument
   layouts have never been confirmed against that deployment, and the verifier
-  will not read positions nobody measured. On testnet that is `burnWlp`,
-  `cancelWlpBurn` and `claimWlpRewards`; on mainnet it is also `cancelOrder` and
-  `updateOrder` — and therefore `placeLimitOrder` and `placeTpSl`, because the
-  agent will not place an order it has no confirmed way to cancel. `doctor` names them for the network you are on. This is
-  expected and is not a fault to work around.
+  will not read positions nobody measured. On both networks today that is
+  `burnWlp`, `cancelWlpBurn` and `claimWlpRewards`. Wherever cancelling is
+  unconfirmed, `placeLimitOrder` and `placeTpSl` refuse too, because the agent
+  will not place an order it has no confirmed way to take back. `doctor` names
+  them for the network you are on. This is expected and is not a fault to work
+  around.
 - **Mainnet needs setup that testnet does not** — a policy someone typed, and
   package exceptions `doctor` prints. Run `npx waterx doctor --json`
   first and report what it says rather than trying to trade through it.

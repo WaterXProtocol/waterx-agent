@@ -30,7 +30,7 @@ import {
 } from "./chain/deployment.ts";
 import { ACTION_RULES, NEEDS_A_WAY_BACK, usesByPackage } from "./chain/verify.ts";
 import { KNOWN_FUNCTIONS } from "./chain/abi.generated.ts";
-import { corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
+import { CAPTURING_LAYOUTS, corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
 import { PolicyGate } from "./policy.ts";
 import { normalizeSuiAddress } from "@mysten/sui/utils";
 import { accountObjectReader } from "./chain/account-object.ts";
@@ -548,18 +548,15 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
             `no argument layouts have ever been captured on ${config.network}. Every positional ` +
               `check reads them, so no write can be signed here — this is "we have never ` +
               `measured this deployment", not "there is nothing to measure". Measured: ` +
-              `${measuredNetworks().join(", ") || "none"}. Run \`pnpm run capture-corpus\` from a `  +
-              `checkout of this repository — the installed package does not carry it — ` +
-              `against ${config.network}.`,
+              `${measuredNetworks().join(", ") || "none"}. ${CAPTURING_LAYOUTS}`,
           )
         : moved.length > 0
         ? fail(
             "abi corpus",
             `the argument layouts were captured on ${corpus.capturedAt} against a deployment ` +
               `that has since changed: ${moved.join(", ")}. Every positional check is now ` +
-              `unverified against the running contract — re-run \`pnpm run capture-corpus\` from a `  +
-              `checkout of this repository ` +
-              `and look at what changed — from a checkout of this repository.`,
+              `unverified against the running contract, so writes refuse until the layouts are ` +
+              `captured again and someone has looked at what changed. ${CAPTURING_LAYOUTS}`,
           )
         : unchecked.length > 0
           ? // A caveat when unconfirmed layouts are accepted, a failure when
@@ -585,9 +582,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
                       ? " "
                       : ` Everything else works, including ${working.slice(0, 6).join(", ")}` +
                         (working.length > 6 ? ` and ${String(working.length - 6)} more. ` : ". ")) +
-                    `Re-run ` +
-                    `\`pnpm run capture-corpus\` from a checkout of this repository — the installed ` +
-                    `package does not carry it — or accept them explicitly:\n` +
+                    `${CAPTURING_LAYOUTS} Until then, accept them deliberately:\n` +
                     `        WATERX_ALLOW_UNCONFIRMED_ABI=` +
                     // De-duplicated, because several actions share an
                     // entrypoint — `openLong`, `openShort`, `placeLimitOrder`

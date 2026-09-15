@@ -103,7 +103,7 @@ import { fromBase64 } from "@mysten/sui/utils";
 import { ExecutionPolicyError } from "../errors.ts";
 import type { WriteIntent } from "../policy.ts";
 import { ABI, KNOWN_FUNCTIONS, SDK_VERSION } from "./abi.generated.ts";
-import { corpusFor, corroborationNote } from "./corpus.ts";
+import { CAPTURING_LAYOUTS, corpusFor, corroborationNote, type NetworkCorpus } from "./corpus.ts";
 import type { Network } from "../config.ts";
 import {
   exceptionCovers,
@@ -2288,9 +2288,12 @@ function assertGasIsRight(
  * every check here is about the transaction in hand, and this hazard is about
  * the one you will need *next*.
  *
- * It came up on mainnet, where `cancel_order_request` is unconfirmed while
- * `place_order_request` is not, so the agent would happily place and then be
- * unable to retract. On testnet both are confirmed and this costs nothing.
+ * It came up on mainnet, where `cancel_order_request` was unconfirmed while
+ * `place_order_request` was not, so the agent would happily have placed and
+ * then been unable to retract. Both deployments confirm both now, so today this
+ * costs nothing anywhere. It stays: capturing a cancel needs a resting order to
+ * exist somewhere on the deployment, a later capture can lose it again, and
+ * nothing else would notice.
  */
 export const NEEDS_A_WAY_BACK: Readonly<Record<string, { entrypoint: string; because: string }>> = {
   placeLimitOrder: {
@@ -2308,8 +2311,15 @@ export function assertLayoutConfirmed(
   intent: WriteIntent,
   allowUnconfirmed: readonly string[],
   network: Network,
+  /**
+   * What the deployment has been measured to confirm — the committed record for
+   * `network` unless one is given. Tests give one, so the rule is exercised
+   * against a deployment with the gap it guards rather than depending on the
+   * fixture happening to have that gap today.
+   */
+  record: NetworkCorpus = corpusFor(network),
 ): void {
-  const unconfirmed = corpusFor(network).uncaptured;
+  const unconfirmed = record.uncaptured;
 
   // Checked before the action's own layout, because it is the less obvious
   // failure: the action itself is fine, and what is missing is the way out.
@@ -2323,8 +2333,8 @@ export function assertLayoutConfirmed(
       intent,
       `this would rest on the book, and ${wayBack.entrypoint} — the call that takes it back — ` +
         `has never been confirmed against this deployment, so cancelling would refuse. ` +
-        `${wayBack.because}. ${corroborationNote(network, wayBack.entrypoint)} Either capture it ` +
-        `(\`pnpm run capture-corpus\`) or accept it deliberately in ` +
+        `${wayBack.because}. ${corroborationNote(network, wayBack.entrypoint, record)} ` +
+        `${CAPTURING_LAYOUTS} Until then, accept it deliberately in ` +
         `WATERX_ALLOW_UNCONFIRMED_ABI — but do not place what you cannot retract by accident.`,
     );
   }
@@ -2339,9 +2349,9 @@ export function assertLayoutConfirmed(
     intent,
     `${String(entrypoint)} has never been confirmed against this deployment: ${why}. Its ` +
       `argument layout comes from the SDK alone — authoritative, but never seen from this ` +
-      `deployment. ${corroborationNote(network, String(entrypoint))} Re-run ` +
-      `\`pnpm run capture-corpus\` once it can be built, or name this entrypoint in ` +
-      `WATERX_ALLOW_UNCONFIRMED_ABI.`,
+      `deployment. ${corroborationNote(network, String(entrypoint), record)} ` +
+      `${CAPTURING_LAYOUTS} Until then, name this entrypoint in WATERX_ALLOW_UNCONFIRMED_ABI to ` +
+      `accept it deliberately.`,
   );
 }
 
