@@ -11,12 +11,34 @@ import { normalizeSuiAddress } from "@mysten/sui/utils";
 import { wxaAccountCalls } from "@waterx/sdk";
 
 import type { AgentConfig } from "../config.ts";
+import { normalizePackage } from "./deployment.ts";
 
 export interface AccountDelegateEntry {
   address: string;
   /** Unix ms after which the delegation confers nothing; `null` for never. */
   expiresAtMs: number | null;
+  /**
+   * The per-protocol permission masks the chain holds for this delegate, keyed by
+   * protocol type name with its package address normalised (see
+   * {@link normalizeTypeName}).
+   *
+   * These are what the contracts consult. The backend reports a digest of them —
+   * a `stale` flag present only when something is wrong — and a missing flag
+   * cannot tell a healthy grant from a backend too old to say, so anything that
+   * needs to KNOW where a grant sits reads these.
+   */
+  protocolPermissions: ReadonlyMap<string, number>;
 }
+
+/**
+ * `0x44da…::account_data::WaterXPerp` and `44da…::account_data::WaterXPerp` name
+ * the same type — Move's `TypeName` carries the address unprefixed, callers
+ * usually do not — so keys are compared with the leading address normalised.
+ */
+export const normalizeTypeName = (name: string): string => {
+  const at = name.indexOf("::");
+  return at <= 0 ? name : `${normalizePackage(name.slice(0, at))}${name.slice(at)}`;
+};
 
 export interface AccountObject {
   accountId: string;
@@ -69,6 +91,9 @@ export function accountObjectReader(
       delegates: parsed.delegates.map((d) => ({
         address: normalizeSuiAddress(d.delegate_address),
         expiresAtMs: d.expires_at_ms === null ? null : Number(d.expires_at_ms),
+        protocolPermissions: new Map(
+          d.protocol_permissions.contents.map((entry) => [normalizeTypeName(entry.key.name), entry.value]),
+        ),
       })),
     };
   };

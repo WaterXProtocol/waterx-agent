@@ -80,10 +80,11 @@ export interface DelegateData {
   stakingPermissions: number;
   stakingPermissionList: string[];
   /**
-   * Present and `true` when the delegate holds authority only in the superseded
-   * slot — it reads as permissioned and aborts on chain. Absent on a healthy
-   * delegate, and also absent from a backend that predates the fix, so its
-   * absence is not proof of health.
+   * Present, and `true`, only when the delegate holds authority solely in the
+   * superseded slot — it reads as permissioned and aborts on chain. The backend
+   * omits it otherwise, so its absence means "not known to be stale", never
+   * "confirmed healthy". `doctor` reads the slot from chain instead of inferring
+   * anything from a missing field.
    */
   stale?: true;
 }

@@ -14,7 +14,7 @@
 import { HttpClient } from "./api/http.ts";
 import { ReadApi } from "./api/read.ts";
 import { TxApi } from "./api/tx.ts";
-import type { AppInfo } from "./api/types.ts";
+import type { AppInfo, DelegateData } from "./api/types.ts";
 import { type AgentConfig, isDefaultExtraPackage, loadConfig, signsAsDelegate } from "./config.ts";
 import { ExecutionPolicyError } from "./errors.ts";
 import { createSigner, signerReadiness } from "./chain/create-signer.ts";
@@ -33,7 +33,9 @@ import { KNOWN_FUNCTIONS } from "./chain/abi.generated.ts";
 import { CAPTURING_LAYOUTS, corpusFor, hasCorpusFor, measuredNetworks } from "./chain/corpus.ts";
 import { PolicyGate } from "./policy.ts";
 import { normalizeSuiAddress } from "@mysten/sui/utils";
-import { accountObjectReader } from "./chain/account-object.ts";
+import { type AccountObject, accountObjectReader } from "./chain/account-object.ts";
+import { delegateScope } from "./chain/delegate-scope.ts";
+import { REQUESTED_PERMISSION_NAMES } from "./agent/delegation.ts";
 
 export interface DoctorCheck {
   name: string;
@@ -124,9 +126,14 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // comparing it with this. WATERX_ACCOUNT_ID alone is enough: the owner is on
   // the account object. A configured owner that disagrees with the chain is the
   // failure worth naming — every delegate write would claim the wrong principal.
+  //
+  // Held for the delegate check below, which reads where the grant sits from this
+  // same object instead of asking the backend a question it answers ambiguously.
+  let accountObject: AccountObject | undefined;
   if (config.accountId !== undefined) {
     try {
       const account = await accountObjectReader(config)(config.accountId);
+      accountObject = account;
       if (config.ownerAddress === undefined) {
         config.ownerAddress = account.owner;
         checks.push(ok("owner", `${account.owner} — read from ${config.accountId}`));
@@ -644,57 +651,73 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   }
 
   // ── Delegate ──────────────────────────────────────────────────────────
-  // Only meaningful when this process holds a delegate key. The masks are the
-  // difference between an agent that trades and one that fails every order.
-  if (config.ownerAddress !== undefined && config.accountId !== undefined && signer !== undefined) {
+  // Only when this process holds a delegate key. An owner key trading its own
+  // account has no grant to check, and failing it for "not a registered
+  // delegate" would report a correct setup as broken.
+  if (
+    config.ownerAddress !== undefined &&
+    config.accountId !== undefined &&
+    signer !== undefined &&
+    signsAsDelegate(config, signer.address)
+  ) {
+    const wallet = normalizeSuiAddress(signer.address);
+
+    // The backend's view, for the permission names it decodes.
+    let listed: DelegateData | undefined;
     try {
       const delegates = await read.delegates(config.accountId);
-      const wallet = (signer?.address ?? "").toLowerCase();
-      const mine = delegates.find((d) => d.delegateAddress.toLowerCase() === wallet);
-      if (mine === undefined) {
-        checks.push(
-          fail(
-            "delegate",
-            `${signer?.address ?? "this signer"} is not a registered delegate of ${config.accountId}. ` +
-              `The owner must run add-delegate first.`,
-          ),
-        );
-      } else {
-        checks.push(
-          ok(
-            "delegate",
-            `perp: ${mine.permissionList.join(" ") || "none"} · ` +
-              `predict: ${mine.predictPermissionList.join(" ") || "none"} · ` +
-              `staking: ${mine.stakingPermissionList.join(" ") || "none"}`,
-          ),
-        );
-        // A delegate can hold authority only in the superseded
-        // `TradingRequest<CREDIT>` slot: it reads as fully permissioned and
-        // aborts `EUnauthorized` on every order, surfacing as a generic 6002.
-        // A backend carrying the delegate-mask fix reports that as `stale`. An
-        // older one cannot, and says nothing either way — so absence is not
-        // proof of health, and that distinction is the whole check.
-        checks.push(
-          mine.stale === true
-            ? fail(
-                "delegate scope",
-                `this delegate holds authority only in the superseded TradingRequest slot, so ` +
-                  `every perp action aborts on chain (EUnauthorized, surfaced as 6002). ` +
-                  `The owner must re-add it.`,
-              )
-            : "stale" in mine
-              ? ok("delegate scope", "authority is in the enforced account_data::WaterXPerp slot")
-              : warn(
-                  "delegate scope",
-                  `this backend predates the delegate-mask fix and does not report whether the ` +
-                    `delegate's authority is in the slot the chain enforces. A delegate added ` +
-                    `before the dual-scope grant reads as authorised here and still fails on ` +
-                    `chain — re-add it to be sure.`,
-                ),
-        );
-      }
+      listed = delegates.find((d) => normalizeSuiAddress(d.delegateAddress) === wallet);
+      checks.push(
+        listed === undefined
+          ? fail(
+              "delegate",
+              `${signer.address} is not a registered delegate of ${config.accountId}. ` +
+                `The owner must grant it first.`,
+            )
+          : ok(
+              "delegate",
+              `perp: ${listed.permissionList.join(" ") || "none"} · ` +
+                `predict: ${listed.predictPermissionList.join(" ") || "none"} · ` +
+                `staking: ${listed.stakingPermissionList.join(" ") || "none"}`,
+            ),
+      );
     } catch (error) {
       checks.push(warn("delegate", `lookup failed — ${describe(error)}`));
+    }
+
+    // The chain's view, for whether the grant sits where the contract looks.
+    // A grant can hold authority only in the superseded `TradingRequest<CREDIT>`
+    // slot: it reads as fully permissioned and aborts `EUnauthorized` on every
+    // order. The backend flags that as `stale` and says nothing when a grant is
+    // fine, so this used to warn on every healthy grant ("predates the fix") —
+    // a missing flag cannot tell the two apart. The Account object can.
+    const perpOriginal = deployment?.idsFor("waterx_perp").at(-1);
+    if (accountObject !== undefined && perpOriginal !== undefined) {
+      const verdict = delegateScope({
+        entry: accountObject.delegates.find((d) => d.address === wallet),
+        perpOriginalId: perpOriginal,
+        requested: REQUESTED_PERMISSION_NAMES,
+        now: Date.now(),
+      });
+      checks.push({ name: "delegate scope", ...verdict });
+    } else {
+      // Nothing to read it from. Say which, and fall back to the one thing the
+      // backend does report reliably: a grant it knows is in the wrong slot.
+      checks.push(
+        listed?.stale === true
+          ? fail(
+              "delegate scope",
+              `the backend reports this grant as holding authority only in the superseded ` +
+                `TradingRequest slot, so every perp action aborts on chain (EUnauthorized, ` +
+                `surfaced as 6002). The owner must re-add it.`,
+            )
+          : warn(
+              "delegate scope",
+              `could not read ${accountObject === undefined ? "the account from chain" : "the deployment manifest"}, ` +
+                `so whether the grant is in the slot the contract reads is unconfirmed. The backend ` +
+                `flags only grants it knows are wrong, and flagged none.`,
+            ),
+      );
     }
   }
 
