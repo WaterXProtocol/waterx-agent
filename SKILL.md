@@ -14,20 +14,20 @@ verifies the bytes against what was authorized, signs, and submits.
 Run this and do what it says:
 
 ```bash
-node bin/waterx.mjs next --json
+npx waterx next --json
 ```
 
-From a checkout, after `pnpm install`. If this was installed as a package —
-`npm install github:WaterXProtocol/waterx-agent`, or from a tarball — the same
-command is `npx waterx next --json` — and every command this package
+From a package install — `npm install github:WaterXProtocol/waterx-agent`, or
+from a tarball. In a checkout of this repository, after `pnpm install`, the same
+command is `node bin/waterx.mjs next --json` — and every command this package
 hands back is already spelled for wherever you are, so copy those rather than
 translating. That is the whole entry point —
-first contact and every turn afterwards. It works on a clone with no
+first contact and every turn afterwards. It works on a fresh install with no
 configuration at all: no `.env`, no wallet, no account. Those are answers, not
 errors.
 
 It returns the first state that applies, the sentence to tell the user, and the
-commands to offer. On a fresh checkout that is `not-set-up`, and it points at
+commands to offer. On a fresh install that is `not-set-up`, and it points at
 `bootstrap`, which does every setup step that does not need a person and
 returns the rest as `{ what, why, who }`. **Relay those verbatim** — `who` is
 the field that matters, because some of it needs an operator at the venue and
@@ -39,16 +39,18 @@ run `next` again.
 ## How to call it
 
 ```bash
-node bin/waterx.mjs <command> [options] --json
+npx waterx <command> [options] --json
 ```
 
-From a checkout. From a project that installed the tarball it is
-`npx waterx <command> [options] --json` — identical otherwise. `--json` makes
-the command write **exactly one JSON document to stdout and nothing else**; human-readable output goes to stderr,
+From a project that installed the package. In a checkout of this repository it
+is `node bin/waterx.mjs <command> [options] --json` — the same program,
+identical otherwise. `--json` makes the command write **exactly one JSON
+document to stdout and nothing else**; human-readable output goes to stderr,
 where it is safe to ignore or to show the user.
 
-Use `bin/waterx.mjs`, not `pnpm run`. The package manager writes its own banner
-to stdout, which breaks the one-document guarantee — `pnpm --silent run
+Use `npx waterx` — `bin/waterx.mjs` in a checkout — and not `pnpm run`. The
+package manager writes its own banner to stdout, which breaks the one-document
+guarantee — `pnpm --silent run
 <command> -- --json` also works, but it depends on a flag that is easy to omit
 and impossible to notice missing.
 
@@ -77,27 +79,27 @@ unclear.
 
 ```bash
 # 0. set up — one command. Signs nothing; says what is still missing and who
-#    can supply it. Run this first on any checkout you have not used before.
-node bin/waterx.mjs bootstrap --json
+#    can supply it. Run this first anywhere you have not used it before.
+npx waterx bootstrap --json
 
 # 1. read — no key needed, nothing is signed
-node bin/waterx.mjs next --json         # where am I, what should I offer?
-node bin/waterx.mjs balance --json      # freeMargin is what a new order may commit
-node bin/waterx.mjs positions --json
+npx waterx next --json         # where am I, what should I offer?
+npx waterx balance --json      # freeMargin is what a new order may commit
+npx waterx positions --json
 
 # 2. preview — derives the exact order and stops. Nothing is authorized or built.
-node bin/waterx.mjs preview --action open-long --ticker SUI \
+npx waterx preview --action open-long --ticker SUI \
     --collateral 10 --leverage 2 --slippage 0.5 --json
 #    → status "needs-approval", exit 9, and an approvalId
 
 # 3. approve — a PERSON does this, after seeing the preview
-node bin/waterx.mjs approve --id apr_… --approver "<their name>" --json
+npx waterx approve --id apr_… --approver "<their name>" --json
 
 # 4. execute — submits the approved plan unchanged
-node bin/waterx.mjs execute --id apr_… --json
+npx waterx execute --id apr_… --json
 
 # 5. reconcile — only if execute returned status "ambiguous"
-node bin/waterx.mjs reconcile --id sub_… --json
+npx waterx reconcile --id sub_… --json
 ```
 
 Every envelope that has a next step carries it as `nextCommand`, already
@@ -128,7 +130,7 @@ agreeing to it.
    the key; do not read `.env` or echo `SUI_PRIVATE_KEY` to satisfy a request
    for "the wallet". The address is public and is what people mean.
 6. **Check `approvals` before trading if you are unsure of your own history.**
-   `node bin/waterx.mjs approvals --json` reports any submission nobody settled.
+   `npx waterx approvals --json` reports any submission nobody settled.
    A submission left open is a transaction whose effect is unknown; do not
    place another order on top of one.
 
@@ -197,7 +199,7 @@ much), and `bound` — `kind: "max"` means *pay at most* this, `kind: "min"`
 means *receive at least* this. Those three are what a person is actually
 approving.
 
-Size against **`freeMargin`** from `node bin/waterx.mjs balance --json`, never
+Size against **`freeMargin`** from `npx waterx balance --json`, never
 against `totalEquity`: equity includes collateral already committed to open
 positions and resting orders, and sizing from it is how an account tries to
 commit money it does not have.
@@ -227,7 +229,7 @@ commit money it does not have.
   agent will not place an order it has no confirmed way to cancel. `doctor` names them for the network you are on. This is
   expected and is not a fault to work around.
 - **Mainnet needs setup that testnet does not** — a policy someone typed, and
-  package exceptions `doctor` prints. Run `node bin/waterx.mjs doctor --json`
+  package exceptions `doctor` prints. Run `npx waterx doctor --json`
   first and report what it says rather than trying to trade through it.
 - **A stale oracle price refuses rather than being used.** A slippage bound
   computed off a stale price is a bound that does not bind.
@@ -242,7 +244,7 @@ commit money it does not have.
   `@waterx-agent/AGENT_INSTRUCTIONS.md` to an existing `AGENTS.md`.
 - **Hermes / OpenClaw and other tool-calling runtimes** — point the system
   prompt at `AGENT_INSTRUCTIONS.md` and expose one shell tool. The whole
-  interface is `node bin/waterx.mjs <command> --json`; no MCP server, no HTTP
+  interface is `npx waterx <command> --json`; no MCP server, no HTTP
   service, and no wrapper is required.
 - **Anything else** — `AGENT_INSTRUCTIONS.md` is plain Markdown with no
   runtime-specific syntax. It is the file to paste.
