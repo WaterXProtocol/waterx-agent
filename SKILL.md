@@ -30,8 +30,8 @@ It returns the first state that applies, the sentence to tell the user, and the
 commands to offer. On a fresh install that is `not-set-up`, and it points at
 `bootstrap`, which does every setup step that does not need a person and
 returns the rest as `{ what, why, who }`. **Relay those verbatim** — `who` is
-the field that matters, because some of it needs an operator at the venue and
-no amount of retrying will produce it.
+the field that matters, because some of it needs the account owner, an operator
+at the venue or the maintainers, and no amount of retrying will produce it.
 
 You do not have to plan the onboarding. Run `next`, do the one thing it says,
 run `next` again.

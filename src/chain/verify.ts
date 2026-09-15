@@ -1957,7 +1957,7 @@ function assertShapeIsAllowed(
           : `the transaction calls ${call.module}::${call.function} in package 0x${id}, which ` +
               `this deployment does not publish. If that package is legitimately part of this ` +
               `deployment and the config document has not caught up, name it in ` +
-              `WATERX_EXTRA_PACKAGES — \`pnpm run doctor\` prints the current list.`,
+              `WATERX_EXTRA_PACKAGES — \`doctor\` prints the current list.`,
       );
     }
     for (const argument of call.typeArguments) {

@@ -1,4 +1,5 @@
 import { invoke } from "../cli/contract.ts";
+import { DELEGATE_BOUNDARY } from "./delegation.ts";
 
 /**
  * What to tell a person next, decided rather than composed.
@@ -88,7 +89,7 @@ export interface Situation {
    * it has to outrank "ready" — otherwise the agent offers a trade that the
    * chain will refuse, and the refusal arrives as a generic 6002.
    */
-  delegation?: { state: string; headline: string; grantUrl: string };
+  delegation?: { state: string; headline: string };
   readOnly: boolean;
   freeMargin: number | undefined;
   positions: number;
@@ -188,8 +189,8 @@ export function decide(s: Situation): Guidance {
         headline:
           `There is a wallet and nothing has been granted to it yet. The usual arrangement is ` +
           `that the account owner grants THIS address permission to trade their account — they ` +
-          `keep the funds, this wallet cannot withdraw them, and it needs no SUI of its own ` +
-          `because the backend sponsors a delegate's transactions. Ask them to grant it; then ` +
+          `keep the funds, and it needs no SUI of its own because the backend sponsors a ` +
+          `delegate's transactions. ${DELEGATE_BOUNDARY} Ask them to grant it; then ` +
           `\`discover\` finds the account on its own. Nobody has to copy an account id or an ` +
           `owner address — but a person does have to confirm the account before it is adopted.`,
         suggestions: [

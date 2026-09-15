@@ -31,7 +31,7 @@ import { explorerTxUrl, loadConfig } from "../../src/config.ts";
 import { narrowOnly, type PolicyMode } from "../../src/policy.ts";
 import type { ExecuteResult } from "../../src/chain/executor.ts";
 import { classify } from "../../src/cli/classify.ts";
-import { type Envelope, EXIT, type Outcome, type Status, succeeded } from "../../src/cli/contract.ts";
+import { type Envelope, EXIT, invoke, type Outcome, type Status, succeeded } from "../../src/cli/contract.ts";
 import { UsageError } from "../../src/errors.ts";
 
 export interface ArgDef {
@@ -283,7 +283,10 @@ function usage(message: string, defs: Record<string, ArgDef>, scriptName: string
 }
 
 function printUsage(defs: Record<string, ArgDef>, scriptName: string): void {
-  note(`\nUsage: pnpm run ${scriptName} -- [options]\n`);
+  // Spelled for wherever this was run from. `pnpm run x -- [options]` is a
+  // checkout's syntax, and `--help` is the first thing someone who installed
+  // the package types.
+  note(`\nUsage: ${invoke(scriptName, "[options]")}\n`);
   note("Options:");
   for (const [key, def] of Object.entries(defs)) {
     const value = def.flag === true ? "" : " <value>";

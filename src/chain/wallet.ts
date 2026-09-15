@@ -49,7 +49,7 @@ export function loadWallet(): WalletInfo {
   const key = process.env.SUI_PRIVATE_KEY?.trim();
   if (!key) {
     throw new Error(
-      "SUI_PRIVATE_KEY not set. Run `pnpm run generate-wallet` to create one, " +
+      "SUI_PRIVATE_KEY not set. `bootstrap` generates one and keeps .env out of git, " +
         "or set SUI_PRIVATE_KEY in .env yourself (bech32 suiprivkey1...). " +
         "Read-only commands — markets, ticker, positions, orders — need no key at all.",
     );

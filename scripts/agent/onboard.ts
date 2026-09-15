@@ -11,10 +11,12 @@
  * grant itself authority.
  */
 import {
+  DELEGATE_BOUNDARY,
   delegationStatus,
   perpGrantCommand,
   REQUESTED_PERMISSION_NAMES,
   REQUESTED_PERP_PERMISSIONS,
+  requestedPermissions,
 } from "../../src/agent/delegation.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
@@ -100,9 +102,12 @@ await run(async () => {
   }
   // Where to review is not where to grant, whatever is configured.
   note(`  review/revoke  ${status.reviewUrl}  (Account → Delegates)`);
-  note(`  asks for       ${Object.keys(REQUESTED_PERMISSION_NAMES).join(", ")}`);
-  note(`  cannot         take money OUT of the account, or grant authority — account deposit`);
-  note(`                 and withdrawal refuse a delegate outright, whatever mask it holds`);
+  // Each bit with what it does. The bare names put WITHDRAW_COLLATERAL a line
+  // above "cannot take money out", and a careful reader took that for a
+  // contradiction to resolve before anyone signed.
+  note(`  asks for`);
+  for (const { name, meaning } of requestedPermissions()) note(`    ${name.padEnd(20)} ${meaning}`);
+  note(`  cannot         ${DELEGATE_BOUNDARY}`);
   if (status.granted !== undefined) note(`  granted        ${status.granted.join(", ") || "none"}`);
   note("");
 
@@ -122,6 +127,10 @@ await run(async () => {
       grantCommand: status.grantCommand ?? null,
       requestedPerpPermissions: REQUESTED_PERP_PERMISSIONS,
       requestedPermissionNames: Object.keys(REQUESTED_PERMISSION_NAMES),
+      // The same list with what each bit does, so an agent relaying it relays
+      // the meaning too — and the one sentence on what the grant cannot do.
+      requestedPermissions: requestedPermissions(),
+      delegateCannot: DELEGATE_BOUNDARY,
       next,
     },
     { rendered: true },

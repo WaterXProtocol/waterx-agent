@@ -13,12 +13,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   CONSOLE_ENDPOINTS,
+  DELEGATE_BOUNDARY,
+  PERMISSION_MEANINGS,
   REQUESTED_PERP_PERMISSIONS,
   delegatesUrl,
   delegationStatus,
+  ownerGrantStep,
   perpAuthorizeUrl,
   REQUESTED_PERMISSION_NAMES,
+  requestedPermissions,
 } from "../src/agent/delegation.ts";
+import { decide, type Situation } from "../src/agent/guidance.ts";
 import type { DelegateData } from "../src/api/types.ts";
 
 const AGENT = `0x${"a".repeat(64)}`;
@@ -110,13 +115,14 @@ describe("the delegate handshake", () => {
     expect(status.headline).toContain("does not grant perps");
   });
 
-  it("says an account id cannot be looked up from a delegate key", () => {
-    // The backend has no reverse lookup, so this is a fact about the deployment
-    // rather than a missing feature here — and an agent told to "find it" would
-    // go looking for an endpoint that does not exist.
+  it("sends a delegate whose owner is known to discover, not to copy an id", () => {
+    // This said there was no way to look an account up from a delegate key and
+    // told the agent to ask for the id — true until `discover` existed, and then
+    // the one surface still sending people to copy it by hand.
     const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT, ownerAddress: OWNER });
     expect(status.state).toBe("awaiting-grant");
-    expect(status.headline).toContain("no way to look one up");
+    expect(status.headline).toContain("discover");
+    expect(status.headline).not.toMatch(/no way to look one up|set WATERX_ACCOUNT_ID/);
   });
 
   it("recognises when it is holding the owner's own key", () => {
@@ -306,6 +312,15 @@ describe("a configured authorize page", () => {
     expect(status.headline).not.toContain("signs with their wallet");
   });
 
+  it("gives next's caller the grant page and the review page under their own names", () => {
+    // `next` reported only the deprecated grantUrl — the review page, where perp
+    // permission cannot be granted — so a caller reading it had nowhere to send
+    // an owner who was ready to grant.
+    const source = readFileSync(new URL("../scripts/agent/next.ts", import.meta.url), "utf8");
+    expect(source).toContain("reviewUrl: status.reviewUrl");
+    expect(source).toContain("authorizeUrl: status.authorizeUrl");
+  });
+
   it("keeps review pointed at the delegates page even when a grant page exists", () => {
     // Granting and revoking are different places; the override is only the
     // first. Collapsing them is what made it inert.
@@ -314,5 +329,90 @@ describe("a configured authorize page", () => {
     const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
 
     expect(status.headline).toContain("https://waterx.app/en/account");
+  });
+});
+
+/**
+ * One account of the grant, wherever it is given.
+ *
+ * `bootstrap`, `next`, `onboard` and a confirmed grant each described the grant
+ * in their own words, and corrections landed in one of them at a time. A real
+ * install read "this wallet cannot withdraw" from `bootstrap` beside
+ * `WITHDRAW_COLLATERAL` from `onboard`, and "set WATERX_ACCOUNT_ID to what they
+ * give you" from `bootstrap` after `discover` had made that unnecessary. These
+ * hold every surface to the same account.
+ */
+describe("what the grant is said to mean", () => {
+  const undecided: Situation = {
+    open: 0,
+    firstUnsettled: undefined,
+    pending: [],
+    configured: false,
+    missing: { signer: false, gas: true, account: true },
+    readOnly: true,
+    freeMargin: undefined,
+    positions: 0,
+    orders: 0,
+    blockers: [],
+    network: "mainnet",
+    mode: "undecided",
+  };
+
+  /** Every sentence that tells someone what the grant allows. */
+  const explanations = (): [string, string][] => [
+    ["bootstrap's grant step", ownerGrantStep(AGENT).why],
+    ["next, before anything is granted", decide(undecided).headline],
+    [
+      "a confirmed grant",
+      delegationStatus({
+        network: "mainnet",
+        delegateAddress: AGENT,
+        ownerAddress: OWNER,
+        accountId: ACCOUNT,
+        delegates: [grant()],
+      }).headline,
+    ],
+  ];
+
+  it("never says what a delegate cannot do without saying what WITHDRAW_COLLATERAL does", () => {
+    for (const [where, text] of explanations()) expect(text, where).toContain(DELEGATE_BOUNDARY);
+  });
+
+  it("never sends anyone to copy an account id or an owner address by hand", () => {
+    const handshake: [string, string][] = [
+      ["awaiting a grant", delegationStatus({ network: "mainnet", delegateAddress: AGENT }).headline],
+      [
+        "owner known, no account",
+        delegationStatus({ network: "mainnet", delegateAddress: AGENT, ownerAddress: OWNER }).headline,
+      ],
+    ];
+    for (const [where, text] of [...explanations(), ...handshake]) {
+      expect(text, where).not.toMatch(/set WATERX_(ACCOUNT_ID|OWNER_ADDRESS)|put the id in/);
+    }
+  });
+
+  it("gives every requested bit a meaning, and says where the margin bits move money", () => {
+    for (const { name, meaning } of requestedPermissions()) {
+      expect(PERMISSION_MEANINGS[name], name).toBeDefined();
+      expect(meaning, name).not.toBe(name);
+    }
+    expect(PERMISSION_MEANINGS.WITHDRAW_COLLATERAL).toMatch(/back into the account's balance/);
+    expect(PERMISSION_MEANINGS.WITHDRAW_COLLATERAL).toMatch(/never out of the account/);
+    expect(PERMISSION_MEANINGS.DEPOSIT_COLLATERAL).toMatch(/open position/);
+  });
+
+  it("files the grant under the account owner, not a venue operator", () => {
+    // "an operator" means a human at the venue, who cannot grant anything on
+    // someone else's account.
+    const step = ownerGrantStep(AGENT);
+    expect(step.who).toBe("the account owner");
+    expect(step.command).toContain("onboard");
+    expect(step.why).toContain("discover");
+  });
+
+  it("puts the meanings and the boundary on the onboard screen, not just the names", () => {
+    const source = readFileSync(new URL("../scripts/agent/onboard.ts", import.meta.url), "utf8");
+    expect(source).toContain("requestedPermissions()");
+    expect(source).toContain("DELEGATE_BOUNDARY");
   });
 });

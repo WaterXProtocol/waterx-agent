@@ -25,7 +25,7 @@ await run(async () => {
       note(`Requested testnet SUI for ${address}`);
       // Gas only, and saying so here is the point: the next thing a new user
       // reaches for is collateral, which this faucet does not provide.
-      show({ address, funded: "gas", note: "collateral is separate — see `pnpm run deposit`" });
+      show({ address, funded: "gas", note: "collateral is separate — see `deposit`" });
       return;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

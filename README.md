@@ -116,7 +116,7 @@ wants them.
 `bootstrap` does every setup step that does not need a person — a wallet, and
 on the owner path gas and the account — and returns the rest as structured work
 items saying *what*, *why*, and *who can supply it*. For a delegate, the rest is
-the owner's grant; after it, `discover` finds the account and a person `adopt`s
+the owner's grant (`who: "the account owner"`); after it, `discover` finds the account and a person `adopt`s
 it, so nobody copies an account id or an owner address by hand.
 Which is how an agent learns to stop and ask instead of retrying: testnet
 collateral is whitelist-gated and comes back as `who: "an operator"`.

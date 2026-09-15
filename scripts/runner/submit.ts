@@ -93,7 +93,7 @@ await run(async () => {
     console.log(`not before ${new Date(at + after * 1000).toISOString()}`);
     console.log(`expires    ${new Date(at + (expiresIn ?? 0) * 1000).toISOString()}`);
   }
-  console.log(`The runner picks it up on its next pass (\`pnpm run runner\`).`);
+  console.log(`The runner picks it up on its next pass (\`runner\`).`);
 });
 
 /** The inbox sits beside the store it feeds. */

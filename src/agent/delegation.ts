@@ -14,11 +14,11 @@
  * says, and whatever a bug in this package does. That is the entire reason
  * `delegated-auto` is a bounded risk rather than a promise.
  *
- * What this module does NOT do is discover the grant by itself. The backend has
- * no reverse lookup — `/account/delegate` answers "who may act on this
- * account?", and there is no "which accounts may this wallet act on?" — so the
- * owner has to state the account id once. Everything after that is verified
- * against the chain rather than believed.
+ * What this module does NOT do is find the account or choose it. `discover`
+ * finds the accounts that granted this wallet — the backend's delegate index
+ * where it is deployed, recent grant events where it is not — and `adopt`
+ * records which one a person chose. This module reads where the handshake has
+ * got to, and what it reports is checked against the chain rather than believed.
  */
 import {
   PERM_ALL_TRADING,
@@ -33,6 +33,7 @@ import {
 } from "@waterx/sdk";
 
 import type { DelegateData } from "../api/types.ts";
+import { invoke } from "../cli/contract.ts";
 import type { Network } from "../config.ts";
 
 /**
@@ -112,7 +113,8 @@ export const grantInstruction = (input: {
   authorizeUrl?: string;
   grantCommand?: string;
 }): string => {
-  const command = input.grantCommand ?? "pnpm run add-delegate -- --delegate <agent> --yes";
+  const command =
+    input.grantCommand ?? invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
   if (input.authorizeUrl === undefined) {
     return (
       `the owner grants it with their own key: ${command}. Granting PERP permission is not ` +
@@ -141,11 +143,7 @@ export const grantInstruction = (input: {
  * screen, which is the worst direction to be wrong in.
  *
  * What the agent cannot do is take money out, and that does not rest on a bit
- * being absent. Account deposit and withdrawal **refuse a `delegateSender`
- * outright** at the API, and the framework-level `Delegate.permissions` field —
- * which carries the withdraw/manage/receive bits — must stay `PERM_NONE` for a
- * delegate; perp authority is read from the per-protocol slot instead. A
- * delegate therefore cannot withdraw whatever mask it holds.
+ * being absent: {@link DELEGATE_BOUNDARY} says what enforces it.
  */
 export const REQUESTED_PERP_PERMISSIONS = PERM_ALL_TRADING;
 
@@ -167,6 +165,89 @@ export const REQUESTED_PERMISSION_NAMES: Readonly<Record<string, number>> = {
   DEPOSIT_COLLATERAL: PERM_DEPOSIT_COLLATERAL,
   WITHDRAW_COLLATERAL: PERM_WITHDRAW_COLLATERAL,
 };
+
+/**
+ * What each requested bit lets the agent do, in the words a consent screen needs.
+ *
+ * The names alone read as a contradiction: `WITHDRAW_COLLATERAL` in the list,
+ * "cannot withdraw" in the sentence beside it. A real install relayed exactly
+ * that to the person about to sign — "I'd get that reconciled before the owner
+ * signs anything on a mainnet account" — which is the right reaction to the
+ * words and the wrong conclusion about the grant. So wherever the list is shown
+ * it carries what each bit does, and the two margin bits say where money goes.
+ *
+ * Read off `waterx_perp::trading`: every order — an opening one included — and
+ * every re-price checks PLACE_ORDER; cancelling an order or an attached leg
+ * checks CANCEL_ORDER; the margin requests check the two collateral bits, and a
+ * margin withdrawal puts the funds back into the account's own balance
+ * (`return_to_user`), never at an address.
+ */
+export const PERMISSION_MEANINGS: Readonly<Record<string, string>> = {
+  OPEN_POSITION: "open positions",
+  CLOSE_POSITION: "close a position",
+  INCREASE_POSITION: "add size to an open position",
+  DECREASE_POSITION: "reduce an open position",
+  PLACE_ORDER:
+    "place market, limit and stop orders, attach take-profit and stop-loss, and re-price a resting order",
+  CANCEL_ORDER: "cancel a resting order or an attached take-profit or stop-loss",
+  DEPOSIT_COLLATERAL: "move margin from the account's balance into an open position",
+  WITHDRAW_COLLATERAL:
+    "move margin out of an open position, back into the account's balance — never out of the account",
+};
+
+/**
+ * What a delegate cannot do, said once, in terms of what enforces it.
+ *
+ * Every surface that tells someone what the grant means — `bootstrap`, `next`,
+ * `onboard`, a confirmed grant — uses this sentence. Each used to say it in its
+ * own words, and a correction to one (what the margin bits are) never reached
+ * the others: an installed agent read "this wallet cannot withdraw" from one
+ * command and `WITHDRAW_COLLATERAL` from the next, and stopped.
+ *
+ * The guarantee is on chain, not a promise about this package.
+ * `waterx_account::request_withdraw` aborts for any sender that is not the
+ * account's owner, whatever bits a delegate holds, and granting — `add_delegate`,
+ * `set_delegate_protocol_permission` — is owner-only the same way. That is why
+ * the margin bits are not a funds-out path.
+ */
+export const DELEGATE_BOUNDARY =
+  "It cannot take money OUT of the account or grant anyone access: withdrawing and granting are " +
+  "owner-only on chain, whatever permissions a delegate holds. WITHDRAW_COLLATERAL only moves " +
+  "margin from an open position back into the account.";
+
+/** The requested bits with what each lets the agent do — the list a consent screen shows. */
+export const requestedPermissions = (): { name: string; meaning: string }[] =>
+  Object.keys(REQUESTED_PERMISSION_NAMES).map((name) => ({
+    name,
+    meaning: PERMISSION_MEANINGS[name] ?? name,
+  }));
+
+/**
+ * The setup step a would-be delegate cannot take for itself: the owner's grant.
+ *
+ * Built here rather than in `bootstrap` so its words are the ones every other
+ * surface uses. It went on saying "set WATERX_OWNER_ADDRESS and WATERX_ACCOUNT_ID
+ * to what they give you" after `discover` made that unnecessary, and it filed
+ * the step under "an operator" — a human at the venue, who cannot grant anything
+ * on someone else's account.
+ */
+export function ownerGrantStep(agentWallet: string): {
+  what: string;
+  why: string;
+  who: "the account owner";
+  command: string;
+} {
+  return {
+    what: "the owner's grant",
+    why:
+      `nothing has been granted to ${agentWallet} yet. The account owner grants it trading ` +
+      `permission from their own wallet; they keep the funds, and it needs no SUI of its own. ` +
+      `${DELEGATE_BOUNDARY} Once they have granted it, \`discover\` finds the account and a ` +
+      `person adopts it — nobody copies an id.`,
+    who: "the account owner",
+    command: invoke("onboard", "--json"),
+  };
+}
 
 /** Where the handshake has got to. */
 export type DelegationState =
@@ -300,8 +381,8 @@ export function delegationStatus(input: {
       ownerAddress,
       state: "awaiting-grant",
       headline:
-        `The owner is ${ownerAddress} but no account id is set, and there is no way to look one ` +
-        `up from a delegate key. Ask them for the account id and set WATERX_ACCOUNT_ID.`,
+        `The owner is ${ownerAddress} but no account has been adopted. Once they have granted ` +
+        `${delegateAddress}, \`discover\` finds the account and a person adopts it — no id to copy.`,
     };
   }
 
@@ -374,7 +455,6 @@ export function delegationStatus(input: {
     state: "granted",
     headline:
       `${delegateAddress} may trade ${accountId} on behalf of ${ownerAddress}, including moving ` +
-      `margin on open positions. It cannot take money OUT of the account or grant authority: ` +
-      `account deposit and withdrawal refuse a delegate outright, whatever mask it holds.`,
+      `margin on open positions. ${DELEGATE_BOUNDARY}`,
   };
 }
