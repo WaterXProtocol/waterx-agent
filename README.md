@@ -116,7 +116,7 @@ wants them.
 `bootstrap` does every setup step that does not need a person — a wallet, and
 on the owner path gas and the account — and returns the rest as structured work
 items saying *what*, *why*, and *who can supply it*. For a delegate, the rest is
-the owner's grant (`who: "the account owner"`); after it, `discover` finds the account and a person `adopt`s
+the owner's grant (`who: "the account owner"`); after it, `discover` finds the account and `adopt` takes
 it, so nobody copies an account id or an owner address by hand.
 Which is how an agent learns to stop and ask instead of retrying: testnet
 collateral is whitelist-gated and comes back as `who: "an operator"`.
@@ -360,17 +360,22 @@ Once the owner has granted the wallet, the agent finds the account itself:
 
 ```bash
 npx waterx discover --wait 300 --json   # which accounts grant this wallet, confirmed on chain
-npx waterx adopt --account <id> --approver <your name> --json
+npx waterx adopt --account <id> --json
 ```
 
 `discover` asks the backend's delegate index (`GET /account/delegated`) and,
 where that is not deployed, recent on-chain grant events — then reads every
 candidate account from chain, so a removed or expired grant never counts and the
 owner comes from the account object rather than from anyone's typing. It lists;
-it never adopts. An address can be made a delegate of **anyone's** account
-without its consent, so finding a grant is not knowing which account to trade.
-`adopt` is that choice, made by a named person: it re-checks the grant, writes
-`WATERX_ACCOUNT_ID`, and records who chose.
+it never adopts. When it finds one grant, its `nextCommand` is the `adopt` for
+it. When it finds several, which account the agent trades is a choice between
+whose money to trade, so it stops and asks rather than picking.
+
+`adopt` re-checks the grant on chain, writes `WATERX_ACCOUNT_ID`, and appends a
+line to `.waterx/adoptions.jsonl`. It does not stop to ask for a name: the line
+goes under `--approver` when one is given, and otherwise under a generated id
+with `generated: true`, so the ledger still tells adoptions apart and never
+reads as a sign-off nobody gave.
 
 `WATERX_OWNER_ADDRESS` is no longer needed. The owner is read from the account
 at run time and a delegate key is recognised by comparing it with that owner;

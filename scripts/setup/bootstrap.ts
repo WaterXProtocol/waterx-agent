@@ -96,7 +96,7 @@ await run(async () => {
     ignored = ensureEnvIgnored();
     note(`             new key written to ${envPath()}`);
     if (ignored.kind === "added") {
-      note(`             .env added to ${ignored.gitignore} so it cannot be committed`);
+      note(`             ${ignored.added.join(" and ")} added to ${ignored.gitignore} so it cannot be committed`);
     } else if (ignored.kind === "already") {
       note(`             .env is already ignored by git`);
     } else if (ignored.kind === "failed") {
