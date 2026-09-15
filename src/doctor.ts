@@ -161,11 +161,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     } else {
     signer = createSigner(config);
     ownerAddress = config.ownerAddress ?? signer.address;
-    checks.push(
-      signsAsDelegate(config, signer.address)
-        ? ok("signer", `${signer.address} — ${signer.describe}, delegate of ${config.ownerAddress ?? "?"}`)
-        : ok("signer", `${signer.address} — ${signer.describe}, owner key`),
-    );
+    checks.push(ok("signer", `${signer.address} — ${signer.describe}, ${signerRole(config, signer.address)}`));
     // An unattended policy with the key in this address space is the
     // combination the signer boundary exists to avoid. It is legal, and it is
     // not what anyone should reach for on purpose.
@@ -619,7 +615,8 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
             : fail(
                 "account",
                 `WATERX_ACCOUNT_ID is set to ${config.accountId} but ${ownerAddress} owns no account ` +
-                  `on this deployment. The id is stale — clear it and run \`pnpm run create-account\`.`,
+                  `on this deployment. The id is stale — clear it, then \`discover\` the account this ` +
+                  `wallet was granted, or \`bootstrap --create-account --yes\` if it should own one.`,
               ),
         );
       } else {
@@ -817,3 +814,20 @@ const sdkPackageFor = (calls: ReadonlySet<string> | undefined): string | undefin
 
 const describe = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+/**
+ * What this key is to the account it acts on — including that there is none yet.
+ *
+ * "Owner key" used to be the answer whenever the key was not a delegate, and that
+ * included having no account at all: a wallet `bootstrap` had just generated for
+ * the delegate path was labelled the owner's key, one command away from `next`
+ * calling the same process undecided. With no account there is nothing to own
+ * and nothing to be a delegate of, and saying so is the only label that is true.
+ */
+export function signerRole(config: AgentConfig, signerAddress: string): string {
+  if (signsAsDelegate(config, signerAddress)) return `delegate of ${config.ownerAddress ?? "?"}`;
+  if (config.ownerAddress !== undefined) return "owner key";
+  return config.accountId === undefined
+    ? "no account yet, so neither an owner's key nor a delegate's until one is adopted or created"
+    : `owner not settled — ${config.accountId} could not be read, so whose key this is is unknown`;
+}

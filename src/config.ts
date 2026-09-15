@@ -218,7 +218,7 @@ function parseAllowUnconfirmed(raw: string | undefined, network: Network): strin
         : `Expected a comma-separated list of \`module::function\` entrypoints with no empty ` +
           `entries. `) +
       `There is no blanket form: accepting every unconfirmed layout at once is wider than any ` +
-      `reason for wanting one. \`pnpm run doctor\` prints the exact line.`,
+      `reason for wanting one. \`doctor\` prints the exact line.`,
   );
 }
 
@@ -425,8 +425,14 @@ function parsePositiveInt(raw: string | undefined): number | undefined {
 export function requireAccountId(config: AgentConfig): string {
   if (config.accountId === undefined) {
     throw new ConfigError(
-      "No WaterX account configured. Run `pnpm run create-account -- --name <name> --yes`, wait for " +
-        "the indexer, then `pnpm run accounts` and put the id in WATERX_ACCOUNT_ID.",
+      // The delegate path first, because it is the usual one — and because the
+      // old advice ("create an account, then copy its id into .env") was the
+      // owner path spelled as if it were the only one, in a checkout's syntax.
+      "No WaterX account configured. A delegate gets one from its owner: `onboard` says what to " +
+        "ask them for, `discover` finds the account once they have granted this wallet, and " +
+        "`adopt` records which one a person chose — no id to copy. A wallet that should hold an " +
+        "account of its own creates it with `bootstrap --create-account --yes`, which writes " +
+        "WATERX_ACCOUNT_ID itself.",
     );
   }
   return config.accountId;

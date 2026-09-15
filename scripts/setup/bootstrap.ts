@@ -20,6 +20,7 @@
  * then only `createAccount`, which moves no funds. It never deposits — that
  * commits money, and money is a decision.
  */
+import { ownerGrantStep } from "../../src/agent/delegation.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
 import { envPath, getOrCreateWallet, saveToEnv } from "../../src/chain/wallet.ts";
@@ -54,8 +55,17 @@ const TRADE_COMMAND = invoke(
 interface Step {
   what: string;
   why: string;
-  /** Who can do it — the distinction between "run this" and "ask someone". */
-  who: "you" | "an operator";
+  /**
+   * Who can do it — the distinction between "run this" and "ask someone", and
+   * WHICH someone.
+   *
+   * Two values were not enough. The owner's grant went out as "an operator",
+   * which the instructions define as a human at the venue — someone who cannot
+   * grant anything on another person's account. And a layout only a maintainer
+   * can capture went out as "you", which left an agent the one remedy it could
+   * act on alone: switching the check off.
+   */
+  who: "you" | "an operator" | "the account owner" | "the maintainers";
   command?: string;
   /**
    * Whether waiting is the whole remedy.
@@ -142,7 +152,9 @@ await run(async () => {
       });
       note(`             faucet declined — ${why.slice(0, 80)}`);
     }
-  } else if (gas !== undefined && !needsGas) {
+  } else if (ownerPath && gas !== undefined && !needsGas) {
+    // Owner path only. On the delegate path nothing needs the balance, and
+    // "gas 0 SUI" listed under `done` read as a step that had been completed.
     done.push(`gas ${String(gas)} SUI`);
   }
 
@@ -183,16 +195,7 @@ await run(async () => {
             who: "you",
             command: invoke("bootstrap", "--create-account", "--yes", "--json"),
           }
-        : {
-            what: "the owner's grant",
-            why:
-              `nothing has been granted to ${wallet.address} yet. The account owner grants it ` +
-              `trading permission from their own wallet — they keep the funds, this wallet ` +
-              `cannot withdraw them, and it needs no SUI of its own. Then set ` +
-              `WATERX_OWNER_ADDRESS and WATERX_ACCOUNT_ID to what they give you.`,
-            who: "an operator",
-            command: invoke("onboard", "--json"),
-          },
+        : ownerGrantStep(wallet.address),
     );
   } else {
     if (agent.config.accountId !== accountId) {
@@ -249,7 +252,15 @@ await run(async () => {
   const report = await runDoctor();
   for (const check of report.checks) {
     if (check.status === "fail") {
-      remaining.push({ what: check.name, why: check.detail, who: "you" });
+      remaining.push({
+        what: check.name,
+        why: check.detail,
+        // A layout nobody has captured is the maintainers' to capture. The detail
+        // still names the allowance that accepts it anyway, and that stays a
+        // decision a person makes — not the fix an agent reaches for because the
+        // step said "you".
+        who: check.name === "abi corpus" ? "the maintainers" : "you",
+      });
     }
   }
 
@@ -260,7 +271,13 @@ await run(async () => {
   } else {
     note(`  ${String(remaining.length)} thing(s) left:`);
     for (const step of remaining) {
-      note(`    • ${step.what} — ${step.who === "you" ? "you" : "ASK AN OPERATOR"}`);
+      const whose = {
+        you: "you",
+        "an operator": "ASK AN OPERATOR",
+        "the account owner": "ASK THE ACCOUNT OWNER",
+        "the maintainers": "FOR THE MAINTAINERS",
+      }[step.who];
+      note(`    • ${step.what} — ${whose}`);
       note(`      ${step.why}`);
       if (step.command !== undefined) note(`      ${step.command}`);
     }

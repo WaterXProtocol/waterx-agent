@@ -8,6 +8,7 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { DELEGATE_BOUNDARY } from "../src/agent/delegation.ts";
 import { decide, type Situation } from "../src/agent/guidance.ts";
 
 const ok: Situation = {
@@ -78,7 +79,9 @@ describe("what to do next", () => {
     const g = decide({ ...ok, mode: "undecided", configured: false, network: "mainnet" });
     expect(g.state).toBe("awaiting-grant");
     expect(g.headline).toContain("grants THIS address");
-    expect(g.headline).toContain("cannot withdraw");
+    // The sentence every surface uses, so what a delegate cannot do reads the
+    // same here as it does beside the permission list.
+    expect(g.headline).toContain(DELEGATE_BOUNDARY);
     expect(g.headline).toContain("no SUI of its own");
     expect(g.suggestions[0]?.command).toContain("onboard");
     // The delegate path is two steps now: hand over the address, then find the
@@ -184,7 +187,7 @@ describe("what to do next", () => {
     for (const state of ["awaiting-grant", "not-granted", "stale-grant", "insufficient"]) {
       const g = decide({
         ...ok,
-        delegation: { state, headline: `delegation is ${state}`, grantUrl: "https://x" },
+        delegation: { state, headline: `delegation is ${state}` },
       });
       expect(g.state, state).toBe("not-delegated");
       expect(g.suggestions.map((x) => x.command).join(" ")).toContain("onboard");
@@ -196,7 +199,7 @@ describe("what to do next", () => {
     for (const state of ["granted", "owner-key"]) {
       const g = decide({
         ...ok,
-        delegation: { state, headline: "fine", grantUrl: "https://x" },
+        delegation: { state, headline: "fine" },
       });
       expect(g.state, state).toBe("ready");
     }
@@ -206,7 +209,7 @@ describe("what to do next", () => {
     const g = decide({
       ...ok,
       open: 1,
-      delegation: { state: "not-granted", headline: "no", grantUrl: "https://x" },
+      delegation: { state: "not-granted", headline: "no" },
     });
     expect(g.state).toBe("unsettled");
   });

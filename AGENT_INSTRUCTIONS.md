@@ -243,9 +243,17 @@ reports free margin. It signs **nothing** unless you add
 funds. It never deposits — that commits money, and money is a decision.
 
 Read `data.remaining`. Each entry is `{ what, why, who, command }`, and `who` is
-the field that matters: `"you"` means run the command, `"an operator"` means
-stop and ask a human at the venue. Relay those verbatim rather than
-paraphrasing — the reasons are specific and the paraphrase usually loses them.
+the field that matters:
+
+| `who` | What it means |
+|---|---|
+| `"you"` | Run the command. |
+| `"the account owner"` | Only the owner can do it — their grant. Give them the address and what `onboard` prints; nobody at the venue can grant it for them. |
+| `"an operator"` | Stop and ask a human at the venue — testnet collateral, for one. |
+| `"the maintainers"` | Nothing anyone at this terminal can fix — an argument layout nobody has captured. Report it. Do not set `WATERX_ALLOW_UNCONFIRMED_ABI` on your own initiative: accepting an unconfirmed layout is a person's decision. |
+
+Relay those verbatim rather than paraphrasing — the reasons are specific and the
+paraphrase usually loses them.
 
 ```json
 {

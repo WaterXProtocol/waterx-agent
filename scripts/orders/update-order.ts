@@ -10,7 +10,7 @@ import { confirmed, initAgent, parseArgs, reportTx, run } from "../lib/cli.ts";
 const args = parseArgs(
   {
     ticker: { desc: "Market, e.g. BTC", required: true },
-    orderId: { desc: "Order id (see `pnpm run orders`)", required: true },
+    orderId: { desc: "Order id (see `orders`)", required: true },
     triggerPrice: { desc: "New trigger price in USD", required: true },
     size: { desc: "New base-asset size", required: true },
     yes: { desc: "Confirm this write", flag: true },

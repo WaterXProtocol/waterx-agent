@@ -47,7 +47,15 @@ await run(async () => {
 
   // Only when this process holds a delegate key: signing as the owner has no
   // handshake to be part-way through.
-  let delegation: { state: string; headline: string; grantUrl: string } | undefined;
+  //
+  // `reviewUrl` and `authorizeUrl` are the two places an owner goes — to review,
+  // and to grant — and they are different places. `grantUrl` rides along only
+  // because a caller may already read it: it has always held the review page,
+  // where perp permission cannot be granted, so nothing should be sent there to
+  // grant.
+  let delegation:
+    | { state: string; headline: string; reviewUrl: string; authorizeUrl?: string; grantUrl: string }
+    | undefined;
   if (report.signerReady && signsAsDelegate(agent.config, agent.signer.address)) {
     let delegates;
     try {
@@ -67,7 +75,13 @@ await run(async () => {
       ...(account === undefined ? {} : { accountId: account }),
       ...(delegates === undefined ? {} : { delegates }),
     });
-    delegation = { state: status.state, headline: status.headline, grantUrl: status.grantUrl };
+    delegation = {
+      state: status.state,
+      headline: status.headline,
+      reviewUrl: status.reviewUrl,
+      ...(status.authorizeUrl === undefined ? {} : { authorizeUrl: status.authorizeUrl }),
+      grantUrl: status.grantUrl,
+    };
   }
 
   const open = unsettled();

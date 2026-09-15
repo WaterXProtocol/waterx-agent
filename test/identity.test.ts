@@ -4,6 +4,8 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { WaterXAgent } from "../src/agent/agent.ts";
+import { loadConfig } from "../src/config.ts";
+import { signerRole } from "../src/doctor.ts";
 
 const OWNER = `0x${"9".repeat(64)}`;
 const DELEGATE = `0x${"d".repeat(64)}`;
@@ -106,5 +108,25 @@ describe("resolveIdentity", () => {
     });
 
     expect(agent.address).toBe(DELEGATE);
+  });
+});
+
+describe("what doctor calls the key", () => {
+  it("does not call a key with no account an owner's key", () => {
+    // A wallet `bootstrap` had just generated for the delegate path was labelled
+    // "owner key" while `next` called the same process undecided.
+    const role = signerRole(loadConfig(), DELEGATE);
+    expect(role).toMatch(/no account yet/);
+    expect(role).not.toContain("owner key");
+  });
+
+  it("names the owner's key and a delegate's once the account settles which", () => {
+    const config = { ...loadConfig(), accountId: ACCOUNT, ownerAddress: OWNER };
+    expect(signerRole(config, OWNER)).toBe("owner key");
+    expect(signerRole(config, DELEGATE)).toBe(`delegate of ${OWNER}`);
+  });
+
+  it("says the owner is not settled when the account could not be read", () => {
+    expect(signerRole({ ...loadConfig(), accountId: ACCOUNT }, DELEGATE)).toMatch(/could not be read/);
   });
 });

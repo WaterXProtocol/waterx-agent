@@ -76,7 +76,7 @@ export function signerReadiness(config: AgentConfig): SignerReadiness {
         ready: false,
         kind: "in-process-keypair",
         reason:
-          "no SUI_PRIVATE_KEY in the environment — run `pnpm run generate-wallet`, or point " +
+          "no SUI_PRIVATE_KEY in the environment — `bootstrap` generates one, or point " +
           "WATERX_SIGNER_COMMAND at a SIGNER_PROTOCOL provider.",
       }
     : { ready: true, kind: "in-process-keypair" };
