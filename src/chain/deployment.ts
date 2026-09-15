@@ -100,6 +100,40 @@ function collectObjects(
   }
 }
 
+/** Keys under which the document declares a coin by its full type. */
+const COIN_TYPE_KEYS = new Set(["type", "coin_type"]);
+
+/** A plain struct tag — `0xADDR::module::Name` — with nothing nested inside it. */
+const STRUCT_TAG = /^0x([0-9a-fA-F]{1,64})::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * The packages of the coin types the document declares, as TYPE identities only.
+ *
+ * The document says which coins the deployment custodies
+ * (`native_custody.assets[].type`) and pays rewards in
+ * (`waterx_staking.rewarders.<pool>.<coin>.coin_type`). A deposit, a withdrawal
+ * and a WLP mint name those coins as type arguments — so reading package ids
+ * only from the `packages` entries made USDC and the reward coin look like
+ * strangers, this package had to ship them as standing exceptions, and `doctor`
+ * reported on every run that the deployment had not listed coins it had.
+ *
+ * Type-only, deliberately. Declaring a coin makes its type legitimate to name;
+ * it does not make its package a call target, and nothing here touches
+ * `callable`. Only struct tags under those two keys count, so an address that
+ * merely appears somewhere in the document widens nothing.
+ */
+function collectCoinTypes(node: unknown, into: Set<string>, depth = 0): void {
+  if (depth > 8 || node === null || typeof node !== "object") return;
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (typeof value === "string") {
+      const address = COIN_TYPE_KEYS.has(key) ? STRUCT_TAG.exec(value)?.[1] : undefined;
+      if (address !== undefined) into.add(normalizePackage(address));
+    } else {
+      collectCoinTypes(value, into, depth + 1);
+    }
+  }
+}
+
 /** Sui's own packages, which every transaction may call. */
 const FRAMEWORK = ["0x1", "0x2", "0x3"];
 
@@ -246,6 +280,7 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
     collectObjects(entry, objects, byRole, `${name}.`);
   }
   collectObjects(document.coin_registry, objects, byRole, "coin_registry.");
+  collectCoinTypes(document.packages, typeable);
   return {
     callable,
     typeable,
