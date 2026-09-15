@@ -457,15 +457,20 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
           : named.length > 0
             ? warn(
                 "packages",
-                `${String(called.size)} packages reached by ${via}; ${String(named.length)} of ` +
-                  `them are accepted only because they are named as exceptions ` +
-                  `(${named.map((id) => `0x${id.slice(0, 8)}…`).join(", ")})` +
+                `${String(called.size)} packages reached by ${via}; ` +
+                  (named.length === 1
+                    ? `1 of them is accepted only because it is named as an exception`
+                    : `${String(named.length)} of them are accepted only because they are named as exceptions`) +
+                  ` (${named.map((id) => `0x${id.slice(0, 8)}…`).join(", ")})` +
                   (shipped.length === 0
                     ? ""
-                    : `, ${String(shipped.length)} of those shipped as a default by this package ` +
-                      `rather than named by you`) +
+                    : shipped.length === named.length
+                      ? `, shipped as ${named.length === 1 ? "a default" : "defaults"} by this package ` +
+                        `rather than named by you`
+                      : `, ${String(shipped.length)} of those shipped as a default by this package ` +
+                        `rather than named by you`) +
                   `. That is a standing exception to "every call belongs to this deployment" — ` +
-                  `drop it once the config document lists them.`,
+                  `drop it once the config document lists ${named.length === 1 ? "it" : "them"}.`,
               )
             : ok(
                 "packages",

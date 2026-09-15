@@ -63,35 +63,35 @@ const DEFAULT_CONFIG_URL: Record<Network, string> = {
 /**
  * Package exceptions mainnet cannot trade without, shipped as a default.
  *
- * The mainnet config document does not list three packages the backend reaches:
- * the Pyth Lazer oracle, which **every order** calls, and two coin types that
- * appear only as type arguments. Without them the verifier refuses every
- * mainnet write — correctly, because a call from a package nobody can name is
- * exactly what it exists to stop.
+ * The mainnet config document does not list the Pyth Lazer oracle package, which
+ * **every order** calls. Without it the verifier refuses every mainnet order —
+ * correctly, because a call from a package nobody can name is exactly what it
+ * exists to stop.
+ *
+ * It used to ship two more: USDC and the WLP reward coin, which appear only as
+ * type arguments. The document does declare those — as the coins
+ * `native_custody` custodies and `waterx_staking` pays out — and they are now
+ * read from there (`collectCoinTypes` in `deployment.ts`), so they are no longer
+ * exceptions to anything.
  *
  * The alternative was to make each user paste a line `doctor` prints. That is
- * worse, not better: pasting three opaque ids you cannot evaluate is not
+ * worse, not better: pasting opaque ids you cannot evaluate is not
  * informed consent, and it puts the exception somewhere nobody reviews. Here it
  * is version-controlled, diffable, explained, and `doctor` reports it as a
  * standing exception in force rather than passing silently.
  *
  * `=*` on the Lazer package grants its calls with nothing holding them to a
  * shape — see `deployment.ts` for why no narrower form can express a
- * third-party package. The other two are bare ids, which cover a type argument
- * and no call at all.
+ * third-party package.
  *
- * These come out the day the config document lists them. `pnpm run doctor`
- * says so every time it runs.
+ * It comes out the day the config document lists it. `doctor` says so every
+ * time it runs.
  */
 const DEFAULT_EXTRA_PACKAGES: Readonly<Record<Network, readonly string[]>> = {
   testnet: [],
   mainnet: [
     // pyth_lazer::parse_and_verify_le_ecdsa_update_v2 — reached by every order.
     "0xefbfd064480777699fd9c557a5804d72ace7bc82661fdc8d1f1a44ea6d92ee10=*",
-    // USDC, as a type argument on deposit, withdraw and WLP mint.
-    "0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7",
-    // The WLP reward coin, as a type argument on a mint.
-    "0xdeeb7a4662eec9f2f3def03fb937a663dddaa2e215b8078a284d026b7946c270",
   ],
 };
 

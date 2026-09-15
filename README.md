@@ -219,8 +219,8 @@ the setting to change.
 ✓  collateral         USD (6 dp); backing assets: USDC, USDsui
 ✓  deployment config  waterx_perp=v3 waterx_account=v2 waterx_oracle=v1 waterx_rule=v4
 ✓  manifest           24 packages, 157 objects, read just now
-!  packages           …a WLP mint will be refused before signing. Nothing in the
-                      onboarding or perp trading flow reaches them.
+✓  packages           …reached by an order, a WLP mint, a withdrawal, a deposit are
+                      listed in the deployment config
 !  abi corpus         19 entrypoints confirmed on 2026-09-10; 3 never were.
                       These actions refuse until they are: burnWlp, cancelWlpBurn,
                       claimWlpRewards — none of which is part of onboarding or
@@ -230,13 +230,11 @@ the setting to change.
 ✓  write readiness    interactive on testnet — writes can be signed
 ```
 
-Those two `!` lines are the current, expected state of testnet: three WLP and
-staking entrypoints whose argument layouts cannot be captured without conditions
-that do not exist (a pending redemption, an unstaked balance, claimable
-rewards), and one reward-coin package the config document does not list. Neither
-touches onboarding or perp trading. `doctor` prints the exact
-`WATERX_ALLOW_UNCONFIRMED_ABI` / `WATERX_EXTRA_PACKAGES` line if you need those
-paths anyway.
+That `!` line is the current, expected state of testnet: three WLP and staking
+entrypoints whose argument layouts cannot be captured without conditions that do
+not exist (a pending redemption, an unstaked balance, claimable rewards). It does
+not touch onboarding or perp trading, and `doctor` prints the exact
+`WATERX_ALLOW_UNCONFIRMED_ABI` line if you need those paths anyway.
 
 ### Mainnet
 
@@ -248,12 +246,13 @@ none of them has happened.
 1. **A policy.** Mainnet defaults to `read-only`. Writing there has to be
    something someone typed, so `WATERX_EXECUTION_POLICY=interactive` is the
    decision, not an oversight to fix.
-2. **The package exceptions.** Mainnet's config document does not list three
-   packages the backend reaches: the Pyth Lazer oracle, which **every order**
-   calls, and the USDC and reward coin types, which appear as type arguments.
-   `pnpm run doctor` prints the exact `WATERX_EXTRA_PACKAGES` line. The Lazer
-   one needs the `=*` form — see `.env.example` for what each form grants and
-   why that one is the ugliest.
+2. **The package exception.** Mainnet's config document does not list the
+   Pyth Lazer oracle package, which **every order** calls, so this package ships
+   it as a default and `doctor` names it on every run as a standing exception.
+   It needs the `=*` form — see `.env.example` for what each form grants and why
+   that one is the ugliest. The coin types a deposit, a withdrawal or a WLP mint
+   carries are not exceptions: the document declares them, and they are read
+   from there.
 3. **A corpus for the actions you use.** The recorded argument layouts are
    **per network**: testnet and mainnet publish different packages under the
    same names, so a capture of one describes the other as entirely changed.

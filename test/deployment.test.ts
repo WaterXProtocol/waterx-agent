@@ -127,6 +127,61 @@ describe("the deployment manifest", () => {
  * different amounts, and until mainnet there was no way to write down the one
  * mainnet needs.
  */
+describe("coin types the document declares", () => {
+  const PERP = `0x${"1".repeat(64)}`;
+  const USDC = `0x${"d".repeat(64)}`;
+  const DEEP = `0x${"e".repeat(64)}`;
+
+  it("lets a declared coin be named as a type argument, and never called", async () => {
+    // Shaped like mainnet's document: custody assets and staking rewarders
+    // declare their coins by full type, outside the `packages` ids.
+    served = ok(
+      JSON.stringify({
+        packages: {
+          waterx_perp: { published_at: PERP, original_id: PERP, version: 1 },
+          native_custody: {
+            published_at: `0x${"2".repeat(64)}`,
+            assets: [{ type: `${USDC}::usdc::USDC`, decimal: 6 }],
+          },
+          waterx_staking: {
+            published_at: `0x${"3".repeat(64)}`,
+            rewarders: { WLP: { DEEP: { coin_type: `${DEEP}::deep::DEEP`, rewarder: `0x${"4".repeat(64)}` } } },
+          },
+        },
+      }),
+    );
+
+    const deployment = await loadDeployment(URL);
+
+    for (const coin of [USDC, DEEP]) {
+      expect(deployment.typeable.has(normalizePackage(coin)), coin).toBe(true);
+      expect(deployment.callable.has(normalizePackage(coin)), coin).toBe(false);
+    }
+  });
+
+  it("reads only struct tags under coin keys, not every string that mentions an address", async () => {
+    served = ok(
+      JSON.stringify({
+        packages: {
+          waterx_perp: {
+            published_at: PERP,
+            original_id: PERP,
+            version: 1,
+            note: `${USDC}::usdc::USDC`,
+            type: "shared",
+            coin_type: `${DEEP}::deep::DEEP<${USDC}::usdc::USDC>`,
+          },
+        },
+      }),
+    );
+
+    const deployment = await loadDeployment(URL);
+
+    expect(deployment.typeable.has(normalizePackage(USDC))).toBe(false);
+    expect(deployment.typeable.has(normalizePackage(DEEP))).toBe(false);
+  });
+});
+
 describe("package exceptions", () => {
   const PKG = normalizePackage(`0x${"e".repeat(64)}`);
 
