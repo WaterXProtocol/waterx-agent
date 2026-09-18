@@ -269,6 +269,13 @@ needs **no SUI** — the backend sponsors its transactions — no account of its
 own, and no collateral of its own, and it cannot withdraw. So the answer to
 "what does the agent need?" is usually "the owner's grant, and nothing else".
 
+**Never read "nothing is configured" as "nothing was granted."** The grant is
+keyed on the agent's wallet, so it is findable before any account id exists —
+`next` and `onboard` ask the delegate index before they report a state that
+depends on it. If the owner granted it earlier, you get `granted-not-adopted`
+and an `adopt` command: run that, and do not hand them the authorize link a
+second time.
+
 Getting that grant is one command:
 
 ```bash

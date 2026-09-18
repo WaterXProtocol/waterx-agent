@@ -28,6 +28,7 @@ export type State =
   | "awaiting-approval"
   | "not-set-up"
   | "awaiting-grant"
+  | "granted-not-adopted"
   | "not-delegated"
   | "read-only"
   | "no-collateral"
@@ -141,6 +142,15 @@ export interface Situation {
    */
   mode: "delegate" | "owner" | "undecided";
   /**
+   * Accounts the delegate index says already grant this wallet.
+   *
+   * `undefined` means nobody asked. The distinction matters: this state used to
+   * be derived entirely from which variables were set, so a wallet granted five
+   * minutes earlier was told nothing had been granted to it — and the owner was
+   * handed a link they had already used.
+   */
+  discovered?: readonly { accountId: string; ownerAddress: string }[];
+  /**
    * This process's own wallet: the address that needs gas on the owner path,
    * and the one an owner grants to on the delegate path. Named in the advice
    * either way, because "fund the wallet" and "grant this address" are both
@@ -212,16 +222,56 @@ export function decide(s: Situation): Guidance {
       // for. It described the grant and named no place to make it, so where to
       // sign depended on the caller running `onboard` next — which an agent
       // relaying a headline does not necessarily do.
+      // Before anything is said about what is missing: the grant may already be
+      // there. It is keyed on the wallet, so it can be found before an account
+      // id exists — which is exactly the situation this branch is in.
+      const found = s.discovered ?? [];
+      const [only] = found;
+      if (found.length === 1 && only !== undefined) {
+        return {
+          state: "granted-not-adopted",
+          headline:
+            `${only.accountId} already grants this wallet, on behalf of ${only.ownerAddress}. ` +
+            `The owner has done their part; adopting writes the account down after re-checking ` +
+            `the grant on chain.`,
+          suggestions: [
+            {
+              what: "record the account this wallet trades",
+              command: invoke("adopt", "--account", only.accountId, "--json"),
+            },
+          ],
+        };
+      }
+      if (found.length > 1) {
+        return {
+          state: "granted-not-adopted",
+          headline:
+            `${String(found.length)} accounts already grant this wallet. Which one it trades is a ` +
+            `choice, not a guess — ask, then adopt that one.`,
+          suggestions: found.map((g) => ({
+            what: `adopt ${g.accountId}, owned by ${g.ownerAddress}`,
+            command: invoke("adopt", "--account", g.accountId, "--json"),
+          })),
+        };
+      }
+
       const page = s.address === undefined ? undefined : perpAuthorizeLink(s.network, s.address);
+      // "Nothing has been granted" is a claim about the chain, and only one of
+      // these callers has asked the chain. The other may say what it actually
+      // knows: that nothing is recorded here.
+      const lead =
+        s.discovered === undefined
+          ? "There is a wallet and no grant to it is recorded here."
+          : "There is a wallet and nothing grants it yet.";
       return {
         state: "awaiting-grant",
         ...(page === undefined ? {} : { link: page }),
         headline:
           page === undefined
-            ? `There is a wallet and nothing has been granted to it yet. The account owner grants ` +
-              `${s.address ?? "it"} permission to trade their account, from their own wallet.`
-            : `There is a wallet and nothing has been granted to it yet. Give the account owner ` +
-              `this link — they sign in their own wallet, where their key stays: ${page}`,
+            ? `${lead} The account owner grants ${s.address ?? "it"} permission to trade their ` +
+              `account, from their own wallet.`
+            : `${lead} Give the account owner this link — they sign in their own wallet, where ` +
+              `their key stays: ${page}`,
         detail:
           `The usual arrangement is that the owner grants THIS address permission to trade their ` +
           `account — they keep the funds, and it needs no SUI of its own because the backend ` +

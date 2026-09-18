@@ -33,6 +33,7 @@ import {
 } from "@waterx/sdk";
 
 import type { DelegateData } from "../api/types.ts";
+import type { DiscoveredGrant } from "./discovery.ts";
 import { invoke } from "../cli/contract.ts";
 import type { Network } from "../config.ts";
 
@@ -316,7 +317,10 @@ export const requestedPermissions = (): { name: string; meaning: string }[] =>
  * the step under "an operator" — a human at the venue, who cannot grant anything
  * on someone else's account.
  */
-export function ownerGrantStep(agentWallet: string): {
+export function ownerGrantStep(
+  agentWallet: string,
+  options: { checked?: boolean } = {},
+): {
   what: string;
   why: string;
   who: "the account owner";
@@ -325,7 +329,12 @@ export function ownerGrantStep(agentWallet: string): {
   return {
     what: "the owner's grant",
     why:
-      `nothing has been granted to ${agentWallet} yet. The account owner grants it trading ` +
+      // Only one of these has read the chain. `bootstrap` relays this verbatim,
+      // so it may not assert what nothing looked for.
+      (options.checked === true
+        ? `nothing grants ${agentWallet} yet`
+        : `no grant to ${agentWallet} is recorded here`) +
+      `. The account owner grants it trading ` +
       `permission from their own wallet; they keep the funds, and it needs no SUI of its own. ` +
       `${DELEGATE_BOUNDARY} Once they have granted it, \`onboard --wait\` finds the account and ` +
       `adopts it — nobody copies an id.`,
@@ -343,6 +352,17 @@ export type DelegationState =
   | "no-wallet"
   /** A wallet exists; the owner has not been told about it. */
   | "awaiting-grant"
+  /**
+   * The chain already grants this wallet, and no account is recorded here yet.
+   *
+   * The state this package could not report for a week, because every surface
+   * asked "is this wallet a delegate of WATERX_ACCOUNT_ID?" — a question with
+   * no answer until an account has been adopted, which is the very thing the
+   * grant is needed to find. So a wallet that had been granted minutes earlier
+   * was told "nothing is granted to you yet", and the owner was handed a link
+   * they had already used.
+   */
+  | "granted-not-adopted"
   /** Owner and account named, but the chain does not show this wallet as a delegate. */
   | "not-granted"
   /**
@@ -374,6 +394,13 @@ export interface DelegationStatus {
   accountId?: string;
   /** The permissions the chain actually records, when there is a grant. */
   granted?: string[];
+  /**
+   * Accounts that grant this wallet, when the index was asked.
+   *
+   * Present only on `granted-not-adopted`, where the grant is known but the
+   * account has not been written down.
+   */
+  grants?: readonly DiscoveredGrant[];
   /** Requested permissions the grant does not carry. */
   missing?: string[];
   /** Where to review and revoke — Account → Delegates. Always the delegates page. */
@@ -415,6 +442,15 @@ export function delegationStatus(input: {
   grantCommand?: string;
   /** `undefined` when the lookup has not been made; an empty array means none. */
   delegates?: readonly DelegateData[];
+  /**
+   * What the delegate index says about THIS wallet, keyed on the wallet alone.
+   *
+   * `undefined` means nobody asked — which is not the same as "nothing", and
+   * the difference is the whole point: a wallet's grant is discoverable before
+   * an account id exists, and this used to report "nothing is granted" without
+   * ever having looked.
+   */
+  discovered?: readonly DiscoveredGrant[];
 }): DelegationStatus {
   // Two different places, and conflating them is what made the override inert.
   //
@@ -459,13 +495,41 @@ export function delegationStatus(input: {
     ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }),
   };
 
+  // Facts before configuration, in the one state where configuration is empty
+  // by definition. A grant names the account; the account is not needed to find
+  // the grant.
+  const discovered = input.discovered;
+  if (accountId === undefined && discovered !== undefined && discovered.length > 0) {
+    const [first] = discovered;
+    return {
+      ...base,
+      ...(ownerAddress === undefined ? {} : { ownerAddress }),
+      state: "granted-not-adopted",
+      grants: discovered,
+      headline:
+        discovered.length === 1 && first !== undefined
+          ? `${first.accountId} already grants this wallet, on behalf of ${first.ownerAddress}. ` +
+            `Nothing more is needed from the owner — \`adopt\` re-checks the grant on chain and ` +
+            `writes the account down.`
+          : `${String(discovered.length)} accounts already grant this wallet. Which one it trades ` +
+            `is a choice, not a guess: ask which, then adopt that one.`,
+      detail,
+    };
+  }
+
   if (ownerAddress === undefined) {
     return {
       ...base,
       state: "awaiting-grant",
       headline:
-        `Nothing is granted to this wallet yet — \`onboard --wait\` finds the account and ` +
-        `adopts it once there is. To grant perp trading, ${grantHeadline(grantArgs)}`,
+        // "Nothing is granted" is a claim about the chain. Only one of these
+        // branches has looked at the chain, and the other used to make the
+        // claim anyway.
+        (discovered === undefined
+          ? `No grant to this wallet is recorded here`
+          : `Nothing grants this wallet yet`) +
+        ` — \`onboard --wait\` finds the account and adopts it once there is. To grant perp ` +
+        `trading, ${grantHeadline(grantArgs)}`,
       detail,
     };
   }

@@ -12,7 +12,11 @@
  */
 import { list as listApprovals } from "../../src/agent/approvals.ts";
 import { delegationStatus, perpGrantCommand } from "../../src/agent/delegation.ts";
+import { type DiscoveredGrant, discoverGrants } from "../../src/agent/discovery.ts";
 import { decide, sentenceOf } from "../../src/agent/guidance.ts";
+import { accountObjectReader } from "../../src/chain/account-object.ts";
+import { loadDeployment } from "../../src/chain/deployment.ts";
+import { grantEventCandidates } from "../../src/chain/grant-events.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
 import { signsAsDelegate } from "../../src/config.ts";
@@ -94,6 +98,33 @@ await run(async () => {
     };
   }
 
+  // Before deciding that nothing has been granted: ask. The grant is keyed on
+  // the wallet, so it is findable with no account id — and `signsAsDelegate`,
+  // which gates the check above, is false until an owner is configured, which
+  // only happens after adoption. That circle is why a wallet granted minutes
+  // earlier was told nothing had been granted to it.
+  let discovered: readonly DiscoveredGrant[] | undefined;
+  if (report.signerReady && report.readReady && account === undefined) {
+    try {
+      const deployment = await loadDeployment(agent.config.configUrl);
+      // The ORIGINAL package id names event types; `idsFor` lists it last.
+      const accountPackage = deployment.idsFor("waterx_account").at(-1);
+      discovered = (
+        await discoverGrants(agent.signer.address, {
+          delegatedAccounts: (delegate) => agent.read.delegatedAccounts(delegate),
+          recentGrantEvents:
+            accountPackage === undefined
+              ? () => Promise.reject(new Error("the deployment config names no waterx_account package"))
+              : grantEventCandidates(agent.config.network, accountPackage),
+          readAccount: accountObjectReader(agent.config),
+        })
+      ).grants;
+    } catch {
+      // Unknown, not "none". The states below say which they mean.
+      discovered = undefined;
+    }
+  }
+
   const open = unsettled();
   const pending = listApprovals().filter((a) => a.state === "pending");
 
@@ -127,6 +158,7 @@ await run(async () => {
           ? "owner"
           : "undecided",
     ...(report.signerReady ? { address: agent.signer.address } : {}),
+    ...(discovered === undefined ? {} : { discovered }),
     ...(delegation === undefined ? {} : { delegation }),
     missing: {
       signer: !report.signerReady,
