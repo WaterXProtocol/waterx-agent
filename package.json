@@ -106,5 +106,14 @@
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   },
-  "packageManager": "pnpm@10.34.5"
+  "packageManager": "pnpm@10.34.5",
+  "description": "A TypeScript agent for the [WaterX](https://waterx.io) perpetual protocol on Sui. No browser wallet: it holds a keypair, asks the WaterX backend to build each transaction, signs the bytes, and submits them.",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

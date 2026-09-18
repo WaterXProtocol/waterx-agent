@@ -49,9 +49,14 @@ npx waterx next --json
 The build happens at install time via the `prepare` script, which means this
 route depends on lifecycle scripts being allowed. Two things to know:
 
-- **npm** runs it, with a `npm warn allow-scripts` notice on npm ≥ 11. If a
-  policy blocks it, the package installs with no `dist/` — an install that looks
-  fine and has no build in it.
+- **npm** runs it, with a `npm warn allow-scripts` notice on npm ≥ 11. That
+  notice is bookkeeping, not a refusal: measured on npm 11.16.0, the build runs
+  and `npx waterx next --json` answers `ok`. Where it *is* a refusal —
+  `ignore-scripts`, an approval policy, a locked-down CI — the package installs
+  with no `dist/`, and the first command says so — `status: "config"`, exit 3 —
+  instead of dying with a module-not-found stack. The fix is to **re-run the
+  install**; `npm rebuild` does not do it, because rebuild does not run
+  `prepare` and reports success anyway.
 - **pnpm refuses outright**: `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`. It wants
   the package named in `onlyBuiltDependencies` first. Nothing is silently
   broken — the install fails — but `pnpm add github:…` does not work as typed.

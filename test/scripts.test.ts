@@ -14,7 +14,9 @@
  * `function` declarations are hoisted and are therefore fine — which is why the
  * rule below is about `const`/`let`/`var`, not about helpers in general.
  */
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -128,6 +130,40 @@ describe("the bin shim", () => {
     for (const tool of ["capture-corpus", "generate-abi", "build", "prepare"]) {
       expect(shim, tool).toContain(`"${tool}"`);
     }
+  });
+
+  it("names an install that has no build in it, in the contract's own terms", () => {
+    // `prepare` compiles at install time; npm >= 11 warns about it, and where
+    // that warning is a policy the package installs with no `dist/`. What the
+    // caller used to get was a MODULE_NOT_FOUND stack naming a path inside
+    // node_modules, empty stdout, and exit 1 — the code reserved for "this
+    // process fell over" — because `spawnSync` succeeds at spawning Node with a
+    // path that does not exist, which left the shim's own message unreachable.
+    const dir = mkdtempSync(join(tmpdir(), "waterx-unbuilt-"));
+    mkdirSync(join(dir, "bin"));
+    copyFileSync("bin/waterx.mjs", join(dir, "bin", "waterx.mjs"));
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "waterx-agent", scripts: { next: "tsx scripts/agent/next.ts" } }),
+    );
+
+    const run = spawnSync(process.execPath, [join(dir, "bin", "waterx.mjs"), "next", "--json"], {
+      encoding: "utf8",
+    });
+
+    // `config`, not 1: the environment is wrong, and that is a thing a caller
+    // can act on.
+    expect(run.status, run.stderr).toBe(3);
+    expect(run.stderr).toContain("npm install github:WaterXProtocol/waterx-agent");
+    // And warns off the obvious wrong move: `npm rebuild` reports success and
+    // does not run `prepare`, so it leaves the package exactly as broken.
+    expect(run.stderr).toMatch(/npm rebuild` does NOT/u);
+    // And the one-document promise survives the failure it is most likely to
+    // meet on a first install.
+    const envelope = JSON.parse(run.stdout) as { ok: boolean; status: string; nextCommand: string };
+    expect(envelope.ok).toBe(false);
+    expect(envelope.status).toBe("config");
+    expect(envelope.nextCommand).toBe("npm install github:WaterXProtocol/waterx-agent");
   });
 
   it("does not ship them either", () => {
