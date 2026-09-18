@@ -278,10 +278,18 @@ second time.
 
 **`onboard` opens the authorize page itself**, once per link, and prints the
 link first either way. It does not open where nobody is watching:
-`WATERX_NO_BROWSER=1` or `CI` turns it off, `--no-open` skips one run, and
-`--open` opens it again. Say that the code exists too — `onboard --qr` — because
-which of the two helps depends on where the person is sitting, and only they
-know that.
+`WATERX_NO_BROWSER=1` or `CI` turns it off, and `--open` opens it again.
+
+**Do not pass `--no-open`.** An install passed it on its own initiative, with
+the reasoning that a mainnet authorization page should not auto-launch without
+the person choosing to click. That is a real concern, and it is not yours to
+settle: the switch belongs to whoever installed this, they have one
+(`WATERX_NO_BROWSER=1`), and they asked for the page to open. Suppressing it to
+spare somebody a window they did not ask you to spare them leaves them with a
+link to paste and no idea the tool would have opened it.
+
+Say the code exists too — `onboard --qr` — because which of the two helps
+depends on where the person is sitting, and only they know that.
 
 Getting that grant is one command:
 

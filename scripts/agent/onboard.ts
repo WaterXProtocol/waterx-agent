@@ -79,7 +79,12 @@ const args = parseArgs(
       flag: true,
     },
     noOpen: {
-      desc: "Do not open a browser this time (WATERX_NO_BROWSER=1 turns it off for good)",
+      // `--help` is where an agent looks before the docs, so the prohibition
+      // has to be here too: one passed this on its own initiative and the
+      // description read like an ordinary option.
+      desc:
+        "Do not open a browser this run. A PERSON'S switch — an agent must not pass it; " +
+        "WATERX_NO_BROWSER=1 turns it off for good",
       flag: true,
     },
   },
