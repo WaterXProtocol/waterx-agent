@@ -54,7 +54,14 @@ await run(async () => {
   // where perp permission cannot be granted, so nothing should be sent there to
   // grant.
   let delegation:
-    | { state: string; headline: string; reviewUrl: string; authorizeUrl?: string; grantUrl: string }
+    | {
+        state: string;
+        headline: string;
+        detail?: string;
+        reviewUrl: string;
+        authorizeUrl?: string;
+        grantUrl: string;
+      }
     | undefined;
   if (report.signerReady && signsAsDelegate(agent.config, agent.signer.address)) {
     let delegates;
@@ -78,6 +85,7 @@ await run(async () => {
     delegation = {
       state: status.state,
       headline: status.headline,
+      ...(status.detail === undefined ? {} : { detail: status.detail }),
       reviewUrl: status.reviewUrl,
       ...(status.authorizeUrl === undefined ? {} : { authorizeUrl: status.authorizeUrl }),
       grantUrl: status.grantUrl,
@@ -97,7 +105,7 @@ await run(async () => {
     orders = (await agent.read.orders({ account })).length;
   }
 
-  const { state, headline, suggestions } = decide({
+  const { state, headline, detail, suggestions } = decide({
     open: open.length,
     firstUnsettled: open[0]?.submission.id,
     pending: pending.map((a) => ({ id: a.request.id, action: a.request.action })),
@@ -148,6 +156,9 @@ await run(async () => {
     {
       state,
       headline,
+      // In the envelope, not on the screen: this is the answer to "why?", asked
+      // by a minority of callers, and it is what made the headline unreadable.
+      ...(detail === undefined ? {} : { detail }),
       suggestions,
       network: agent.config.network,
     // Both set and different is a delegate; an account with no owner named is

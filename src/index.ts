@@ -17,17 +17,29 @@ export type {
 } from "./agent/agent.ts";
 export { assertNotCrossing, MarketRegistry } from "./agent/markets.ts";
 export {
+  addressTail,
+  completeHandshakeCommand,
   CONSOLE_ENDPOINTS,
   consoleUrl,
+  DELEGATE_BOUNDARY,
   delegatesUrl,
+  grantDetail,
+  grantHeadline,
+  handshakeScreen,
+  ownerGrantStep,
   perpAuthorizeLink,
   perpAuthorizeUrl,
   perpGrantCommand,
   delegationStatus,
+  requestedPermissions,
   REQUESTED_PERMISSION_NAMES,
   REQUESTED_PERP_PERMISSIONS,
 } from "./agent/delegation.ts";
-export type { DelegationState, DelegationStatus } from "./agent/delegation.ts";
+export type { DelegationState, DelegationStatus, ScreenOptions } from "./agent/delegation.ts";
+export { adoptAccount, NotAGrantError, OwnerMismatchError, verifyAdoptable } from "./agent/adopt.ts";
+export type { Adoptable, Adopted, AdoptionEffects } from "./agent/adopt.ts";
+export { awaitGrants, DEFAULT_POLL_SECONDS, discoverGrants, MIN_POLL_SECONDS } from "./agent/discovery.ts";
+export type { Attempt, Discovery, DiscoveredGrant, DiscoveryDeps, WaitOptions } from "./agent/discovery.ts";
 export { decide } from "./agent/guidance.ts";
 export type { Guidance, Situation, State, Suggestion } from "./agent/guidance.ts";
 export { buildTx, previewOf } from "./agent/plan.ts";

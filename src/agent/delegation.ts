@@ -128,8 +128,18 @@ export const perpGrantCommand = (input: {
   input.invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
 
 /**
- * How to tell the owner to grant — a page when there is one, the CLI when there
- * is not.
+ * Where the owner goes, in one sentence — the sentence that gets relayed.
+ *
+ * This used to be one paragraph carrying the link, the CLI alternative, the
+ * review page and what a delegate cannot do, and `next` put all of it in
+ * `headline`, which SKILL.md tells an agent to relay verbatim. The reader is an
+ * operator whose whole job at that moment is to send someone a link, and the
+ * link sat about three-quarters of the way through 850 characters of prose
+ * addressed to somebody else. Nobody reads that to the end.
+ *
+ * So the sentence carries the link and stops. What the grant means is
+ * {@link grantDetail}, which rides beside it in the JSON and is addressed to
+ * the person who signs — who reads it on the page, where they are signing.
  *
  * `perpAuthorizeUrl()` used to change only the REVIEW link while every headline
  * went on prescribing the command. So the escape hatch existed and did not
@@ -138,36 +148,68 @@ export const perpGrantCommand = (input: {
  * it, which is the only reason it was found — the env var is exercised by
  * nobody until the page ships.
  *
- * The CLI path is not deprecated by this. It is the one that works when this
- * package can name no page, and it is honest about its cost: the owner puts
- * their key in a terminal instead of keeping it in a browser wallet. That cost
- * is the reason the page exists, not an argument that the CLI is fine.
- *
  * `authorizeUrl` is the FULL link, agent address included. It used to be the
  * bare page with `?agent=` appended here, which put the query-string building
  * in two places — and only one of them learned that an override may already
  * carry one.
  */
-export const grantInstruction = (input: {
+export const grantHeadline = (input: {
   agentWallet: string;
   authorizeUrl?: string;
   grantCommand?: string;
 }): string => {
   const command =
     input.grantCommand ?? invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
+  return input.authorizeUrl === undefined
+    ? `the owner grants it with their own key: ${command}`
+    : `the owner opens ${input.authorizeUrl} and signs with their wallet`;
+};
+
+/**
+ * What the grant means, and what else it could be made with — read once, by the
+ * person deciding, rather than reprinted every time the state is reported.
+ *
+ * The CLI path is not deprecated by the page existing. It is the one that works
+ * when this package can name no page, and it is honest about its cost: the
+ * owner puts their key in a terminal instead of keeping it in a browser wallet.
+ * That cost is the reason the page exists, not an argument that the CLI is
+ * fine.
+ *
+ * It carries {@link DELEGATE_BOUNDARY} in full. A surface that says what a
+ * delegate cannot do in its own words is how one of them ended up saying "this
+ * wallet cannot withdraw" beside a list containing WITHDRAW_COLLATERAL.
+ */
+export const grantDetail = (input: {
+  agentWallet: string;
+  authorizeUrl?: string;
+  grantCommand?: string;
+  reviewUrl?: string;
+}): string => {
+  const command =
+    input.grantCommand ?? invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
+  const review =
+    input.reviewUrl === undefined
+      ? ""
+      : ` They review and revoke it at ${input.reviewUrl} (Account → Delegates).`;
   if (input.authorizeUrl === undefined) {
     return (
-      `the owner grants it with their own key: ${command}. There is no browser page to send ` +
-      `them to, because this deployment's console is not one this package knows a perp ` +
-      `authorize page for — name it in WATERX_PERP_AUTHORIZE_URL if it has one`
+      `There is no browser page to send them to: this deployment's console is not one this ` +
+      `package knows a perp authorize page for — name it in WATERX_PERP_AUTHORIZE_URL if it has ` +
+      `one. ${DELEGATE_BOUNDARY}${review}`
     );
   }
   return (
-    `the owner opens ${input.authorizeUrl} and signs with their ` +
-    `wallet — the key never leaves the browser. If they would rather not use the ` +
-    `browser, ${command} does the same thing with their key in a terminal`
+    `Their key never leaves the browser. If they would rather not use one, ${command} does the ` +
+    `same thing with their key in a terminal. ${DELEGATE_BOUNDARY}${review}`
   );
 };
+
+/** The command that completes the handshake: hand over the link, wait, adopt. */
+export const completeHandshakeCommand = (): string =>
+  invoke("onboard", "--wait", "300", "--json");
+
+/** The command that prints the full consent account rather than the next move. */
+export const handshakeDetailsCommand = (): string => invoke("onboard", "--details");
 
 /**
  * What the agent asks for: the perp trading mask, and nothing outside perps.
@@ -282,8 +324,8 @@ export function ownerGrantStep(agentWallet: string): {
     why:
       `nothing has been granted to ${agentWallet} yet. The account owner grants it trading ` +
       `permission from their own wallet; they keep the funds, and it needs no SUI of its own. ` +
-      `${DELEGATE_BOUNDARY} Once they have granted it, \`discover\` finds the account and ` +
-      `\`adopt\` takes it — nobody copies an id.`,
+      `${DELEGATE_BOUNDARY} Once they have granted it, \`onboard --wait\` finds the account and ` +
+      `adopts it — nobody copies an id.`,
     who: "the account owner",
     command: invoke("onboard", "--json"),
   };
@@ -313,6 +355,14 @@ export interface DelegationStatus {
   state: DelegationState;
   /** One sentence naming what is true and what to do about it. */
   headline: string;
+  /**
+   * What the grant means, for the person who will sign it.
+   *
+   * Kept out of the headline because the two have different readers. The
+   * headline is relayed on every turn to an operator who has to hand over a
+   * link; this is read once, by the account owner, who is looking at the page.
+   */
+  detail?: string;
   delegateAddress?: string;
   ownerAddress?: string;
   accountId?: string;
@@ -386,6 +436,15 @@ export function delegationStatus(input: {
   // override's own parameters and the others dropped them.
   const authorizeLink = perpAuthorizeLink(input.network, delegateAddress);
 
+  // Built once. Spelling these out at each headline is how one of them kept an
+  // override's own query parameters and the others dropped them.
+  const grantArgs = {
+    agentWallet: delegateAddress,
+    ...(authorizeLink === undefined ? {} : { authorizeUrl: authorizeLink }),
+    ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }),
+  };
+  const detail = grantDetail({ ...grantArgs, reviewUrl });
+
   const base = {
     delegateAddress,
     reviewUrl,
@@ -399,10 +458,10 @@ export function delegationStatus(input: {
       ...base,
       state: "awaiting-grant",
       headline:
-        `Give ${delegateAddress} to the account owner. To grant perp trading, ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizeLink, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
-        `They can review and revoke it at ${reviewUrl} (Account → Delegates). ` +
-        `Once they have signed, \`discover\` finds the account — no id to copy.`,
+        `Nothing is granted to ${delegateAddress} yet. To grant perp trading, ` +
+        `${grantHeadline(grantArgs)}. Then \`onboard --wait\` finds the account and adopts ` +
+        `it — no id to copy.`,
+      detail,
     };
   }
 
@@ -424,7 +483,8 @@ export function delegationStatus(input: {
       state: "awaiting-grant",
       headline:
         `The owner is ${ownerAddress} but no account has been adopted. Once they have granted ` +
-        `${delegateAddress}, \`discover\` finds the account and \`adopt\` takes it — no id to copy.`,
+        `${delegateAddress}, \`onboard --wait\` finds the account and adopts it — no id to copy.`,
+      detail,
     };
   }
 
@@ -449,8 +509,9 @@ export function delegationStatus(input: {
       state: "not-granted",
       headline:
         `${delegateAddress} is not a delegate of ${accountId}. To grant it, ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizeLink, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
+        `${grantHeadline(grantArgs)}. ` +
         `Until they do, every write refuses on chain.`,
+      detail,
     };
   }
 
@@ -468,7 +529,8 @@ export function delegationStatus(input: {
       headline:
         "The grant is in the superseded authority slot, so every perp action aborts on chain " +
         `(EUnauthorized, surfaced as 6002). It has to be granted again: ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizeLink, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}.`,
+        `${grantHeadline(grantArgs)}.`,
+      detail,
     };
   }
 
@@ -484,9 +546,10 @@ export function delegationStatus(input: {
       state: "insufficient",
       headline:
         `Granted, but without ${missing.join(", ")}. Those actions will refuse on chain; the ` +
-        `owner widens the grant by granting again with a fuller perp mask. If they used the ` +
-        `console's PREDICT page (\`/agent/authorize\`), that is why: it grants prediction ` +
-        `markets, not perps. The perp page is \`/agent/authorize/perp\`.`,
+        `owner widens it by granting again: ${grantHeadline(grantArgs)}.`,
+      detail:
+        `If they used the console's PREDICT page (\`/agent/authorize\`), that is why: it grants ` +
+        `prediction markets, not perps. The perp page is \`/agent/authorize/perp\`. ${detail}`,
     };
   }
 
@@ -500,4 +563,104 @@ export function delegationStatus(input: {
       `${delegateAddress} may trade ${accountId} on behalf of ${ownerAddress}, including moving ` +
       `margin on open positions. ${DELEGATE_BOUNDARY}`,
   };
+}
+
+/** States in which the owner still has something to sign. */
+const NEEDS_GRANT = new Set<DelegationState>([
+  "awaiting-grant",
+  "not-granted",
+  "stale-grant",
+  "insufficient",
+]);
+
+/**
+ * The last characters of an address.
+ *
+ * What the owner checks the page against. The whole address is 66 characters
+ * and nobody compares two of those by eye; six is a check a person will
+ * actually make, and the page shows the address in full for anyone who wants
+ * to make the real one.
+ */
+export const addressTail = (address: string, digits = 6): string => address.slice(-digits);
+
+export interface ScreenOptions {
+  /** Print the full consent account rather than the next move. */
+  details?: boolean;
+  /** The command to offer at the end, when the caller has one. */
+  next?: string;
+}
+
+/**
+ * What an operator is shown, and in what order.
+ *
+ * Lives here, with a return value, rather than as `note()` calls in the script,
+ * because the order is the thing that was wrong and an order is only testable
+ * if something returns it.
+ *
+ * What was wrong: the screen was 23 lines and the link was on line 3, competing
+ * with a second copy of the agent address, a review URL that is no use until
+ * after the grant, eight permission rows and a three-clause sentence about what
+ * a delegate cannot do. All of that is addressed to the account OWNER — who is
+ * not at this terminal, and who reads the same things on the page where they
+ * sign. The person reading this has one job: send someone a link.
+ *
+ * So the link gets the screen, and the consent account moves behind
+ * `--details`, where the reader who wants it can ask.
+ */
+/** One label column for the commands under the link, so they read as a pair. */
+const row = (label: string, value: string): string => `  ${label.padEnd(40)}${value}`;
+
+export function handshakeScreen(status: DelegationStatus, options: ScreenOptions = {}): string[] {
+  const lines: string[] = [""];
+  const link = NEEDS_GRANT.has(status.state) ? status.authorizeUrl : undefined;
+
+  if (link !== undefined && status.delegateAddress !== undefined) {
+    lines.push(
+      "  Give this link to the account owner. They sign in their own wallet:",
+      "",
+      `  ${link}`,
+      "",
+      `  the page must show the agent address ending ${addressTail(status.delegateAddress)}`,
+    );
+  } else {
+    // No page to send them to, or nothing left to sign: the sentence is the
+    // screen. It already names the command an owner without a browser runs.
+    lines.push(`  ${status.headline}`);
+  }
+
+  if (options.next !== undefined) {
+    lines.push(row(NEEDS_GRANT.has(status.state) ? "when they have signed" : "next", options.next));
+  }
+
+  if (options.details === true) {
+    lines.push("");
+    if (status.delegateAddress !== undefined) lines.push(`  agent wallet   ${status.delegateAddress}`);
+    if (status.ownerAddress !== undefined) lines.push(`  owner          ${status.ownerAddress}`);
+    if (status.accountId !== undefined) lines.push(`  account        ${status.accountId}`);
+    if (status.grantCommand !== undefined) {
+      lines.push(
+        `  or, terminal   ${status.grantCommand}`,
+        "                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account",
+      );
+    }
+    // Where to review is not where to grant, whatever is configured. `grantUrl`
+    // held this once, and its meaning changed with the environment.
+    lines.push(`  review/revoke  ${status.reviewUrl}  (Account → Delegates)`);
+    // Each bit with what it does. The bare names put WITHDRAW_COLLATERAL a line
+    // above "cannot take money out", and a careful reader took that for a
+    // contradiction to resolve before anyone signed.
+    lines.push("  asks for");
+    for (const { name, meaning } of requestedPermissions()) {
+      lines.push(`    ${name.padEnd(20)} ${meaning}`);
+    }
+    lines.push(`  cannot         ${DELEGATE_BOUNDARY}`);
+    if (status.granted !== undefined) {
+      lines.push(`  granted        ${status.granted.join(", ") || "none"}`);
+    }
+  } else if (status.detail !== undefined) {
+    lines.push(row("what it asks for, and where to revoke", handshakeDetailsCommand()));
+  }
+
+  lines.push("");
+  return lines;
 }

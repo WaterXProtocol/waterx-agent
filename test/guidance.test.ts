@@ -78,22 +78,24 @@ describe("what to do next", () => {
     // and no collateral; the owner keeps all three.
     const g = decide({ ...ok, mode: "undecided", configured: false, network: "mainnet" });
     expect(g.state).toBe("awaiting-grant");
-    expect(g.headline).toContain("grants THIS address");
+    // In the detail, not the headline. All three of these are addressed to the
+    // account owner — how the arrangement works, what it cannot do, what it
+    // does not need — and the headline is relayed to an operator whose next act
+    // is to send someone a link.
+    expect(g.detail).toContain("grants THIS address");
     // The sentence every surface uses, so what a delegate cannot do reads the
     // same here as it does beside the permission list.
-    expect(g.headline).toContain(DELEGATE_BOUNDARY);
-    expect(g.headline).toContain("no SUI of its own");
+    expect(g.detail).toContain(DELEGATE_BOUNDARY);
+    expect(g.detail).toContain("no SUI of its own");
     expect(g.suggestions[0]?.command).toContain("onboard");
-    // The delegate path is two steps now: hand over the address, then find the
-    // account the owner granted instead of asking them to copy its id back.
-    // Asserted by content and relative order, not by index — the property is
-    // "delegate steps come before the owner alternative", not "slot 1".
-    const commands = g.suggestions.map((s) => s.command);
-    const discover = commands.findIndex((c) => c.includes("discover"));
-    const ownerPath = g.suggestions.findIndex((s) => s.command.includes("--create-account"));
-    expect(discover).toBe(1);
-    // The owner path stays available, after the delegate steps, and says what it costs.
-    expect(ownerPath).toBeGreaterThan(discover);
+    // The delegate path is ONE step now — hand over the link, wait for the
+    // grant, adopt what granted — so the property is that it comes before the
+    // owner alternative, not that a separate discovery step sits at slot 1.
+    const handshake = g.suggestions.findIndex((x) => x.command.includes("onboard --wait"));
+    const ownerPath = g.suggestions.findIndex((x) => x.command.includes("--create-account"));
+    expect(handshake).toBe(0);
+    // The owner path stays available, after the delegate step, and says what it costs.
+    expect(ownerPath).toBeGreaterThan(handshake);
     expect(g.suggestions[ownerPath]?.what).toContain("SUI for gas");
   });
 
@@ -112,6 +114,23 @@ describe("what to do next", () => {
     expect(g.state).toBe("awaiting-grant");
     expect(g.headline).toContain(`https://waterx.app/en/agent/authorize/perp?agent=0x${"a".repeat(64)}`);
     expect(g.headline).toContain("their key stays");
+  });
+
+  it("keeps the headline to one thing to do, so relaying it is not a wall of text", () => {
+    // What prompted this: a fresh install's first screen was one paragraph of
+    // ~850 characters with the link about three-quarters of the way through,
+    // and SKILL.md tells an agent to relay the headline verbatim. Nobody reads
+    // that far, and the link was the only part they needed.
+    const g = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      network: "mainnet",
+      address: `0x${"a".repeat(64)}`,
+    });
+
+    expect(g.headline.length).toBeLessThan(400);
+    expect(g.detail?.length ?? 0).toBeGreaterThan(0);
   });
 
   it("names no page when there is no wallet to name in it", () => {

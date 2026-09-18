@@ -7,7 +7,13 @@
  * is handed straight to it. More than one is a choice between accounts, and a
  * choice of whose money to trade is not something to guess, so that one is asked.
  */
-import { discoverGrants, type DiscoveryDeps } from "../../src/agent/discovery.ts";
+import { completeHandshakeCommand } from "../../src/agent/delegation.ts";
+import {
+  awaitGrants,
+  DEFAULT_POLL_SECONDS,
+  type DiscoveryDeps,
+  MIN_POLL_SECONDS,
+} from "../../src/agent/discovery.ts";
 import { accountObjectReader } from "../../src/chain/account-object.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
@@ -18,12 +24,10 @@ import { asNumber, initAgent, note, parseArgs, run, setOutcome, show } from "../
 const args = parseArgs(
   {
     wait: { desc: "Keep looking for up to this many seconds (default: look once)" },
-    interval: { desc: "Seconds between looks while waiting (default 10)" },
+    interval: { desc: `Seconds between looks while waiting (default ${String(DEFAULT_POLL_SECONDS)})` },
   },
   "discover",
 );
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 const quiet = { submitted: false, reconcileRequired: false } as const;
 
@@ -55,35 +59,14 @@ await run(async () => {
   };
 
   const waitMs = Math.max(0, asNumber(args.wait) ?? 0) * 1000;
-  const intervalMs = Math.max(2, asNumber(args.interval) ?? 10) * 1000;
-  const deadline = Date.now() + waitMs;
+  const intervalMs = Math.max(MIN_POLL_SECONDS, asNumber(args.interval) ?? DEFAULT_POLL_SECONDS) * 1000;
 
-  // Both sources can fail at once — the backend without the endpoint or down,
-  // and the public GraphQL endpoint refusing. That is an outage to report with
-  // its cause, not a crash, and not "nothing granted": the grant may exist.
-  let failure: string | undefined;
-  const look = async () => {
-    try {
-      failure = undefined;
-      return await discoverGrants(me, deps);
-    } catch (error) {
-      failure = error instanceof Error ? error.message : String(error);
-      return undefined;
-    }
-  };
-
-  let result = await look();
-  // Wait only for "nothing yet". An unreadable candidate or a grant found is
-  // an answer to report now, not a reason to keep polling.
-  while (
-    result !== undefined &&
-    result.grants.length === 0 &&
-    result.unverified.length === 0 &&
-    Date.now() + intervalMs <= deadline
-  ) {
-    await sleep(intervalMs);
-    result = await look();
-  }
+  // The loop lives in `src/agent/discovery.ts`: `onboard --wait` runs the same
+  // one, and what counts as an answer — a grant, or a candidate that could not
+  // be read — is a rule, not a detail of this script.
+  const attempt = await awaitGrants(me, deps, { waitMs, intervalMs });
+  const result = attempt.discovery;
+  const failure = attempt.failure;
 
   if (result === undefined) {
     show({ delegate: me, error: failure ?? "unknown" }, { rendered: true });
@@ -146,10 +129,13 @@ await run(async () => {
         : {
             ...quiet,
             status: "config",
-            message: `No account grants ${me} yet. Hand the owner the link \`onboard\` prints; once they sign, this finds it.`,
+            message:
+              `No account grants ${me} yet. Hand the owner the link \`onboard\` prints; ` +
+              `\`onboard --wait\` hands it over, waits for the grant, and adopts the account ` +
+              `that made it.`,
             retryable: true,
             awaitingApproval: false,
-            nextCommand: invoke("discover", "--wait", "300", "--json"),
+            nextCommand: completeHandshakeCommand(),
           },
     );
     return;

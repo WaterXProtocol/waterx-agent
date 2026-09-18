@@ -1,36 +1,83 @@
 /**
- * The delegate handshake, from either side of it.
+ * The delegate handshake, from either side of it — and with `--wait`, through
+ * to the end of it.
  *
  * An agent that trades an account it does not own needs one thing from a
  * person: a grant, made on chain from the wallet that owns the account. This
  * command says where that has got to and what the next move is — for the agent
- * ("give this address to the owner") and for the owner ("grant it here").
+ * ("give this link to the owner") and for the owner ("grant it here").
  *
  * It reads; it never grants. The grant is the owner's act, made from their own
  * wallet, and an agent that could make it for them would be an agent that could
  * grant itself authority.
+ *
+ * `--wait` is the one thing it writes, and only after the owner has acted: it
+ * polls for the grant and, when exactly one account turns out to have made it,
+ * adopts that account — `WATERX_ACCOUNT_ID` and a line in the adoption ledger.
+ * That is the step that used to depend on a person typing "I signed it" into a
+ * chat window, while the console's own completion screen was already telling
+ * them the agent would pick it up within seconds. Between several grants it
+ * still stops and asks: which account an agent trades is whose money it trades.
  */
+import { adoptAccount, NotAGrantError, OwnerMismatchError } from "../../src/agent/adopt.ts";
 import {
+  completeHandshakeCommand,
   DELEGATE_BOUNDARY,
   delegationStatus,
+  handshakeScreen,
   perpGrantCommand,
   REQUESTED_PERMISSION_NAMES,
   REQUESTED_PERP_PERMISSIONS,
   requestedPermissions,
 } from "../../src/agent/delegation.ts";
+import {
+  awaitGrants,
+  DEFAULT_POLL_SECONDS,
+  type DiscoveryDeps,
+  MIN_POLL_SECONDS,
+} from "../../src/agent/discovery.ts";
+import { AccountNotFoundError, accountObjectReader } from "../../src/chain/account-object.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
+import { loadDeployment } from "../../src/chain/deployment.ts";
+import { grantEventCandidates } from "../../src/chain/grant-events.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
 import type { DelegateData } from "../../src/api/types.ts";
-import { initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
+import { asNumber, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
   {
     label: {
       desc: "A name for this agent, shown to the owner on the authorization screen",
     },
+    details: {
+      desc: "Print the full consent account: every permission asked for, the CLI route, where to revoke",
+      flag: true,
+    },
+    link: {
+      desc: "Print only the authorize link — one line, for pasting or piping",
+      flag: true,
+    },
+    wait: {
+      desc: "Wait this many seconds for the owner's grant, then adopt the account that made it (writes WATERX_ACCOUNT_ID)",
+    },
+    interval: { desc: `Seconds between looks while waiting (default ${String(DEFAULT_POLL_SECONDS)})` },
   },
   "onboard",
 );
+
+const quiet = { submitted: false, reconcileRequired: false } as const;
+
+const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** Nothing in flight, nothing signed: every outcome this command can reach is one of these. */
+const config = (message: string, extra: { retryable?: boolean; nextCommand?: string } = {}) => ({
+  ...quiet,
+  status: "config" as const,
+  message,
+  retryable: extra.retryable ?? false,
+  awaitingApproval: false,
+  ...(extra.nextCommand === undefined ? {} : { nextCommand: extra.nextCommand }),
+});
 
 await run(async () => {
   const agent = initAgent();
@@ -77,78 +124,225 @@ await run(async () => {
     ...(delegates === undefined ? {} : { delegates }),
   });
 
-  note("");
-  note(`  ${status.headline}`);
-  note("");
-  if (status.delegateAddress !== undefined) {
-    note(`  agent wallet   ${status.delegateAddress}`);
-  }
-  if (status.ownerAddress !== undefined) note(`  owner          ${status.ownerAddress}`);
-  if (status.accountId !== undefined) note(`  account        ${status.accountId}`);
-  if (status.authorizeUrl !== undefined) {
-    // A page is configured, so that is the way in and the CLI is the fallback.
-    // Printing the CLI first — and the "authorize page will not work" note —
-    // under a working perp authorize URL told the owner the opposite of the
-    // headline two lines above it.
-    note(`  owner grants   ${status.authorizeUrl}`);
-    note(`                 in their browser, signing with their own wallet`);
-    note(`  or, terminal   ${status.grantCommand ?? "(needs a wallet first)"}`);
-    note(`                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account`);
-  } else {
-    note(`  the owner runs ${status.grantCommand ?? "(needs a wallet first)"}`);
-    note(`                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account`);
-    note(`  note           no perp authorize page is known for this console, so granting is a`);
-    note(`                 CLI step here. Name one in WATERX_PERP_AUTHORIZE_URL if this`);
-    note(`                 deployment has one. /agent/authorize — without /perp — grants`);
-    note(`                 PREDICTION MARKETS and states that it does not grant perps`);
-  }
-  // Where to review is not where to grant, whatever is configured.
-  note(`  review/revoke  ${status.reviewUrl}  (Account → Delegates)`);
-  // Each bit with what it does. The bare names put WITHDRAW_COLLATERAL a line
-  // above "cannot take money out", and a careful reader took that for a
-  // contradiction to resolve before anyone signed.
-  note(`  asks for`);
-  for (const { name, meaning } of requestedPermissions()) note(`    ${name.padEnd(20)} ${meaning}`);
-  note(`  cannot         ${DELEGATE_BOUNDARY}`);
-  if (status.granted !== undefined) note(`  granted        ${status.granted.join(", ") || "none"}`);
-  note("");
+  const payload = {
+    ...status,
+    network: agent.config.network,
+    grantCommand: status.grantCommand ?? null,
+    requestedPerpPermissions: REQUESTED_PERP_PERMISSIONS,
+    requestedPermissionNames: Object.keys(REQUESTED_PERMISSION_NAMES),
+    // The same list with what each bit does, so an agent relaying it relays
+    // the meaning too — and the one sentence on what the grant cannot do.
+    requestedPermissions: requestedPermissions(),
+    delegateCannot: DELEGATE_BOUNDARY,
+  };
 
-  const next =
-    status.state === "no-wallet"
+  // ── --link: the one line, and nothing else ──────────────────────────────
+  // For a person who is about to paste it somewhere, and for `$(…)`. Anything
+  // else on stdout would have to be stripped by whoever called it.
+  if (args.link === "true") {
+    if (status.authorizeUrl === undefined) {
+      show({ ...payload, next: null }, { rendered: true });
+      setOutcome(
+        config(
+          `No perp authorize page is known for this console, so there is no link to print. ` +
+            `Name one in WATERX_PERP_AUTHORIZE_URL, or have the owner grant it from a terminal.`,
+          { nextCommand: invoke("onboard", "--details") },
+        ),
+      );
+      return;
+    }
+    note(status.authorizeUrl);
+    show({ ...payload, next: completeHandshakeCommand() }, { rendered: true });
+    setOutcome(succeeded(status.authorizeUrl, { nextCommand: completeHandshakeCommand() }));
+    return;
+  }
+
+  const waitSeconds = asNumber(args.wait);
+  const granted = status.state === "granted" || status.state === "owner-key";
+  // Waiting needs a wallet to have been granted TO, and something still to
+  // wait for. Asked for otherwise it is not an error — it is just nothing.
+  const waiting =
+    waitSeconds !== undefined && waitSeconds >= 0 && delegateAddress !== undefined && !granted;
+
+  const next = waiting
+    ? undefined
+    : status.state === "no-wallet"
       ? invoke("bootstrap", "--json")
-      : status.state === "granted"
+      : granted
         ? invoke("next", "--json")
-        : status.state === "awaiting-grant"
-          ? invoke("discover", "--wait", "300", "--json")
-          : invoke("onboard", "--json");
+        : completeHandshakeCommand();
 
-  show(
-    {
-      ...status,
+  for (const line of handshakeScreen(status, {
+    details: args.details === "true",
+    ...(next === undefined ? {} : { next }),
+  })) {
+    note(line);
+  }
+
+  if (!waiting || delegateAddress === undefined) {
+    show({ ...payload, next: next ?? null }, { rendered: true });
+    setOutcome(
+      granted
+        ? succeeded(status.headline, { nextCommand: next ?? invoke("next", "--json") })
+        : config(status.headline, { nextCommand: next ?? completeHandshakeCommand() }),
+    );
+    return;
+  }
+
+  // ── --wait: watch for the grant the owner is making right now ───────────
+  const intervalSeconds = Math.max(MIN_POLL_SECONDS, asNumber(args.interval) ?? DEFAULT_POLL_SECONDS);
+  const deployment = await loadDeployment(agent.config.configUrl);
+  // The ORIGINAL package id names event types; `idsFor` lists it last.
+  const accountPackage = deployment.idsFor("waterx_account").at(-1);
+  const deps: DiscoveryDeps = {
+    delegatedAccounts: (delegate) => agent.read.delegatedAccounts(delegate),
+    recentGrantEvents:
+      accountPackage === undefined
+        ? () => Promise.reject(new Error("the deployment config names no waterx_account package"))
+        : grantEventCandidates(agent.config.network, accountPackage),
+    readAccount: accountObjectReader(agent.config),
+  };
+
+  note(
+    `  waiting up to ${String(waitSeconds)}s for the grant, looking every ` +
+      `${String(intervalSeconds)}s — Ctrl-C is safe, nothing is in flight`,
+  );
+  const attempt = await awaitGrants(delegateAddress, deps, {
+    waitMs: waitSeconds * 1000,
+    intervalMs: intervalSeconds * 1000,
+  });
+
+  if (attempt.discovery === undefined) {
+    show({ ...payload, error: attempt.failure ?? "unknown" }, { rendered: true });
+    setOutcome({
+      ...quiet,
+      status: "unavailable",
+      message:
+        `Could not look for the grant — neither the backend nor recent chain events could be ` +
+        `read (${attempt.failure ?? "unknown"}). Whether this wallet is granted is unknown; ` +
+        `try again.`,
+      retryable: true,
+      awaitingApproval: false,
+      nextCommand: completeHandshakeCommand(),
+    });
+    return;
+  }
+
+  const { grants, unverified, truncated, source } = attempt.discovery;
+  const found = {
+    ...payload,
+    source,
+    grants,
+    unverified,
+    truncated,
+  };
+
+  for (const id of unverified) note(`  unreadable    ${id}  (could not confirm either way)`);
+
+  if (grants.length === 0) {
+    show(found, { rendered: true });
+    setOutcome(
+      unverified.length > 0
+        ? {
+            ...quiet,
+            status: "unavailable",
+            message:
+              `${String(unverified.length)} candidate account(s) could not be read from chain, so ` +
+              `whether this wallet is granted is unknown. Try again.`,
+            retryable: true,
+            awaitingApproval: false,
+            nextCommand: completeHandshakeCommand(),
+          }
+        : config(
+            `No account grants ${delegateAddress} yet. The link is still good — hand it over, ` +
+              `and this finds the grant the moment it lands.`,
+            { retryable: true, nextCommand: completeHandshakeCommand() },
+          ),
+    );
+    return;
+  }
+
+  const [only] = grants;
+  if (grants.length > 1 || only === undefined) {
+    for (const g of grants) {
+      note(`  granted by    ${g.accountId}`);
+      note(`    owner       ${g.ownerAddress}`);
+      note(`    adopt it    ${invoke("adopt", "--account", g.accountId, "--json")}`);
+    }
+    show(found, { rendered: true });
+    setOutcome({
+      ...quiet,
+      status: "needs-approval",
+      message:
+        `${String(grants.length)} accounts grant this wallet. Which one it trades is a choice, ` +
+        `not a guess: ask which, then run that grant's adopt command.`,
+      retryable: false,
+      awaitingApproval: true,
+    });
+    return;
+  }
+
+  // Exactly one, and `adoptAccount` reads it from chain again before writing
+  // anything: minutes may have passed, and the grant may already be gone.
+  try {
+    const adopted = await adoptAccount({
+      accountId: only.accountId,
+      delegate: delegateAddress,
       network: agent.config.network,
-      grantCommand: status.grantCommand ?? null,
-      requestedPerpPermissions: REQUESTED_PERP_PERMISSIONS,
-      requestedPermissionNames: Object.keys(REQUESTED_PERMISSION_NAMES),
-      // The same list with what each bit does, so an agent relaying it relays
-      // the meaning too — and the one sentence on what the grant cannot do.
-      requestedPermissions: requestedPermissions(),
-      delegateCannot: DELEGATE_BOUNDARY,
-      next,
-    },
-    { rendered: true },
-  );
-
-  setOutcome(
-    status.state === "granted" || status.state === "owner-key"
-      ? succeeded(status.headline, { nextCommand: next })
-      : {
-          status: "config",
-          message: status.headline,
-          submitted: false,
-          retryable: false,
-          reconcileRequired: false,
-          awaitingApproval: false,
-          nextCommand: next,
-        },
-  );
+      readAccount: deps.readAccount,
+      ...(ownerAddress === undefined ? {} : { configuredOwner: ownerAddress }),
+    });
+    const recordedAs = `${adopted.by}${adopted.generated ? " (generated — no approver was given)" : ""}`;
+    note("");
+    note(`  granted by    ${adopted.accountId}`);
+    note(`  owner         ${adopted.ownerAddress}  (read from chain)`);
+    note(`  adopted       WATERX_ACCOUNT_ID written; recorded as ${recordedAs}`);
+    note("");
+    show({ ...found, adopted }, { rendered: true });
+    setOutcome(
+      succeeded(
+        `This wallet now trades ${adopted.accountId}, owned by ${adopted.ownerAddress}. ` +
+          `Recorded as ${recordedAs}.`,
+        { nextCommand: invoke("next", "--json") },
+      ),
+    );
+  } catch (error) {
+    show(found, { rendered: true });
+    if (error instanceof NotAGrantError) {
+      setOutcome({
+        ...quiet,
+        status: "auth",
+        message: error.message,
+        retryable: false,
+        awaitingApproval: false,
+        nextCommand: completeHandshakeCommand(),
+      });
+      return;
+    }
+    if (error instanceof OwnerMismatchError) {
+      setOutcome(config(error.message));
+      return;
+    }
+    if (error instanceof AccountNotFoundError) {
+      setOutcome({
+        ...quiet,
+        status: "unavailable",
+        message: error.message,
+        retryable: true,
+        awaitingApproval: false,
+        nextCommand: invoke("adopt", "--account", only.accountId, "--json"),
+      });
+      return;
+    }
+    setOutcome({
+      ...quiet,
+      status: "unavailable",
+      message:
+        `${only.accountId} grants this wallet, but it could not be adopted, so nothing was ` +
+        `written: ${describe(error)}`,
+      retryable: true,
+      awaitingApproval: false,
+      nextCommand: invoke("adopt", "--account", only.accountId, "--json"),
+    });
+  }
 });

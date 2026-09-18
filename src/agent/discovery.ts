@@ -55,6 +55,89 @@ export interface DiscoveryDeps {
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
+/** Seconds between looks while waiting, when the caller names none. */
+export const DEFAULT_POLL_SECONDS = 10;
+
+/** The floor on that interval. A tighter loop asks the same question faster and learns nothing. */
+export const MIN_POLL_SECONDS = 2;
+
+/** One look: what it found, or why it could not look. */
+export interface Attempt {
+  discovery?: Discovery;
+  /**
+   * Why the last look failed, when it did.
+   *
+   * Never collapsed into "nothing granted": both sources can be down at once,
+   * and the grant may exist. A caller reports this as an outage with its cause.
+   */
+  failure?: string;
+}
+
+export interface WaitOptions {
+  /** How long to keep looking. `0` — the default — looks once. */
+  waitMs?: number;
+  intervalMs?: number;
+  /** Injectable so the wait is tested without one. */
+  sleep?: (ms: number) => Promise<void>;
+  clock?: () => number;
+}
+
+/**
+ * Look until there is an answer, or until the clock runs out.
+ *
+ * The step that used to be a person saying "I signed it". The owner signs in a
+ * browser, the backend's index picks it up seconds later, and nothing but a
+ * human sentence connected the two — so the agent sat waiting for a message
+ * about something it could see for itself.
+ *
+ * What counts as an answer, and therefore stops the wait:
+ *
+ *  - a grant — the thing being waited for;
+ *  - an unreadable candidate — an account may grant this wallet and could not
+ *    be read, which is a fact to report now rather than to sit on.
+ *
+ * A failed look is NOT an answer. Both sources being down for a moment is
+ * exactly what waiting is for, so the loop keeps going and the last failure is
+ * what gets reported if the clock beats it. (Looking once — `waitMs` 0 — is
+ * unchanged: one look, and its failure comes straight back.)
+ */
+export async function awaitGrants(
+  delegate: string,
+  deps: DiscoveryDeps,
+  options: WaitOptions = {},
+): Promise<Attempt> {
+  const waitMs = Math.max(0, options.waitMs ?? 0);
+  const intervalMs = Math.max(
+    MIN_POLL_SECONDS * 1000,
+    options.intervalMs ?? DEFAULT_POLL_SECONDS * 1000,
+  );
+  const clock = options.clock ?? Date.now;
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((done) => setTimeout(done, ms)));
+  const deadline = clock() + waitMs;
+
+  const look = async (): Promise<Attempt> => {
+    try {
+      return { discovery: await discoverGrants(delegate, deps) };
+    } catch (error) {
+      return { failure: describe(error) };
+    }
+  };
+
+  let attempt = await look();
+  // `+ intervalMs <= deadline` rather than `< deadline`: sleeping past the time
+  // the caller allowed is not waiting, it is overrunning.
+  while (inconclusive(attempt) && clock() + intervalMs <= deadline) {
+    await sleep(intervalMs);
+    attempt = await look();
+  }
+  return attempt;
+}
+
+/** Nothing found and nothing to report — the only state worth waiting through. */
+const inconclusive = (attempt: Attempt): boolean =>
+  attempt.discovery === undefined ||
+  (attempt.discovery.grants.length === 0 && attempt.discovery.unverified.length === 0);
+
 export async function discoverGrants(delegate: string, deps: DiscoveryDeps): Promise<Discovery> {
   const me = normalizeSuiAddress(delegate);
   let source: DiscoverySource = "backend";

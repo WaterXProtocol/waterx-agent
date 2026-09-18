@@ -248,7 +248,7 @@ the field that matters:
 | `who` | What it means |
 |---|---|
 | `"you"` | Run the command. |
-| `"the account owner"` | Only the owner can do it — their grant. Give them the address and what `onboard` prints; nobody at the venue can grant it for them. |
+| `"the account owner"` | Only the owner can do it — their grant. Give them the link `onboard` prints; nobody at the venue can grant it for them. `onboard --wait <s>` then picks the grant up on its own. |
 | `"an operator"` | Stop and ask a human at the venue — testnet collateral, for one. |
 | `"the maintainers"` | Nothing anyone at this terminal can fix — an argument layout nobody has captured. Report it. Do not set `WATERX_ALLOW_UNCONFIRMED_ABI` on your own initiative: accepting an unconfirmed layout is a person's decision. |
 
@@ -268,6 +268,20 @@ funds; this wallet gets permission to trade it and nothing else. A delegate
 needs **no SUI** — the backend sponsors its transactions — no account of its
 own, and no collateral of its own, and it cannot withdraw. So the answer to
 "what does the agent need?" is usually "the owner's grant, and nothing else".
+
+Getting that grant is one command:
+
+```bash
+npx waterx onboard --wait 300 --json
+```
+
+It prints the link to hand the owner, then polls until the grant lands and
+adopts the account that made it — `WATERX_ACCOUNT_ID`, plus a line in the
+adoption ledger. The console's own completion screen tells the owner "you can go
+back to the terminal, the agent will pick this up within a few seconds", and
+this is the command that makes that true. Do not wait for the user to announce
+that they signed; the chain says so. Between several grants it stops at
+`needs-approval` rather than choosing whose money to trade.
 Never tell a user to send money to the agent's wallet unless they have
 deliberately chosen the owner path with `bootstrap --create-account --yes`.
 
