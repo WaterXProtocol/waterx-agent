@@ -12,8 +12,10 @@ import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  addressTail,
   CONSOLE_ENDPOINTS,
   DELEGATE_BOUNDARY,
+  handshakeScreen,
   PERMISSION_MEANINGS,
   REQUESTED_PERP_PERMISSIONS,
   delegatesUrl,
@@ -153,17 +155,21 @@ describe("the delegate handshake", () => {
     expect(status.headline).toContain(AGENT);
     // The browser page first: the owner keeps their key in their wallet.
     expect(status.headline).toContain("https://waterx.app/en/agent/authorize/perp");
-    // And the CLI still named, for an owner who would rather not use a browser.
-    expect(status.headline).toContain("add-delegate");
+    // And the CLI still named — in the detail, where the alternatives live. The
+    // headline is the one thing to do; an operator who reads it has to come out
+    // of it holding a link, not a choice between two routes.
+    expect(status.detail).toContain("add-delegate");
   });
 
-  it("sends a delegate whose owner is known to discover, not to copy an id", () => {
+  it("sends a delegate whose owner is known to the command that finds it, not to copy an id", () => {
     // This said there was no way to look an account up from a delegate key and
-    // told the agent to ask for the id — true until `discover` existed, and then
-    // the one surface still sending people to copy it by hand.
+    // told the agent to ask for the id — true until discovery existed, and then
+    // the one surface still sending people to copy it by hand. Discovery and
+    // adoption are one command now, so that is the one to name: two steps was
+    // two chances to stop half way.
     const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT, ownerAddress: OWNER });
     expect(status.state).toBe("awaiting-grant");
-    expect(status.headline).toContain("discover");
+    expect(status.headline).toContain("onboard --wait");
     expect(status.headline).not.toMatch(/no way to look one up|set WATERX_ACCOUNT_ID/);
   });
 
@@ -312,13 +318,18 @@ describe("a configured authorize page", () => {
     expect(status.reviewUrl).toBe("https://console.internal/en/account");
   });
 
-  it("prints review/revoke from reviewUrl on the onboard screen, never from grantUrl", () => {
-    const source = readFileSync(new URL("../scripts/agent/onboard.ts", import.meta.url), "utf8");
-    const line = source.split("\n").find((l) => l.includes("review/revoke"));
+  it("prints review/revoke from the review page, never from the page that grants", () => {
+    // It printed `grantUrl` — a field whose meaning changed with the
+    // environment — under "review/revoke". Asserted on the rendered line now
+    // rather than on the source that renders it: the screen is a return value.
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+    const line = handshakeScreen(status, { details: true }).find((l) => l.includes("review/revoke"));
 
     expect(line).toBeDefined();
-    expect(line).toContain("status.reviewUrl");
-    expect(line).not.toContain("grantUrl");
+    expect(line).toContain(status.reviewUrl);
+    expect(line).not.toContain("agent/authorize");
   });
 
   it("does not promise a number of signatures", () => {
@@ -349,7 +360,7 @@ describe("a configured authorize page", () => {
       grantCommand: "npx waterx add-delegate --delegate 0xagent --yes --json",
     });
 
-    expect(status.headline).toContain("npx waterx add-delegate");
+    expect(status.detail).toContain("npx waterx add-delegate");
   });
 
   it("prescribes the CLI for a console it cannot name a page for, and says why", () => {
@@ -364,8 +375,12 @@ describe("a configured authorize page", () => {
       grantCommand: "npx waterx add-delegate --delegate 0xagent --yes --json",
     });
 
+    // With no page there is nothing to lead with but the command, so here it
+    // IS the headline — and the detail says which variable brings the browser
+    // path back rather than reporting the product as unable to do something it
+    // can.
     expect(status.headline).toContain("npx waterx add-delegate");
-    expect(status.headline).toContain("WATERX_PERP_AUTHORIZE_URL");
+    expect(status.detail).toContain("WATERX_PERP_AUTHORIZE_URL");
     expect(status.headline).not.toContain("signs with their wallet");
   });
 
@@ -392,12 +407,15 @@ describe("a configured authorize page", () => {
 
   it("keeps review pointed at the delegates page even when a grant page exists", () => {
     // Granting and revoking are different places; the override is only the
-    // first. Collapsing them is what made it inert.
+    // first. Collapsing them is what made it inert. Where to revoke is not a
+    // thing to do before the grant exists, so it is named in the detail — but
+    // it is still named, and still the delegates page.
     process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
 
     const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
 
-    expect(status.headline).toContain("https://waterx.app/en/account");
+    expect(status.detail).toContain("https://waterx.app/en/account");
+    expect(status.reviewUrl).toBe("https://waterx.app/en/account");
   });
 });
 
@@ -427,24 +445,53 @@ describe("what the grant is said to mean", () => {
     mode: "undecided",
   };
 
-  /** Every sentence that tells someone what the grant allows. */
-  const explanations = (): [string, string][] => [
-    ["bootstrap's grant step", ownerGrantStep(AGENT).why],
-    ["next, before anything is granted", decide(undecided).headline],
-    [
-      "a confirmed grant",
-      delegationStatus({
-        network: "mainnet",
-        delegateAddress: AGENT,
-        ownerAddress: OWNER,
-        accountId: ACCOUNT,
-        delegates: [grant()],
-      }).headline,
-    ],
-  ];
+  const confirmed = (): ReturnType<typeof delegationStatus> =>
+    delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      ownerAddress: OWNER,
+      accountId: ACCOUNT,
+      delegates: [grant()],
+    });
+
+  /**
+   * Every surface that tells someone what the grant allows.
+   *
+   * A headline and its detail are one explanation in two parts — the sentence
+   * that gets relayed every turn, and the account that gets read once — so the
+   * claim they have to make between them is checked between them.
+   */
+  const explanations = (): [string, string][] => {
+    const whole = (s: ReturnType<typeof delegationStatus>): string =>
+      `${s.headline} ${s.detail ?? ""}`;
+    const starting = decide(undecided);
+    return [
+      ["bootstrap's grant step", ownerGrantStep(AGENT).why],
+      ["next, before anything is granted", `${starting.headline} ${starting.detail ?? ""}`],
+      ["a confirmed grant", whole(confirmed())],
+    ];
+  };
 
   it("never says what a delegate cannot do without saying what WITHDRAW_COLLATERAL does", () => {
     for (const [where, text] of explanations()) expect(text, where).toContain(DELEGATE_BOUNDARY);
+  });
+
+  it("never starts that claim in the half that gets relayed and finishes it in the half that does not", () => {
+    // The original defect, in the shape the split could bring back. One surface
+    // said "this wallet cannot withdraw" while the next listed
+    // WITHDRAW_COLLATERAL, and a real install stopped to reconcile the two
+    // before letting anyone sign a mainnet account away. A headline may leave
+    // the subject alone — that is the point of having a detail — but it may not
+    // make half the claim.
+    const relayed: [string, string][] = [
+      ["awaiting a grant", delegationStatus({ network: "mainnet", delegateAddress: AGENT }).headline],
+      ["a confirmed grant", confirmed().headline],
+      ["next, before anything is granted", decide(undecided).headline],
+      ["bootstrap's grant step", ownerGrantStep(AGENT).why],
+    ];
+    for (const [where, text] of relayed) {
+      if (/cannot/iu.test(text)) expect(text, where).toContain(DELEGATE_BOUNDARY);
+    }
   });
 
   it("never sends anyone to copy an account id or an owner address by hand", () => {
@@ -476,12 +523,109 @@ describe("what the grant is said to mean", () => {
     const step = ownerGrantStep(AGENT);
     expect(step.who).toBe("the account owner");
     expect(step.command).toContain("onboard");
-    expect(step.why).toContain("discover");
+    // And names what finishes it, so the owner's grant does not land somewhere
+    // nobody goes looking for it.
+    expect(step.why).toContain("onboard --wait");
   });
 
-  it("puts the meanings and the boundary on the onboard screen, not just the names", () => {
-    const source = readFileSync(new URL("../scripts/agent/onboard.ts", import.meta.url), "utf8");
-    expect(source).toContain("requestedPermissions()");
-    expect(source).toContain("DELEGATE_BOUNDARY");
+  it("puts the meanings and the boundary on the detailed screen, not just the names", () => {
+    const lines = handshakeScreen(confirmed(), { details: true }).join("\n");
+
+    for (const { name, meaning } of requestedPermissions()) {
+      expect(lines, name).toContain(name);
+      expect(lines, name).toContain(meaning);
+    }
+    expect(lines).toContain(DELEGATE_BOUNDARY);
+  });
+});
+
+/**
+ * What an operator is shown, and in what order.
+ *
+ * The screen was 23 lines with the link on line 3, competing with a second copy
+ * of the agent address, a review URL that is no use until after the grant,
+ * eight permission rows and a three-clause sentence about what a delegate
+ * cannot do. All of that is addressed to the account OWNER, who is not at this
+ * terminal and who reads the same things on the page where they sign. The
+ * person reading this has one job: send someone a link.
+ */
+describe("the screen an operator reads", () => {
+  const LINK = `https://waterx.app/en/agent/authorize/perp?agent=${AGENT}`;
+
+  afterEach(() => {
+    delete process.env.WATERX_CONSOLE_URL;
+    delete process.env.WATERX_PERP_AUTHORIZE_URL;
+  });
+
+  const awaiting = (): ReturnType<typeof delegationStatus> =>
+    delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      grantCommand: "npx waterx add-delegate --delegate 0xagent --yes --json",
+    });
+
+  it("leads with the link, on a line of its own, with nothing above it", () => {
+    const printed = handshakeScreen(awaiting()).filter((line) => line.trim() !== "");
+
+    expect(printed[0]).toContain("Give this link to the account owner");
+    // On its own line: a URL wrapped inside a paragraph is a URL nobody can
+    // double-click, and this one is 110 characters because the address is in it.
+    expect(printed[1]).toBe(`  ${LINK}`);
+  });
+
+  it("does not reprint the consent form the owner is about to read on the page", () => {
+    const lines = handshakeScreen(awaiting()).join("\n");
+
+    expect(lines).not.toContain("OPEN_POSITION");
+    expect(lines).not.toContain(DELEGATE_BOUNDARY);
+    // It says where that account is, rather than pretending it does not exist.
+    expect(lines).toContain("onboard --details");
+  });
+
+  it("gives the owner something cheap to check the link against", () => {
+    // They compare what the page shows against what the operator sent. Nobody
+    // compares two 66-character addresses by eye; six characters is a check a
+    // person will actually make, and the page shows the address in full for
+    // anyone who wants to make the real one.
+    const lines = handshakeScreen(awaiting()).join("\n");
+
+    expect(lines).toContain(addressTail(AGENT));
+  });
+
+  it("carries the whole account one flag away", () => {
+    const lines = handshakeScreen(awaiting(), { details: true }).join("\n");
+
+    for (const name of ALL) expect(lines, name).toContain(name);
+    expect(lines).toContain(DELEGATE_BOUNDARY);
+    expect(lines).toContain(PERMISSION_MEANINGS.WITHDRAW_COLLATERAL);
+    expect(lines).toContain("npx waterx add-delegate");
+  });
+
+  it("labels the next command for where the handshake actually is", () => {
+    const next = "node bin/waterx.mjs onboard --wait 300 --json";
+    expect(handshakeScreen(awaiting(), { next }).join("\n")).toContain("when they have signed");
+
+    const granted = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      ownerAddress: OWNER,
+      accountId: ACCOUNT,
+      delegates: [grant()],
+    });
+    const done = handshakeScreen(granted, { next: "node bin/waterx.mjs next --json" }).join("\n");
+    expect(done).not.toContain("when they have signed");
+    expect(done).toContain("node bin/waterx.mjs next --json");
+  });
+
+  it("falls back to the sentence when there is no page to lead with", () => {
+    // A private console gets no guessed route, so the CLI sentence is the whole
+    // screen — and it is the headline, which already names the command.
+    process.env.WATERX_CONSOLE_URL = "https://console.internal";
+    const status = awaiting();
+
+    const lines = handshakeScreen(status).join("\n");
+
+    expect(lines).toContain(status.headline);
+    expect(lines).not.toContain("Give this link");
   });
 });

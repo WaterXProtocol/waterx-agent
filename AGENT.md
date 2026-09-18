@@ -104,6 +104,19 @@ there is no separate stake/unstake action.
 
 ## Delegates
 
+The handshake, from the agent's side — it never grants, and `--wait` is the only
+thing here that writes:
+
+```bash
+pnpm run onboard                            # the link to hand the account owner
+pnpm run onboard -- --wait 300              # …then wait for the grant and adopt the account
+pnpm run onboard -- --link                  # the URL alone, for pasting or piping
+pnpm run onboard -- --details               # what the grant asks for, and where to revoke
+pnpm run discover -- --wait 300             # the same search, without adopting
+```
+
+From the owner's side, with their own key:
+
 ```bash
 pnpm run add-delegate -- --delegate 0x… --yes           # defaults to PERM_ALL_TRADING
 pnpm run remove-delegate -- --delegate 0x… --yes

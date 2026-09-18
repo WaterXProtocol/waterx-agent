@@ -292,7 +292,8 @@ account, and grants a **separate** wallet — the agent's — permission to trad
 on it. The agent holds only the delegate key.
 
 ```bash
-npx waterx onboard --json
+npx waterx onboard --json          # the link to hand the account owner
+npx waterx onboard --wait 300 --json   # …and then wait for the grant, and adopt it
 ```
 
 A delegate needs **nothing**: no SUI, because the backend sponsors its
@@ -309,10 +310,28 @@ https://waterx.app/en/agent/authorize/perp?agent=<the agent wallet>
 ```
 
 `onboard` prints that link with the address already in it, so nobody assembles
-one by hand. **Mind the `/perp`** — the sibling route without it is the
-prediction-market page, and it states on itself that it does not grant perps. An
-owner who signs there connects a wallet, signs, and has granted nothing this
-package can use.
+one by hand — `--link` prints the URL alone, for pasting or piping, and
+`--details` prints what the grant asks for and where to revoke. The screen leads
+with the link because the person reading it has one job: send it to the owner.
+**Mind the `/perp`** — the sibling route without it is the prediction-market
+page, and it states on itself that it does not grant perps. An owner who signs
+there connects a wallet, signs, and has granted nothing this package can use.
+
+**Nobody has to say "I signed it".** The console's completion screen tells the
+owner to go back to the terminal because the agent will pick the grant up within
+seconds, and `--wait` is what makes that true:
+
+```bash
+npx waterx onboard --wait 300 --json
+```
+
+It prints the link, then looks for the grant every ten seconds — the backend's
+delegate index where it is deployed, recent on-chain grant events where it is
+not — and when exactly one account turns out to have granted this wallet, it
+adopts it: `WATERX_ACCOUNT_ID`, and a line in the adoption ledger. Between
+several grants it stops and asks, because which account an agent trades is whose
+money it trades. It is the only thing `onboard` writes, and only after the owner
+has acted.
 
 For an owner who would rather not use a browser — or a private console this
 package knows no page for — the same grant is one command, run with their own
@@ -340,8 +359,8 @@ console, and revocation takes effect on chain immediately.
 `onboard` reports where the handshake has got to and what the next move is. The
 grant itself is the owner's act, made on chain from their own wallet — through
 the authorize page or the command above — and revocable from Account →
-Delegates; this command reads it and never makes it. An agent that could grant
-itself authority would not be a delegate arrangement.
+Delegates; this command reads it, waits for it, and never makes it. An agent
+that could grant itself authority would not be a delegate arrangement.
 
 What the agent asks for is the perp trading mask (`PERM_ALL_TRADING`, 255):
 opening, closing, sizing, orders, **and position margin** —

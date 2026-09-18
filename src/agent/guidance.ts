@@ -51,6 +51,14 @@ export interface Guidance {
   state: State;
   /** One sentence, addressed to the agent, about what to say and why. */
   headline: string;
+  /**
+   * The account behind the headline, for a caller that is asked "why?".
+   *
+   * Separate because the headline is relayed on every turn and this is read
+   * once. Folding the two put an 850-character explanation of the delegate
+   * arrangement in front of an operator whose next act was to paste a link.
+   */
+  detail?: string;
   suggestions: Suggestion[];
 }
 
@@ -89,7 +97,7 @@ export interface Situation {
    * it has to outrank "ready" — otherwise the agent offers a trade that the
    * chain will refuse, and the refusal arrives as a generic 6002.
    */
-  delegation?: { state: string; headline: string };
+  delegation?: { state: string; headline: string; detail?: string };
   readOnly: boolean;
   freeMargin: number | undefined;
   positions: number;
@@ -197,24 +205,21 @@ export function decide(s: Situation): Guidance {
       return {
         state: "awaiting-grant",
         headline:
-          `There is a wallet and nothing has been granted to it yet. The usual arrangement is ` +
-          `that the account owner grants THIS address permission to trade their account — they ` +
-          `keep the funds, and it needs no SUI of its own because the backend sponsors a ` +
-          `delegate's transactions. ${DELEGATE_BOUNDARY} ` +
-          (page === undefined
-            ? `Ask them to grant it; then `
-            : `They grant it at ${page} — signing in their own wallet, where their key stays. ` +
-              `Then `) +
-          `\`discover\` finds the account on its own and \`adopt\` takes it. Nobody has to copy an ` +
-          `account id or an owner address.`,
+          page === undefined
+            ? `There is a wallet and nothing has been granted to it yet. The account owner grants ` +
+              `${s.address ?? "it"} permission to trade their account, from their own wallet.`
+            : `There is a wallet and nothing has been granted to it yet. Give the account owner ` +
+              `this link — they sign in their own wallet, where their key stays: ${page}`,
+        detail:
+          `The usual arrangement is that the owner grants THIS address permission to trade their ` +
+          `account — they keep the funds, and it needs no SUI of its own because the backend ` +
+          `sponsors a delegate's transactions. ${DELEGATE_BOUNDARY} Once they have signed, ` +
+          `\`onboard --wait\` finds the account and adopts it. Nobody has to copy an account id ` +
+          `or an owner address.`,
         suggestions: [
           {
-            what: "the address to hand over, and where the owner grants it",
-            command: invoke("onboard", "--json"),
-          },
-          {
-            what: "once the owner has signed: find the account that granted this wallet",
-            command: invoke("discover", "--wait", "300", "--json"),
+            what: "hand over the link, then wait for the grant and adopt the account it names",
+            command: invoke("onboard", "--wait", "300", "--json"),
           },
           {
             what:
@@ -287,8 +292,12 @@ export function decide(s: Situation): Guidance {
     return {
       state: "not-delegated",
       headline: s.delegation.headline,
+      ...(s.delegation.detail === undefined ? {} : { detail: s.delegation.detail }),
       suggestions: [
-        { what: "the handshake, and what the owner has to do", command: invoke("onboard", "--json") },
+        {
+          what: "hand over the link, then wait for the grant and adopt the account it names",
+          command: invoke("onboard", "--wait", "300", "--json"),
+        },
       ],
     };
   }

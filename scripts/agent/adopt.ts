@@ -8,14 +8,9 @@
  * generated, so the ledger still tells adoptions apart and never claims a
  * sign-off that did not happen.
  */
-import { normalizeSuiAddress } from "@mysten/sui/utils";
-
-import { recordAdoption, resolveApprover } from "../../src/agent/adoptions.ts";
-import { NotAGrantError, verifyAdoptable } from "../../src/agent/adopt.ts";
+import { adoptAccount, NotAGrantError, OwnerMismatchError } from "../../src/agent/adopt.ts";
 import { AccountNotFoundError, accountObjectReader } from "../../src/chain/account-object.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
-import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
-import { saveToEnv } from "../../src/chain/wallet.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { demand, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
@@ -48,9 +43,21 @@ await run(async () => {
   }
   const me = agent.signer.address;
 
-  let adoptable;
+  // Verified on chain and written down in one place, because `onboard --wait`
+  // adopts too and the order of those writes matters: the `.gitignore` rule
+  // goes in before the ledger line that says which account this agent trades.
+  let adopted;
   try {
-    adoptable = await verifyAdoptable({ accountId, delegate: me, readAccount: accountObjectReader(agent.config) });
+    adopted = await adoptAccount({
+      accountId,
+      delegate: me,
+      network: agent.config.network,
+      readAccount: accountObjectReader(agent.config),
+      ...(agent.config.ownerAddress === undefined
+        ? {}
+        : { configuredOwner: agent.config.ownerAddress }),
+      ...(args.approver === undefined ? {} : { approver: args.approver }),
+    });
   } catch (error) {
     if (error instanceof NotAGrantError) {
       setOutcome({ ...quiet, status: "auth", message: error.message, retryable: false, nextCommand: invoke("onboard", "--json") });
@@ -58,6 +65,12 @@ await run(async () => {
     }
     if (error instanceof AccountNotFoundError) {
       setOutcome({ ...quiet, status: "usage", message: error.message, retryable: false, nextCommand: invoke("discover", "--json") });
+      return;
+    }
+    // A leftover owner that disagrees with the chain would make every write
+    // claim the wrong principal. Refuse rather than write a contradiction.
+    if (error instanceof OwnerMismatchError) {
+      setOutcome({ ...quiet, status: "config", message: error.message, retryable: false });
       return;
     }
     setOutcome({
@@ -69,56 +82,26 @@ await run(async () => {
     return;
   }
 
-  // A leftover owner that disagrees with the chain would make every write
-  // claim the wrong principal. Refuse rather than write a contradiction.
-  const configuredOwner = agent.config.ownerAddress;
-  if (configuredOwner !== undefined && normalizeSuiAddress(configuredOwner) !== adoptable.ownerAddress) {
-    setOutcome({
-      ...quiet,
-      status: "config",
-      message:
-        `WATERX_OWNER_ADDRESS is ${configuredOwner}, but ${adoptable.accountId} is owned by ` +
-        `${adoptable.ownerAddress} on chain. Remove WATERX_OWNER_ADDRESS from .env — the owner is ` +
-        `read from the account — then adopt again.`,
-      retryable: false,
-    });
-    return;
-  }
-
-  const approver = resolveApprover(args.approver);
-  // Before the ledger is written: `.waterx/` records which account was adopted,
-  // and a project that ignored only `.env` would otherwise commit it.
-  const ignored = ensureEnvIgnored();
-  saveToEnv("WATERX_ACCOUNT_ID", adoptable.accountId);
-  recordAdoption({
-    accountId: adoptable.accountId,
-    ownerAddress: adoptable.ownerAddress,
-    delegate: me,
-    network: agent.config.network,
-    by: approver.by,
-    generated: approver.generated,
-  });
-
-  const recordedAs = `${approver.by}${approver.generated ? " (generated — no approver was given)" : ""}`;
+  const recordedAs = `${adopted.by}${adopted.generated ? " (generated — no approver was given)" : ""}`;
   note("");
-  note(`  adopted       ${adoptable.accountId}`);
-  note(`  owner         ${adoptable.ownerAddress}  (read from chain)`);
+  note(`  adopted       ${adopted.accountId}`);
+  note(`  owner         ${adopted.ownerAddress}  (read from chain)`);
   note(`  recorded as   ${recordedAs}`);
   note("  wrote         WATERX_ACCOUNT_ID — the owner is read from the account, not stored");
   note("");
   show(
     {
-      ...adoptable,
-      delegate: me,
-      chosenBy: approver.by,
-      generated: approver.generated,
-      ...(ignored.kind === "added" || ignored.kind === "failed" ? { gitignore: ignored } : {}),
+      ...adopted,
+      chosenBy: adopted.by,
+      ...(adopted.gitignore.kind === "added" || adopted.gitignore.kind === "failed"
+        ? { gitignore: adopted.gitignore }
+        : {}),
     },
     { rendered: true },
   );
   setOutcome(
     succeeded(
-      `This wallet now trades ${adoptable.accountId}, owned by ${adoptable.ownerAddress}. Recorded as ${recordedAs}.`,
+      `This wallet now trades ${adopted.accountId}, owned by ${adopted.ownerAddress}. Recorded as ${recordedAs}.`,
       { nextCommand: invoke("next", "--json") },
     ),
   );

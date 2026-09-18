@@ -3,7 +3,12 @@
  */
 import { describe, expect, it, vi } from "vitest";
 
-import { DISCOVERY_LIMIT, discoverGrants, type DiscoveryDeps } from "../src/agent/discovery.ts";
+import {
+  awaitGrants,
+  DISCOVERY_LIMIT,
+  discoverGrants,
+  type DiscoveryDeps,
+} from "../src/agent/discovery.ts";
 import type { AccountObject } from "../src/chain/account-object.ts";
 
 const ME = `0x${"a".repeat(64)}`;
@@ -130,5 +135,175 @@ describe("discoverGrants", () => {
 
     expect(result.truncated).toBe(true);
     expect(d.readAccount).toHaveBeenCalledTimes(DISCOVERY_LIMIT);
+  });
+});
+
+/**
+ * Waiting for a grant somebody is making in a browser right now.
+ *
+ * This replaced a person typing "I signed it" into a chat window — while the
+ * console's own completion screen was already telling them the agent would pick
+ * it up within seconds. What it may not do is give up early, or sit on an
+ * answer it already has.
+ */
+describe("awaitGrants", () => {
+  const granted = (id: string): DiscoveryDeps["delegatedAccounts"] =>
+    vi.fn().mockResolvedValue({
+      accounts: [{ accountId: id, ownerAddress: null, delegate: {} }],
+      unverifiedAccounts: [],
+      truncated: false,
+    });
+  const nothing = (): DiscoveryDeps["delegatedAccounts"] =>
+    vi.fn().mockResolvedValue({ accounts: [], unverifiedAccounts: [], truncated: false });
+
+  /** A clock that only moves when something sleeps. */
+  const fake = (): { clock: () => number; sleep: (ms: number) => Promise<void>; at: () => number } => {
+    let now = 0;
+    return {
+      clock: () => now,
+      sleep: (ms: number) => {
+        now += ms;
+        return Promise.resolve();
+      },
+      at: () => now,
+    };
+  };
+
+  it("looks once when no wait was asked for", async () => {
+    const delegatedAccounts = nothing();
+    const d = deps({ delegatedAccounts });
+
+    const attempt = await awaitGrants(ME, d);
+
+    expect(attempt.discovery?.grants).toEqual([]);
+    expect(delegatedAccounts).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops the moment a grant appears", async () => {
+    const time = fake();
+    const delegatedAccounts = vi
+      .fn()
+      .mockResolvedValueOnce({ accounts: [], unverifiedAccounts: [], truncated: false })
+      .mockResolvedValue({
+        accounts: [{ accountId: acct(1), ownerAddress: null, delegate: {} }],
+        unverifiedAccounts: [],
+        truncated: false,
+      });
+    const d = deps({
+      delegatedAccounts,
+      readAccount: vi.fn().mockResolvedValue(
+        account(acct(1), [{ address: ME, expiresAtMs: null, protocolPermissions: new Map() }]),
+      ),
+    });
+
+    const attempt = await awaitGrants(ME, d, {
+      waitMs: 300_000,
+      intervalMs: 10_000,
+      sleep: time.sleep,
+      clock: time.clock,
+    });
+
+    expect(attempt.discovery?.grants.map((g) => g.accountId)).toEqual([acct(1)]);
+    expect(delegatedAccounts).toHaveBeenCalledTimes(2);
+    expect(time.at(), "waited one interval, not the whole window").toBe(10_000);
+  });
+
+  it("treats an unreadable candidate as an answer rather than waiting it out", async () => {
+    // An account may grant this wallet and could not be read. That is a fact to
+    // report now — it is not the same as "nothing granted", and sitting on it
+    // for five minutes tells the caller nothing it did not already know.
+    const time = fake();
+    const delegatedAccounts = vi
+      .fn()
+      .mockResolvedValue({ accounts: [], unverifiedAccounts: [acct(3)], truncated: false });
+    const d = deps({ delegatedAccounts, readAccount: vi.fn().mockRejectedValue(new Error("rpc down")) });
+
+    const attempt = await awaitGrants(ME, d, {
+      waitMs: 300_000,
+      intervalMs: 10_000,
+      sleep: time.sleep,
+      clock: time.clock,
+    });
+
+    expect(attempt.discovery?.unverified).toEqual([acct(3)]);
+    expect(delegatedAccounts).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps waiting through a look that failed, instead of calling an outage an answer", async () => {
+    // Both sources can be down at once, and a wait is exactly the situation
+    // where that fixes itself. Looking once — no wait — still hands the failure
+    // straight back.
+    const time = fake();
+    const delegatedAccounts = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("HTTP 502"))
+      .mockResolvedValue({
+        accounts: [{ accountId: acct(9), ownerAddress: null, delegate: {} }],
+        unverifiedAccounts: [],
+        truncated: false,
+      });
+    const d = deps({
+      delegatedAccounts,
+      recentGrantEvents: vi.fn().mockRejectedValue(new Error("graphql refused")),
+      readAccount: vi.fn().mockResolvedValue(
+        account(acct(9), [{ address: ME, expiresAtMs: null, protocolPermissions: new Map() }]),
+      ),
+    });
+
+    const attempt = await awaitGrants(ME, d, {
+      waitMs: 60_000,
+      intervalMs: 10_000,
+      sleep: time.sleep,
+      clock: time.clock,
+    });
+
+    expect(attempt.failure).toBeUndefined();
+    expect(attempt.discovery?.grants.map((g) => g.accountId)).toEqual([acct(9)]);
+  });
+
+  it("reports the last failure when the clock beats the outage", async () => {
+    const time = fake();
+    const d = deps({
+      delegatedAccounts: vi.fn().mockRejectedValue(new Error("HTTP 502")),
+      recentGrantEvents: vi.fn().mockRejectedValue(new Error("graphql refused")),
+    });
+
+    const attempt = await awaitGrants(ME, d, {
+      waitMs: 25_000,
+      intervalMs: 10_000,
+      sleep: time.sleep,
+      clock: time.clock,
+    });
+
+    expect(attempt.discovery).toBeUndefined();
+    expect(attempt.failure).toContain("graphql refused");
+  });
+
+  it("never sleeps past the deadline the caller allowed", async () => {
+    // `+ interval <= deadline`, not `< deadline`: overrunning the window is not
+    // waiting, and a caller that said 15 seconds has something else to do at 15.
+    const time = fake();
+    const delegatedAccounts = nothing();
+    const d = deps({ delegatedAccounts });
+
+    await awaitGrants(ME, d, {
+      waitMs: 15_000,
+      intervalMs: 10_000,
+      sleep: time.sleep,
+      clock: time.clock,
+    });
+
+    expect(delegatedAccounts).toHaveBeenCalledTimes(2);
+    expect(time.at()).toBeLessThanOrEqual(15_000);
+  });
+
+  it("uses the backend index when it answers, which is what makes this quick", async () => {
+    const d = deps({ delegatedAccounts: granted(acct(4)), readAccount: vi.fn().mockResolvedValue(
+      account(acct(4), [{ address: ME, expiresAtMs: null, protocolPermissions: new Map() }]),
+    ) });
+
+    const attempt = await awaitGrants(ME, d);
+
+    expect(attempt.discovery?.source).toBe("backend");
   });
 });

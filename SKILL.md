@@ -59,15 +59,18 @@ and impossible to notice missing.
 One read that answers "where am I, and what should I offer?" — and answers it
 in the order the states have to be resolved, so you cannot offer a trade to
 someone who has a transaction in flight. Relay `headline`, offer `suggestions`,
-and **ask for anything in `needsFromUser` instead of choosing it**.
+and **ask for anything in `needsFromUser` instead of choosing it**. A state that
+carries `detail` is answering "why?" — read that out if the person asks, not
+before: it is written for the account owner, and the headline is what the person
+in front of you needs.
 
 | `state` | What to say |
 |---|---|
 | `unsettled` | Something was sent and nobody knows what happened. Reconcile before anything else. |
 | `awaiting-approval` | A preview is waiting on them. Show it and ask. |
 | `not-set-up` | Run `bootstrap` and relay what is still missing — some of it needs an operator. |
-| `awaiting-grant` | A wallet exists and nothing has been granted to it. Give the address to the account owner — `onboard` prints where they grant it. When they say they have signed, run `discover`: it finds the account, confirms the grant on chain, and reads the owner off the account. **It never adopts.** With one grant, its `nextCommand` is `adopt --account <id>` — run it; no name is needed, and `--approver` is only for a name the person gives you. With several, ask which account; never pick one. The agent needs no SUI, no account and no collateral of its own. |
-| `not-delegated` | The owner granted nothing, or the grant is stale. Run `onboard` and relay it — only they can fix it. |
+| `awaiting-grant` | A wallet exists and nothing has been granted to it. **Run `onboard --wait 300 --json`**: it prints the link to hand the account owner, then watches for the grant and adopts the account that made it — so nobody has to tell you "I signed it", and nobody copies an account id. It returns when the grant lands, or `config` when the wait runs out (run it again). With several grants it stops at `needs-approval`: ask which account, then run that grant's `adopt` command. Never pick one. `onboard --link` prints the URL alone if you only need something to paste; `onboard --details` prints what the grant asks for and where to revoke. The agent needs no SUI, no account and no collateral of its own. |
+| `not-delegated` | The owner granted nothing, or the grant is stale. Relay the headline — only they can fix it — and `onboard --wait 300 --json` picks the grant up when they do. |
 | `read-only` | Nothing can be signed. On mainnet that is the default and changing it is their decision. |
 | `no-collateral` | Set up, but nothing to commit. Gas is not collateral; this one needs an operator. |
 | `ready` | Ask what they want to do, and for the numbers. |
@@ -165,8 +168,8 @@ Exit codes carry the same answer: `0` ok, `2` usage, `3` config, `4` auth,
 | `funds` | Deposit and withdrawal **history** — not balances; use `balance` |
 | `accounts`, `delegates` | Which accounts this wallet owns, and who may act on them |
 | `limits` | The execution policy and risk ceilings this process is bound by |
-| `onboard` | The delegate handshake: what the owner still has to grant, and where |
-| `discover` | Which accounts have granted this wallet — each confirmed on chain, owner read from the account. Lists; never chooses |
+| `onboard` | The delegate handshake: the link the owner grants at. `--wait <s>` then watches for the grant and adopts the account that made it; `--link` prints the URL alone; `--details` prints the full consent account |
+| `discover` | Which accounts have granted this wallet — each confirmed on chain, owner read from the account. Lists; never chooses, never writes. `onboard --wait` is the same search plus the adoption |
 | `adopt` | Adopts one account: re-checks the grant, writes `WATERX_ACCOUNT_ID`, and records it under `--approver` if given, otherwise under a generated id marked as generated |
 | `approvals` | Previewed plans, who approved them, and anything unsettled |
 
