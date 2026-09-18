@@ -278,7 +278,7 @@ describe("a configured authorize page", () => {
     const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
 
     expect(status.headline).toContain(PAGE);
-    expect(status.headline).toContain("signs with their wallet");
+    expect(status.headline).toContain("signs in their own wallet");
   });
 
   it("exposes where to grant and where to review as separate fields", () => {
@@ -343,6 +343,33 @@ describe("a configured authorize page", () => {
     expect(status.headline).not.toMatch(/one signature/iu);
   });
 
+  it("ends on the link, so a terminal wrap cannot cut it in half", () => {
+    // 115 characters of URL in the middle of a paragraph wraps across three
+    // lines of an 80-column terminal, and a URL split across a wrap is one
+    // nobody can click or select. Ending on it also means a renderer can lift
+    // it onto a line of its own by slicing rather than by guessing.
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    for (const status of [
+      delegationStatus({ network: "mainnet", delegateAddress: AGENT }),
+      delegationStatus({ network: "mainnet", delegateAddress: AGENT, ownerAddress: OWNER, accountId: ACCOUNT, delegates: [] }),
+      delegationStatus({ network: "mainnet", delegateAddress: AGENT, ownerAddress: OWNER, accountId: ACCOUNT, delegates: [grant({ stale: true })] }),
+    ]) {
+      expect(status.headline.trimEnd(), status.state).toMatch(/https:\/\/\S+$/u);
+    }
+  });
+
+  it("names the wallet once, in the link that already carries it", () => {
+    // The screen showed the 66-character address three times: in the link, in
+    // the check line, and again in the status line underneath. Two of those
+    // were the same string nobody reads twice.
+    process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
+
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.headline.split(AGENT)).toHaveLength(2);
+  });
+
   it("carries the agent address in the link, so the page cannot be aimed at the wrong one", () => {
     process.env.WATERX_PERP_AUTHORIZE_URL = PAGE;
 
@@ -381,7 +408,7 @@ describe("a configured authorize page", () => {
     // can.
     expect(status.headline).toContain("npx waterx add-delegate");
     expect(status.detail).toContain("WATERX_PERP_AUTHORIZE_URL");
-    expect(status.headline).not.toContain("signs with their wallet");
+    expect(status.headline).not.toContain("signs in their own wallet");
   });
 
   it("names the grant page in the preflight failure an owner is stuck on", () => {

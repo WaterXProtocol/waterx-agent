@@ -9,7 +9,7 @@
 import { describe, expect, it } from "vitest";
 
 import { DELEGATE_BOUNDARY } from "../src/agent/delegation.ts";
-import { decide, type Situation } from "../src/agent/guidance.ts";
+import { decide, sentenceOf, type Situation } from "../src/agent/guidance.ts";
 
 const ok: Situation = {
   open: 0,
@@ -114,6 +114,31 @@ describe("what to do next", () => {
     expect(g.state).toBe("awaiting-grant");
     expect(g.headline).toContain(`https://waterx.app/en/agent/authorize/perp?agent=0x${"a".repeat(64)}`);
     expect(g.headline).toContain("their key stays");
+  });
+
+  it("hands the link out as a field too, so a renderer can put it on its own line", () => {
+    // The headline keeps it — an agent that relays one field and stops must not
+    // leave the owner with nowhere to go. But inside the paragraph it wrapped
+    // across three lines of an 80-column terminal, and a wrapped URL is one
+    // nobody can click.
+    const address = `0x${"a".repeat(64)}`;
+    const g = decide({ ...ok, mode: "undecided", configured: false, network: "mainnet", address });
+
+    expect(g.link).toBe(`https://waterx.app/en/agent/authorize/perp?agent=${address}`);
+    expect(g.headline).toContain(g.link ?? "never");
+    // And the sentence stands on its own once the link is lifted out of it,
+    // rather than trailing the colon that introduced it.
+    const sentence = sentenceOf(g);
+    expect(sentence).not.toContain("https://");
+    expect(sentence).toMatch(/[a-z]$/u);
+    expect(g.headline.startsWith(sentence)).toBe(true);
+  });
+
+  it("returns the headline whole when there is no link to lift out", () => {
+    // Guessing where a sentence stops is worse than printing one URL twice.
+    const g = decide({ ...ok, freeMargin: 0 });
+
+    expect(sentenceOf(g)).toBe(g.headline);
   });
 
   it("keeps the headline to one thing to do, so relaying it is not a wall of text", () => {
