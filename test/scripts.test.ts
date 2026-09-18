@@ -115,6 +115,42 @@ describe("commands named in the documentation", () => {
 });
 
 /**
+ * Switches that belong to a person, held to a prohibition an agent will obey.
+ *
+ * These agents follow a direct instruction: told "Do not pass `--open`
+ * yourself", one did exactly that, verbatim. What they do not do is infer a
+ * prohibition from surrounding prose — a later install passed `--no-open` on
+ * its own initiative, reasoning that a mainnet authorization page should not
+ * auto-launch without a click, because nothing forbade it and the paragraph
+ * offered it beside the environment switches as an equal option.
+ *
+ * So the prohibition is a checked invariant rather than a sentence somebody
+ * once wrote. Softening it fails here.
+ */
+describe("switches an agent must not reach for", () => {
+  const FORBIDDEN: Record<string, RegExp> = {
+    // Whether a browser opens is the person's call; they have WATERX_NO_BROWSER.
+    "--no-open": /\*\*Do not pass `--no-open`\.?\*\*/u,
+    // Widening what a process may sign is the same kind of decision as approving.
+    "policy --set": /a person runs that, never you/u,
+  };
+
+  it("are forbidden in SKILL.md, in words that name the flag", () => {
+    const skill = readFileSync("SKILL.md", "utf8");
+    for (const [flag, prohibition] of Object.entries(FORBIDDEN)) {
+      expect(skill, `SKILL.md no longer forbids ${flag}`).toMatch(prohibition);
+    }
+  });
+
+  it("say so in --help too, where an agent looks before it reads the docs", () => {
+    const source = readFileSync("scripts/agent/onboard.ts", "utf8");
+    const block = source.slice(source.indexOf("noOpen: {"), source.indexOf("approver: {"));
+
+    expect(block).toMatch(/an agent must not pass it/u);
+  });
+});
+
+/**
  * Redeclaring a global flag replaces it, whole.
  *
  * `parseArgs` merges `{ ...GLOBAL, ...defs }`, so a script that documents
