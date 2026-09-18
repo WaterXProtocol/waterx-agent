@@ -13,6 +13,7 @@
 import { list as listApprovals } from "../../src/agent/approvals.ts";
 import { delegationStatus, perpGrantCommand } from "../../src/agent/delegation.ts";
 import { type DiscoveredGrant, discoverGrants } from "../../src/agent/discovery.ts";
+import { exposureWarnings, summarise } from "../../src/agent/exposure.ts";
 import { decide, sentenceOf } from "../../src/agent/guidance.ts";
 import { accountObjectReader } from "../../src/chain/account-object.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
@@ -131,14 +132,23 @@ await run(async () => {
   let freeMargin: number | undefined;
   let positions = 0;
   let orders = 0;
+  // What the ACCOUNT is carrying, as distinct from where the PROCESS is. This
+  // command answered the second and was silent about the first, including for
+  // an account whose prices had stopped updating under a 10x position.
+  let warnings: string[] = [];
+  let exposure: ReturnType<typeof summarise> | undefined;
   if (account !== undefined && report.readReady) {
-    const overview = (await agent.read.overview(account)) as { freeMargin?: number };
-    freeMargin = overview.freeMargin ?? 0;
-    positions = (await agent.read.positions(account)).length;
-    orders = (await agent.read.orders({ account })).length;
+    const overview: unknown = await agent.read.overview(account);
+    const open = await agent.read.positions(account);
+    const resting = await agent.read.orders({ account });
+    exposure = summarise({ overview, positions: open, orders: resting.length });
+    warnings = exposureWarnings(exposure);
+    freeMargin = exposure.freeMargin;
+    positions = exposure.positions;
+    orders = exposure.orders;
   }
 
-  const { state, headline, detail, link, suggestions } = decide({
+  const guidance = decide({
     open: open.length,
     firstUnsettled: open[0]?.submission.id,
     pending: pending.map((a) => ({ id: a.request.id, action: a.request.action })),
@@ -172,9 +182,15 @@ await run(async () => {
     positions,
     orders,
     blockers: report.checks.filter((c) => c.status === "fail").map((c) => c.name),
+    warnings,
   });
+  const { state, headline, detail, link, suggestions } = guidance;
 
   note("");
+  // Before the sentence, not after it. These are facts about somebody's money;
+  // the state of the process can wait two lines.
+  for (const warning of guidance.warnings ?? []) note(`  ! ${warning}`);
+  if ((guidance.warnings ?? []).length > 0) note("");
   // The sentence, then the link on a line of its own. Inside the paragraph it
   // wrapped across three lines of an 80-column terminal, which is where a URL
   // stops being clickable; the envelope's `headline` still carries it whole,
@@ -198,6 +214,8 @@ await run(async () => {
     {
       state,
       headline,
+      ...(guidance.warnings === undefined ? {} : { warnings: guidance.warnings }),
+      ...(exposure === undefined ? {} : { exposure }),
       ...(link === undefined ? {} : { link }),
       // In the envelope, not on the screen: this is the answer to "why?", asked
       // by a minority of callers, and it is what made the headline unreadable.
