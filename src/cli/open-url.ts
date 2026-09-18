@@ -26,6 +26,8 @@
  * is a web page; nothing else needs opening.
  */
 import { spawn as nodeSpawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 export type OpenOutcome =
   /** The opener started. Whether a human then saw a window is not knowable from here. */
@@ -105,4 +107,71 @@ export function openUrl(url: string, deps: OpenDeps = {}): Promise<OpenOutcome> 
       });
     }
   });
+}
+
+// --- Opening it once ---------------------------------------------------------
+
+/**
+ * Which links have already been opened here, so running `onboard` again does
+ * not open another tab.
+ *
+ * It is run again constantly: an agent asks `next`, is told to run `onboard
+ * --wait`, that times out, it runs it again. Opening every time turns a
+ * five-minute wait into a browser full of the same page. Beside the other
+ * ledgers in `.waterx/`, which `bootstrap` already keeps out of git.
+ */
+export const OPENED_FILE = process.env.WATERX_OPENED_FILE?.trim() || ".waterx/opened.json";
+
+/** How long an opened link counts as still open. */
+export const REOPEN_AFTER_MS = 60 * 60 * 1000;
+
+export interface OpenMemory {
+  path?: string;
+  now?: number;
+  windowMs?: number;
+}
+
+const readOpened = (path: string): Record<string, number> => {
+  try {
+    if (!existsSync(path)) return {};
+    const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, number>) : {};
+  } catch {
+    // A corrupt note about browser tabs is not worth failing a handshake over.
+    return {};
+  }
+};
+
+/** Whether this exact link was opened here recently enough not to open again. */
+export function openedRecently(url: string, memory: OpenMemory = {}): boolean {
+  const at = readOpened(memory.path ?? OPENED_FILE)[url];
+  if (at === undefined) return false;
+  return (memory.now ?? Date.now()) - at < (memory.windowMs ?? REOPEN_AFTER_MS);
+}
+
+/** Write down that it was opened. Never throws: this is a convenience, not a record. */
+export function rememberOpened(url: string, memory: OpenMemory = {}): void {
+  const path = memory.path ?? OPENED_FILE;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify({ ...readOpened(path), [url]: memory.now ?? Date.now() }), "utf8");
+  } catch {
+    // Then it opens twice next time, which is the smallest possible harm.
+  }
+}
+
+/**
+ * Whether something in the environment says not to open a browser here, and
+ * what said it.
+ *
+ * The escape hatch that makes opening-by-default defensible: a server, a
+ * container and a CI runner all have no browser and no one watching, and they
+ * are exactly the places that set these.
+ */
+export function browserSuppressed(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const off = (value: string | undefined): boolean =>
+    value !== undefined && value.trim() !== "" && value.trim() !== "0" && value.trim().toLowerCase() !== "false";
+  if (off(env.WATERX_NO_BROWSER)) return "WATERX_NO_BROWSER is set";
+  if (off(env.CI)) return "CI is set";
+  return undefined;
 }

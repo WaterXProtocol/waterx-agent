@@ -191,6 +191,22 @@ describe("what to do next", () => {
     expect(g.state).toBe("awaiting-grant");
   });
 
+  it("offers the code in the state an agent relays, not only in --help", () => {
+    // The defect this closes: an agent that follows the contract -- relay the
+    // headline, offer the suggestions -- could not learn the option existed.
+    const g = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      network: "mainnet",
+      address: `0x${"a".repeat(64)}`,
+    });
+
+    expect(g.suggestions.map((s) => s.command).join(" ")).toContain("onboard --qr");
+    // And still leads with the one command that finishes the handshake.
+    expect(g.suggestions[0]?.command).toContain("--wait");
+  });
+
   it("hands the link out as a field too, so a renderer can put it on its own line", () => {
     // The headline keeps it — an agent that relays one field and stops must not
     // leave the owner with nowhere to go. But inside the paragraph it wrapped

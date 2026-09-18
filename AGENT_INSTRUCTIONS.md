@@ -276,6 +276,13 @@ depends on it. If the owner granted it earlier, you get `granted-not-adopted`
 and an `adopt` command: run that, and do not hand them the authorize link a
 second time.
 
+**`onboard` opens the authorize page itself**, once per link, and prints the
+link first either way. It does not open where nobody is watching:
+`WATERX_NO_BROWSER=1` or `CI` turns it off, `--no-open` skips one run, and
+`--open` opens it again. Say that the code exists too — `onboard --qr` — because
+which of the two helps depends on where the person is sitting, and only they
+know that.
+
 Getting that grant is one command:
 
 ```bash

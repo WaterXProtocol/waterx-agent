@@ -216,6 +216,16 @@ export const completeHandshakeCommand = (): string =>
 export const handshakeDetailsCommand = (): string => invoke("onboard", "--details");
 
 /**
+ * The command that draws the link as a scannable code.
+ *
+ * Named on the screen rather than only in `--help`, because that is where it
+ * was: a real session worked out for itself that the owner was probably not at
+ * this machine -- which is exactly what the code is for -- and never learned
+ * the option existed, because nothing it reads mentions it.
+ */
+export const handshakeQrCommand = (): string => invoke("onboard", "--qr");
+
+/**
  * What the agent asks for: the perp trading mask, and nothing outside perps.
  *
  * `PERM_ALL_TRADING` (255) covers opening, closing, sizing, orders **and
@@ -697,6 +707,9 @@ export function handshakeScreen(status: DelegationStatus, options: ScreenOptions
       "",
       `  the page must show the agent address ending ${addressTail(status.delegateAddress)}`,
     );
+    if (options.qr === undefined || options.qr.length === 0) {
+      lines.push(row("owner elsewhere? a code to scan", handshakeQrCommand()));
+    }
     if (options.qr !== undefined && options.qr.length > 0) {
       // Under the link, not instead of it: whoever is at this terminal may be
       // the one who signs, and a link they can click beats a code they cannot.
