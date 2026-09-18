@@ -106,6 +106,64 @@ const useBuilt = !existsSync(source);
 const invokedAs = root.includes(`${sep}node_modules${sep}`) ? "npx waterx" : "node bin/waterx.mjs";
 const env = { ...process.env, WATERX_INVOKED_AS: invokedAs };
 
+/**
+ * An install with no build in it, caught before Node is handed a path that is
+ * not there.
+ *
+ * `prepare` compiles this package at install time, and npm >= 11 prints a
+ * `npm warn allow-scripts` notice about it. That notice is bookkeeping, not a
+ * refusal — but where it IS one (`ignore-scripts`, an approval policy, a
+ * locked-down CI), the package installs "successfully" with no `dist/` and
+ * nothing says so.
+ *
+ * The check exists because the message further down could never print it:
+ * `spawnSync` SUCCEEDS at spawning Node with a path that does not exist, so
+ * `child.error` is undefined and that branch is unreachable for this case. What
+ * the caller actually got was a MODULE_NOT_FOUND stack naming a path inside
+ * node_modules, empty stdout, and exit 1 — the code this contract reserves for
+ * "this process fell over", so an automated caller could not tell an unbuilt
+ * install from a crash.
+ */
+if (useBuilt && !existsSync(built)) {
+  // The JSON promise is about stdout, and it is one this can still keep: a
+  // caller that asked for JSON gets one document naming the fix, rather than
+  // silence on stdout and a stack trace on stderr.
+  if (args.includes("--json")) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          ok: false,
+          status: "config",
+          command,
+          message:
+            "waterx-agent installed without its build: the `prepare` script did not run, so " +
+            "there is nothing to execute. Re-run the install — `npm install " +
+            "github:WaterXProtocol/waterx-agent` — or install the tarball, which ships built. " +
+            "`npm rebuild` does NOT fix this: it does not run `prepare`, and reports success.",
+          submitted: false,
+          retryable: false,
+          reconcileRequired: false,
+          awaitingApproval: false,
+          nextCommand: "npm install github:WaterXProtocol/waterx-agent",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  }
+  process.stderr.write(
+    `waterx: this package installed without its build, so there is nothing to run.\n` +
+      `  The compile happens in the \`prepare\` script at install time, and it did not run here.\n` +
+      `  Either of these fixes it:\n` +
+      `    npm install github:WaterXProtocol/waterx-agent  # re-run the install; prepare runs\n` +
+      `    npm install <waterx-agent-0.1.0.tgz>            # a tarball ships built\n` +
+      `  \`npm rebuild\` does NOT: it does not run \`prepare\`, and says "rebuilt successfully".\n` +
+      `  If your npm holds install scripts for approval, \`npm approve-scripts waterx-agent\`\n` +
+      `  first, then install again.\n`,
+  );
+  process.exit(3);
+}
+
 const child = useBuilt
   ? spawnSync(process.execPath, [built, ...args], { stdio: "inherit", env })
   : spawnSync(
@@ -117,8 +175,11 @@ const child = useBuilt
 if (child.error !== undefined) {
   process.stderr.write(
     `waterx: could not start "${command}": ${child.error.message}\n` +
+      // A missing build is caught above, where it can be named. What is left
+      // here is the spawn itself failing — no Node on PATH, no tsx in a
+      // checkout — which is a different sentence.
       (useBuilt
-        ? "The build is missing or incomplete. Reinstall the package.\n"
+        ? "The build is there but could not be started.\n"
         : "The sources need `tsx`. Run `pnpm install` first.\n"),
   );
   process.exit(3);

@@ -270,6 +270,12 @@ agent does not have to plan the onboarding, and does not need to find a
 document first — though `npx waterx skill` prints these instructions if it
 wants them.
 
+If the first command comes back `status: "config"` saying the package installed
+without its build, the install was allowed but its `prepare` script was not.
+Re-run the install — the envelope's `nextCommand` is exactly that — and nothing
+else is wrong. Do not reach for `npm rebuild`: it does not run `prepare`, and
+reports success without building anything.
+
 Use `npm`, not `pnpm` — pnpm refuses a git install that needs a build
 (`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`). If install scripts are blocked where
 you are, install a tarball instead; the rest is identical:
