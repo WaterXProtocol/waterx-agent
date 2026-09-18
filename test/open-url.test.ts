@@ -7,10 +7,18 @@
  * only.
  */
 import { EventEmitter } from "node:events";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import { openUrl } from "../src/cli/open-url.ts";
+import {
+  browserSuppressed,
+  openedRecently,
+  openUrl,
+  rememberOpened,
+} from "../src/cli/open-url.ts";
 
 const LINK = `https://waterx.app/en/agent/authorize/perp?agent=0x${"a".repeat(64)}`;
 
@@ -100,5 +108,58 @@ describe("openUrl", () => {
     await openUrl(LINK, { platform: "darwin", spawn: fake.spawn });
 
     expect(fake.calls[0]?.options).toMatchObject({ stdio: "ignore", detached: true });
+  });
+});
+
+/**
+ * Opening by default means opening again, and again, unless something
+ * remembers. `onboard` is run constantly -- an agent asks `next`, is told to
+ * run `onboard --wait`, it times out, it runs it again -- and a five-minute
+ * wait should not end in twenty tabs of the same page.
+ */
+describe("opening the same link twice", () => {
+  const somewhere = (): string => join(mkdtempSync(join(tmpdir(), "waterx-opened-")), "opened.json");
+
+  it("knows nothing the first time", () => {
+    expect(openedRecently(LINK, { path: somewhere() })).toBe(false);
+  });
+
+  it("remembers it for an hour, and forgets it after", () => {
+    const path = somewhere();
+    rememberOpened(LINK, { path, now: 1_000_000 });
+
+    expect(openedRecently(LINK, { path, now: 1_000_000 + 60_000 })).toBe(true);
+    expect(openedRecently(LINK, { path, now: 1_000_000 + 2 * 60 * 60 * 1000 })).toBe(false);
+  });
+
+  it("remembers links one at a time, not browsers in general", () => {
+    // A second agent wallet is a different link and a page nobody has seen.
+    const path = somewhere();
+    rememberOpened(LINK, { path, now: 1_000_000 });
+
+    expect(openedRecently(`${LINK}0`, { path, now: 1_000_000 })).toBe(false);
+  });
+
+  it("treats an unreadable note as no note, rather than as a failure", () => {
+    // It is a convenience about browser tabs. The worst it may do when the file
+    // is broken is open one more time.
+    expect(openedRecently(LINK, { path: "/nowhere/at/all/opened.json" })).toBe(false);
+    expect(() => rememberOpened(LINK, { path: "/nowhere/at/all/opened.json" })).not.toThrow();
+  });
+});
+
+describe("where a browser is not wanted", () => {
+  it("stays shut where nobody is watching, and says which switch said so", () => {
+    // The escape hatch that makes opening-by-default defensible: a server, a
+    // container and a CI runner have no browser and no one in front of them.
+    expect(browserSuppressed({ WATERX_NO_BROWSER: "1" })).toContain("WATERX_NO_BROWSER");
+    expect(browserSuppressed({ CI: "true" })).toContain("CI");
+    expect(browserSuppressed({})).toBeUndefined();
+  });
+
+  it("does not read an explicit off as on", () => {
+    for (const value of ["0", "false", "", "  "]) {
+      expect(browserSuppressed({ WATERX_NO_BROWSER: value }), value).toBeUndefined();
+    }
   });
 });

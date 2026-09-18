@@ -39,7 +39,12 @@ import {
   MIN_POLL_SECONDS,
 } from "../../src/agent/discovery.ts";
 import { AccountNotFoundError, accountObjectReader } from "../../src/chain/account-object.ts";
-import { openUrl } from "../../src/cli/open-url.ts";
+import {
+  browserSuppressed,
+  openedRecently,
+  openUrl,
+  rememberOpened,
+} from "../../src/cli/open-url.ts";
 import { qrLines } from "../../src/cli/qr.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
@@ -70,7 +75,11 @@ const args = parseArgs(
       flag: true,
     },
     open: {
-      desc: "Open the authorize page in a browser ON THIS MACHINE (for when you are the account owner)",
+      desc: "Open the authorize page now, even if it was opened here recently or a browser was turned off",
+      flag: true,
+    },
+    noOpen: {
+      desc: "Do not open a browser this time (WATERX_NO_BROWSER=1 turns it off for good)",
       flag: true,
     },
   },
@@ -256,18 +265,42 @@ await run(async () => {
     );
   }
 
-  // Opening is a side effect on somebody's desktop, so it is asked for. It
-  // happens after the screen: the link is already printed, so a machine with no
-  // opener on it loses nothing.
+  // The page opens by itself, and the link is printed first so that a machine
+  // with no browser on it loses nothing. Four things can stop it, and each says
+  // so in one line rather than silently doing nothing:
+  //
+  //  - there is nothing left for the owner to sign;
+  //  - `--no-open`, for this run;
+  //  - WATERX_NO_BROWSER or CI, for a machine that has no one watching it;
+  //  - it was already opened here for this same link, because `onboard` is run
+  //    again constantly and a five-minute wait should not end in twenty tabs.
+  //
+  // `--open` overrides the last two: it is the "I am here, open it now" button.
   let opened: { opened: boolean; detail: string } | undefined;
-  if (args.open === "true" && status.authorizeUrl !== undefined) {
-    const outcome = await openUrl(status.authorizeUrl);
-    opened = outcome.opened
-      ? { opened: true, detail: outcome.command }
-      : { opened: false, detail: outcome.reason };
-    note(outcome.opened ? `  opened in a browser here (${outcome.command})` : `  ${outcome.reason}`);
+  const pageToOpen = granted || readyToAdopt ? undefined : status.authorizeUrl;
+  if (pageToOpen !== undefined) {
+    const forced = args.open === "true";
+    const suppressed = browserSuppressed();
+    const already = openedRecently(pageToOpen);
+    const reason = args.noOpen === "true" ? "--no-open" : (suppressed ?? (already ? "already" : undefined));
+
+    if (forced || reason === undefined) {
+      const outcome = await openUrl(pageToOpen);
+      opened = outcome.opened
+        ? { opened: true, detail: outcome.command }
+        : { opened: false, detail: outcome.reason };
+      if (outcome.opened) rememberOpened(pageToOpen);
+      note(outcome.opened ? `  opened it here (${outcome.command})` : `  ${outcome.reason}`);
+    } else {
+      opened = { opened: false, detail: reason };
+      note(
+        reason === "already"
+          ? "  already opened here — `--open` opens it again"
+          : `  not opening a browser (${reason})`,
+      );
+    }
   } else if (args.open === "true") {
-    note("  no authorize page is known for this console, so there is nothing to open");
+    note("  nothing to open: no authorize page is known, or there is nothing left to sign");
   }
 
   if (!waiting || delegateAddress === undefined) {

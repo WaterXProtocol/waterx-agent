@@ -331,17 +331,28 @@ it, rather than sending its owner back to a link they have already used. When
 the index cannot be reached, the state says the grant is unconfirmed; it never
 reports "nothing is granted" on the strength of not having looked.
 
-**Two ways to shorten the handover.** `--qr` draws the link as a code the owner
-scans with the phone their wallet is already on — which is the case the delegate
-arrangement is built for, where they are not at this machine. `--open` opens the
-page in a browser **here**, for the other case: you are the account owner, and
-the wallet is in this machine's browser. Both are opt-in and the link is printed
-either way, so a machine with no browser on it loses nothing.
+**The page opens by itself.** `onboard` prints the link and then opens it in a
+browser here — once per link, so running it again during a wait does not end in
+twenty tabs of the same page. The link is printed first, so a machine with no
+browser on it loses nothing.
+
+It does not open where nobody is watching. `WATERX_NO_BROWSER=1` or `CI` turns
+it off, `--no-open` skips a single run, and `--open` opens it again on demand.
+Only http and https are ever handed to the opener, and it is spawned as argv
+rather than through a shell — the URL can come from
+`WATERX_PERP_AUTHORIZE_URL`, which is environment a caller controls.
 
 ```bash
-npx waterx onboard --qr      # a code to scan
-npx waterx onboard --open    # a browser on this machine
+npx waterx onboard            # prints the link, opens it here
+npx waterx onboard --qr       # …and draws it as a code to scan
+npx waterx onboard --no-open  # just the link
 ```
+
+**`--qr` is for the case this arrangement is built for**: the owner is not at
+this machine, so a browser here helps them not at all. They scan it with the
+phone their wallet is already on. The screen names the option and so does
+`next`, because an agent that only reads what it is handed cannot offer what it
+never sees.
 
 The encoder is written out rather than installed: a QR encoder is a few hundred
 lines of arithmetic with no reason to change, and a dependency for it would be a

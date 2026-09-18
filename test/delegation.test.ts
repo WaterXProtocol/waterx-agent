@@ -628,6 +628,23 @@ describe("the screen an operator reads", () => {
     expect(lines).toContain("npx waterx add-delegate");
   });
 
+  it("names the code on the screen, for a reader who does not run --help", () => {
+    // What this is for: a real session reasoned its way to "the owner is
+    // probably not at this machine" -- exactly the case the code exists for --
+    // and never mentioned it, because nothing it read named it. The flag was in
+    // `--help` and in one line of SKILL.md, and neither is on the path.
+    const lines = handshakeScreen(awaiting()).join("\n");
+
+    expect(lines).toContain("--qr");
+  });
+
+  it("stops naming the code once it has drawn one", () => {
+    const lines = handshakeScreen(awaiting(), { qr: ["##CODE##"] }).join("\n");
+
+    expect(lines).toContain("##CODE##");
+    expect(lines).not.toContain("--qr");
+  });
+
   it("draws a code under the link, never instead of it", () => {
     // Whoever is at this terminal may be the one who signs, and a link they can
     // click beats a code they cannot. The code is for the owner who is

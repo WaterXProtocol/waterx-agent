@@ -284,6 +284,13 @@ export function decide(s: Situation): Guidance {
             command: invoke("onboard", "--wait", "300", "--json"),
           },
           {
+            // Named here because this is what a relaying agent reads. One that
+            // reasoned its way to "the owner is probably not at this machine"
+            // still never mentioned the code, because nothing it read did.
+            what: "or draw the link as a code, for an owner who is not at this machine",
+            command: invoke("onboard", "--qr"),
+          },
+          {
             what:
               "or make this wallet an account holder in its own right — it then needs SUI for " +
               "gas and collateral of its own, and can withdraw",
