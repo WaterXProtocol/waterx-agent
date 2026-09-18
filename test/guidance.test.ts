@@ -416,6 +416,39 @@ describe("what to do next", () => {
     }
   });
 
+  it("carries the account's warnings on whatever state applies", () => {
+    // They are orthogonal to the ordering: a price feed that has stopped
+    // matters whether the process is ready or halfway through setup. The case
+    // this comes from reported `read-only` and nothing else, for an account
+    // holding a 10x position priced off a dead feed.
+    const warnings = ["WTIUSD #36 is about 6% from its estimated liquidation price."];
+
+    for (const situation of [
+      { ...ok, warnings },
+      { ...ok, readOnly: true, warnings },
+      { ...ok, configured: false, missing: { signer: true, gas: false, account: true }, warnings },
+      { ...ok, open: 1, firstUnsettled: "sub_1", warnings },
+    ]) {
+      const g = decide(situation);
+      expect(g.warnings, g.state).toEqual(warnings);
+    }
+  });
+
+  it("does not change which state applies", () => {
+    // The ordering is the safety property. Warnings ride along; they never
+    // promote or demote anything.
+    const withWarnings = decide({ ...ok, warnings: ["anything"] });
+    const without = decide(ok);
+
+    expect(withWarnings.state).toBe(without.state);
+    expect(withWarnings.suggestions).toEqual(without.suggestions);
+  });
+
+  it("says nothing when there is nothing to say", () => {
+    expect(decide(ok).warnings).toBeUndefined();
+    expect(decide({ ...ok, warnings: [] }).warnings).toBeUndefined();
+  });
+
   it("emits commands that can be run as printed", () => {
     // `nextCommand` and these share the rule: a package-manager banner on
     // stdout breaks the one-document guarantee the caller is about to rely on.

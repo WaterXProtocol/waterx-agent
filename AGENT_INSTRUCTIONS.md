@@ -227,6 +227,21 @@ approval was marked consumed at the same moment. So:
 - Only when `reconcile` reports `landed: false` and `safeToRetry: true` is
   re-placing the order safe.
 
+## 6a. `warnings`, and who widens the policy
+
+`next` carries a `warnings` array when the account it is looking at has
+something a person must hear: positions priced from a feed that is not live
+(their PnL and liquidation estimates are fiction), a position close to its
+estimated liquidation, free margin that is thin against open notional, or a
+summary the backend itself reports as degraded. **Say them before anything
+else.** They are orthogonal to `state` — a dead feed matters whether the process
+is `ready` or half configured — and they come from reads `next` already makes.
+
+Widening the execution policy has a command now, `policy --set <mode> --yes`,
+and it is one **a person runs**. Narrowing to `read-only` needs no confirmation;
+widening needs `--yes`, and an agent adding `--yes` on its own initiative is the
+same mistake as approving its own preview.
+
 ## 7. Setting up wallet, account, delegation and risk limits
 
 One command does everything that can be done without a person, and returns the
@@ -278,10 +293,18 @@ second time.
 
 **`onboard` opens the authorize page itself**, once per link, and prints the
 link first either way. It does not open where nobody is watching:
-`WATERX_NO_BROWSER=1` or `CI` turns it off, `--no-open` skips one run, and
-`--open` opens it again. Say that the code exists too — `onboard --qr` — because
-which of the two helps depends on where the person is sitting, and only they
-know that.
+`WATERX_NO_BROWSER=1` or `CI` turns it off, and `--open` opens it again.
+
+**Do not pass `--no-open`.** An install passed it on its own initiative, with
+the reasoning that a mainnet authorization page should not auto-launch without
+the person choosing to click. That is a real concern, and it is not yours to
+settle: the switch belongs to whoever installed this, they have one
+(`WATERX_NO_BROWSER=1`), and they asked for the page to open. Suppressing it to
+spare somebody a window they did not ask you to spare them leaves them with a
+link to paste and no idea the tool would have opened it.
+
+Say the code exists too — `onboard --qr` — because which of the two helps
+depends on where the person is sitting, and only they know that.
 
 Getting that grant is one command:
 

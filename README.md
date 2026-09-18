@@ -290,6 +290,21 @@ on testnet that sweep is sometimes not running at all. `pnpm run orders` shows
 the resting request; `pnpm run positions` shows what was actually filled. Do not
 read a successful `execute` as a position.
 
+## What `next` says about the account, not the process
+
+`next` carries `warnings` whenever the account is carrying something worth
+hearing first: positions priced from a feed that has stopped, a position close
+to its estimated liquidation, free margin thin against open notional, or a
+summary the backend reports as degraded. They ride on every state rather than
+being one, because a dead price feed matters whether the process is `ready` or
+halfway through setup — and they are computed from reads `next` already makes.
+
+`policy --set interactive --yes` writes the execution policy to `.env`.
+Narrowing to `read-only` needs no confirmation; widening does, because it
+changes what this process may sign. It exists because every other setup step had
+a command and this one did not, so the documented loop ended at a state whose
+only suggestion could not change it.
+
 ## Trading someone else's account
 
 **This is the normal arrangement, and the default the setup assumes.** a person keeps their own key and their own

@@ -71,6 +71,18 @@ export interface Guidance {
    * arrangement in front of an operator whose next act was to paste a link.
    */
   detail?: string;
+  /**
+   * What a person must hear before anything is offered, whatever the state.
+   *
+   * Not a state of its own, because the ordering above is a safety property and
+   * these are orthogonal to it: a stale price feed matters whether the process
+   * is `ready`, `read-only` or half configured. It went the other way once --
+   * an agent adopted an account holding ten positions, $11.85 of free margin
+   * against $312 of notional, and a 10x short about 6% from its estimated
+   * liquidation priced off a dead feed, and the only thing `next` said was
+   * "read-only". The numbers were all in reads this command already makes.
+   */
+  warnings?: string[];
   suggestions: Suggestion[];
 }
 
@@ -115,6 +127,14 @@ export interface Situation {
   positions: number;
   orders: number;
   blockers: string[];
+  /**
+   * Facts about the ACCOUNT rather than the process: stale prices, thin margin,
+   * a position close to liquidation, reads that came back degraded.
+   *
+   * Passed in rather than derived here so `decide` stays a pure function of
+   * what the caller found -- see `src/agent/exposure.ts`, which computes them.
+   */
+  warnings?: readonly string[];
   /**
    * Which deployment this is about.
    *
@@ -168,6 +188,16 @@ export interface Situation {
  * in flight?".
  */
 export function decide(s: Situation): Guidance {
+  const guidance = choose(s);
+  // Attached here so no branch can forget: a warning that only some states
+  // carry is one nobody can rely on hearing.
+  return s.warnings === undefined || s.warnings.length === 0
+    ? guidance
+    : { ...guidance, warnings: [...s.warnings] };
+}
+
+/** The state, decided. First one that applies wins. */
+function choose(s: Situation): Guidance {
   if (s.open > 0) {
     return {
       state: "unsettled",
@@ -378,7 +408,18 @@ export function decide(s: Situation): Guidance {
       headline:
         `The execution policy is read-only, so nothing can be signed. On mainnet that is the ` +
         `default and changing it is a decision a person makes deliberately.`,
-      suggestions: [{ what: "see the policy and ceilings in force", command: invoke("limits", "--json") }],
+      suggestions: [
+        {
+          // The state used to suggest only `limits`, which REPORTS the policy
+          // and cannot change it -- so the documented loop ("run `next`, do the
+          // one thing it says") ended at a command that could not move it. A
+          // real install stopped here and said there was nothing left to run.
+          what:
+            "a person -- not you -- widens it when they mean to: this writes the policy to .env",
+          command: invoke("policy", "--set", "interactive", "--yes"),
+        },
+        { what: "see the policy and ceilings in force", command: invoke("limits", "--json") },
+      ],
     };
   }
 

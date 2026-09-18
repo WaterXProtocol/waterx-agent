@@ -58,7 +58,10 @@ and impossible to notice missing.
 
 One read that answers "where am I, and what should I offer?" — and answers it
 in the order the states have to be resolved, so you cannot offer a trade to
-someone who has a transaction in flight. Relay `headline`, offer `suggestions`,
+someone who has a transaction in flight. **Relay `warnings` FIRST** when there
+are any — they are facts about the account's money (a price feed that has
+stopped, a position near liquidation, margin that is thin against what is open)
+and they are true whatever the state says. Then relay `headline`, offer `suggestions`,
 and **ask for anything in `needsFromUser` instead of choosing it**. A state that
 carries `detail` is answering "why?" — read that out if the person asks, not
 before: it is written for the account owner, and the headline is what the person
@@ -69,10 +72,10 @@ in front of you needs.
 | `unsettled` | Something was sent and nobody knows what happened. Reconcile before anything else. |
 | `awaiting-approval` | A preview is waiting on them. Show it and ask. |
 | `not-set-up` | Run `bootstrap` and relay what is still missing — some of it needs an operator. |
-| `awaiting-grant` | A wallet exists and **the index says nothing grants it** — `next` asks before reporting this, so it means "nobody has granted it", not "nobody looked". Run `onboard --wait 300 --json`: it prints the link to hand the account owner, then watches for the grant and adopts the account that made it — so nobody has to tell you "I signed it", and nobody copies an account id. It returns when the grant lands, or `config` when the wait runs out (run it again). **Tell the person both of these exist**, because only they know where they are sitting: `onboard --qr` draws the link as a code to scan, for an owner who is not at this machine; `onboard` **opens the page in a browser here by itself**, once per link, which is what you want when the person asking is the account owner. `--no-open` skips it for one run and `WATERX_NO_BROWSER=1` turns it off for good; `--open` opens it again on demand. `onboard --link` prints the URL alone if you only need something to paste; `onboard --details` prints what the grant asks for and where to revoke. The agent needs no SUI, no account and no collateral of its own. |
+| `awaiting-grant` | A wallet exists and **the index says nothing grants it** — `next` asks before reporting this, so it means "nobody has granted it", not "nobody looked". Run `onboard --wait 300 --json`: it prints the link to hand the account owner, then watches for the grant and adopts the account that made it — so nobody has to tell you "I signed it", and nobody copies an account id. It returns when the grant lands, or `config` when the wait runs out (run it again). **Tell the person both of these exist**, because only they know where they are sitting: `onboard --qr` draws the link as a code to scan, for an owner who is not at this machine; `onboard` **opens the page in a browser here by itself**, once per link. **Do not pass `--no-open`.** Whether a browser should open is the person's call, not yours — they set `WATERX_NO_BROWSER=1` if they do not want one, and the person who installed this asked for the page to open. `--open` opens it again on demand. `onboard --link` prints the URL alone if you only need something to paste; `onboard --details` prints what the grant asks for and where to revoke. The agent needs no SUI, no account and no collateral of its own. |
 | `granted-not-adopted` | The chain **already** grants this wallet, and no account is recorded here yet — the owner has done their part, so do not hand them the link again. `suggestions[0]` is the `adopt` command for the account that granted it; run it. With several grants, ask which account; never pick one. |
 | `not-delegated` | The owner granted nothing, or the grant is stale. Relay the headline — only they can fix it — and `onboard --wait 300 --json` picks the grant up when they do. |
-| `read-only` | Nothing can be signed. On mainnet that is the default and changing it is their decision. |
+| `read-only` | Nothing can be signed. On mainnet that is the default. `policy --set interactive --yes` writes the change — **a person runs that, never you**: widening what a process may sign is their decision, like `approve`. |
 | `no-collateral` | Set up, but nothing to commit. Gas is not collateral; this one needs an operator. |
 | `ready` | Ask what they want to do, and for the numbers. |
 
