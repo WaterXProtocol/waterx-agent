@@ -300,13 +300,23 @@ transactions; no account of its own; no collateral of its own. The owner keeps
 all three. A fresh install therefore has exactly one thing outstanding — the
 grant — and `bootstrap` says so rather than asking anyone to fund a wallet.
 
-**The console cannot grant this yet.** Its `/agent/authorize` page covers
-prediction markets and says so on the page: *"This does not grant — withdrawals,
-transfers, **perps**, staking…"*. Sending a perp owner there is worse than
-sending them nowhere — they connect a wallet, sign, and have granted nothing
-this package can use.
+**The owner grants it in their browser.** The console's perp authorize page
+takes the agent's address in the query string, shows what the grant covers, and
+lets the owner pick which of their accounts it applies to:
 
-So today the owner grants it with their own key:
+```
+https://waterx.app/en/agent/authorize/perp?agent=<the agent wallet>
+```
+
+`onboard` prints that link with the address already in it, so nobody assembles
+one by hand. **Mind the `/perp`** — the sibling route without it is the
+prediction-market page, and it states on itself that it does not grant perps. An
+owner who signs there connects a wallet, signs, and has granted nothing this
+package can use.
+
+For an owner who would rather not use a browser — or a private console this
+package knows no page for — the same grant is one command, run with their own
+key:
 
 ```bash
 # run by the OWNER, with their key in SUI_PRIVATE_KEY and their account in
@@ -315,21 +325,23 @@ npx waterx add-delegate --delegate <the agent wallet> --yes --json
 ```
 
 `account::add_delegate` and `account::set_delegate_protocol_permission` are both
-confirmed against both deployments, so this demonstrably works. It does mean the
-owner puts their key in a CLI rather than keeping it in a browser wallet, and
-that is a real cost of the missing page rather than a design choice worth
-defending — **a perp equivalent of `/agent/authorize` would remove it.** When
-one exists, name it in `WATERX_PERP_AUTHORIZE_URL` and the agent will hand out
-the link instead, with no code change.
+confirmed against both deployments, so this demonstrably works. It is the second
+choice wherever the page exists, because it asks the owner to put a private key
+in a terminal instead of keeping it in a wallet.
+
+Set `WATERX_CONSOLE_URL` to a private console and the agent stops offering a
+page it cannot vouch for, falling back to the command above until
+`WATERX_PERP_AUTHORIZE_URL` names one. A link to a 404 reads as a broken
+product, not as a wrong link.
 
 Either way, the owner reviews and revokes from **Account → Delegates** in the
 console, and revocation takes effect on chain immediately.
 
 `onboard` reports where the handshake has got to and what the next move is. The
 grant itself is the owner's act, made on chain from their own wallet — through
-the authorize page `WATERX_PERP_AUTHORIZE_URL` names, or the command above — and
-revocable from Account → Delegates; this command reads it and never makes it. An
-agent that could grant itself authority would not be a delegate arrangement.
+the authorize page or the command above — and revocable from Account →
+Delegates; this command reads it and never makes it. An agent that could grant
+itself authority would not be a delegate arrangement.
 
 What the agent asks for is the perp trading mask (`PERM_ALL_TRADING`, 255):
 opening, closing, sizing, orders, **and position margin** —

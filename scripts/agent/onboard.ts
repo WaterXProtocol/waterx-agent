@@ -97,8 +97,10 @@ await run(async () => {
   } else {
     note(`  the owner runs ${status.grantCommand ?? "(needs a wallet first)"}`);
     note(`                 with THEIR OWN key, and WATERX_ACCOUNT_ID set to their account`);
-    note(`  note           the console's /agent/authorize page grants PREDICTION MARKETS and`);
-    note(`                 states it does not grant perps — it will not work for this agent`);
+    note(`  note           no perp authorize page is known for this console, so granting is a`);
+    note(`                 CLI step here. Name one in WATERX_PERP_AUTHORIZE_URL if this`);
+    note(`                 deployment has one. /agent/authorize — without /perp — grants`);
+    note(`                 PREDICTION MARKETS and states that it does not grant perps`);
   }
   // Where to review is not where to grant, whatever is configured.
   note(`  review/revoke  ${status.reviewUrl}  (Account → Delegates)`);

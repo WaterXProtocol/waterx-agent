@@ -20,6 +20,7 @@ export {
   CONSOLE_ENDPOINTS,
   consoleUrl,
   delegatesUrl,
+  perpAuthorizeLink,
   perpAuthorizeUrl,
   perpGrantCommand,
   delegationStatus,

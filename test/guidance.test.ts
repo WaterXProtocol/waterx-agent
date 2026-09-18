@@ -97,6 +97,31 @@ describe("what to do next", () => {
     expect(g.suggestions[ownerPath]?.what).toContain("SUI for gas");
   });
 
+  it("names where the owner signs, in the first state a fresh install reaches", () => {
+    // This state described the grant and named no place to make it, so where to
+    // sign depended on the caller going on to run `onboard`. An agent that
+    // relays the headline and stops left the owner with nowhere to go — and the
+    // install that did exactly that was told to prescribe a CLI key paste.
+    const g = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      network: "mainnet",
+      address: `0x${"a".repeat(64)}`,
+    });
+    expect(g.state).toBe("awaiting-grant");
+    expect(g.headline).toContain(`https://waterx.app/en/agent/authorize/perp?agent=0x${"a".repeat(64)}`);
+    expect(g.headline).toContain("their key stays");
+  });
+
+  it("names no page when there is no wallet to name in it", () => {
+    // `?agent=` with nothing in it is a page that refuses; better to say
+    // nothing until bootstrap has made a wallet.
+    const g = decide({ ...ok, mode: "undecided", configured: false, network: "mainnet" });
+    expect(g.state).toBe("awaiting-grant");
+    expect(g.headline).not.toContain("agent/authorize");
+  });
+
   it("does not ask a would-be delegate for gas", () => {
     // Gas is an owner-path requirement. Reaching the gas branch from
     // `undecided` is the bug this ordering exists to prevent.
