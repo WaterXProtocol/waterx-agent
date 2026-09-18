@@ -111,6 +111,8 @@ thing here that writes:
 pnpm run onboard                            # the link to hand the account owner
 pnpm run onboard -- --wait 300              # …then wait for the grant and adopt the account
 pnpm run onboard -- --link                  # the URL alone, for pasting or piping
+pnpm run onboard -- --qr                    # the link as a scannable code, for an owner elsewhere
+pnpm run onboard -- --open                  # open the page in a browser ON THIS MACHINE
 pnpm run onboard -- --details               # what the grant asks for, and where to revoke
 pnpm run discover -- --wait 300             # the same search, without adopting
 ```

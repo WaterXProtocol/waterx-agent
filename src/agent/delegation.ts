@@ -656,6 +656,13 @@ export interface ScreenOptions {
   details?: boolean;
   /** The command to offer at the end, when the caller has one. */
   next?: string;
+  /**
+   * A QR code for the link, already drawn, to sit under it.
+   *
+   * Passed in rather than built here: the encoder belongs to the CLI, and this
+   * module is reachable from a program that has no terminal to draw on.
+   */
+  qr?: string[];
 }
 
 /**
@@ -690,6 +697,11 @@ export function handshakeScreen(status: DelegationStatus, options: ScreenOptions
       "",
       `  the page must show the agent address ending ${addressTail(status.delegateAddress)}`,
     );
+    if (options.qr !== undefined && options.qr.length > 0) {
+      // Under the link, not instead of it: whoever is at this terminal may be
+      // the one who signs, and a link they can click beats a code they cannot.
+      lines.push("", ...options.qr.map((line) => `  ${line}`));
+    }
   } else {
     // No page to send them to, or nothing left to sign: the sentence is the
     // screen. It already names the command an owner without a browser runs.
