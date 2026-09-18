@@ -115,6 +115,115 @@ describe("commands named in the documentation", () => {
 });
 
 /**
+ * Redeclaring a global flag replaces it, whole.
+ *
+ * `parseArgs` merges `{ ...GLOBAL, ...defs }`, so a script that documents
+ * `--yes` in its own words and forgets `flag: true` does not get the global
+ * definition back — it gets a flag that demands a value. `policy --set
+ * interactive --yes` then failed as "Missing value for --yes", which is a
+ * usage error for a command that was invoked correctly.
+ *
+ * TypeScript cannot see it: both shapes are valid `ArgDef`s. Only running it
+ * shows it, which is how this one was found.
+ */
+describe("scripts that redeclare a global flag", () => {
+  /** How `scripts/lib/cli.ts` declares each one. */
+  const GLOBAL_IS_FLAG: Record<string, boolean> = { json: true, yes: true, policy: false };
+
+  it("keep it the same shape", () => {
+    const offenders: string[] = [];
+    for (const path of scriptFiles("scripts")) {
+      if (path.startsWith(join("scripts", "lib"))) continue;
+      const source = readFileSync(path, "utf8");
+      for (const [name, isFlag] of Object.entries(GLOBAL_IS_FLAG)) {
+        // The small, brace-free definitions these always are.
+        const match = new RegExp(`\\n\\s+${name}: \\{([^{}]*)\\}`, "u").exec(source);
+        if (match === null) continue;
+        const declaresFlag = /flag:\s*true/u.test(match[1] ?? "");
+        if (declaresFlag !== isFlag) {
+          offenders.push(
+            `${path} redeclares --${name} with flag: ${String(declaresFlag)}, but the global is ` +
+              `flag: ${String(isFlag)} — the script's definition replaces it, so the flag changes shape`,
+          );
+        }
+      }
+    }
+    expect(offenders, offenders.join("\n")).toEqual([]);
+  });
+});
+
+/**
+ * A flag nobody can find is a flag that does not exist.
+ *
+ * `--qr` and `--open` shipped in `--help` and in one line of a SKILL table, and
+ * neither is on the path an agent reads: SKILL tells it to relay `headline` and
+ * offer `suggestions`. Four minutes later a real session reasoned its way to
+ * "the owner probably isn't at this machine" -- exactly what `--qr` is for --
+ * and never mentioned it, because nothing it read named it.
+ *
+ * So adding a flag to `onboard` now forces a decision: put it where it can be
+ * found, or say here why it does not need to be.
+ */
+describe("flags an agent could never discover", () => {
+  /** Reached another way, and deliberately not on the handshake screen. */
+  const HELP_ONLY: Record<string, string> = {
+    json: "the output contract, documented in SKILL.md itself",
+    policy: "a global, documented with the execution policy",
+    yes: "a global confirmation, documented per write",
+    label: "cosmetic: a name shown on the authorize page",
+    link: "for piping; `--json` callers read authorizeUrl instead",
+    interval: "tuning for --wait, which is itself surfaced",
+    open: "the page opens by itself; this only re-opens it",
+    noOpen: "an opt-out, and WATERX_NO_BROWSER is the documented one",
+    approver: "a name for the record, the same flag `adopt` documents",
+    details: "surfaced on the screen itself",
+    qr: "surfaced on the screen itself",
+    wait: "surfaced on the screen and in `next`",
+  };
+
+  it("are each either surfaced or explained", async () => {
+    const source = readFileSync("scripts/agent/onboard.ts", "utf8");
+    const block = source.slice(source.indexOf("const args = parseArgs("), source.indexOf('"onboard",'));
+    const flags = [...block.matchAll(/^\s{4}([a-zA-Z]+): \{/gmu)].map((m) => m[1] as string);
+    expect(flags.length, "no flags found — the parse above has drifted").toBeGreaterThan(4);
+
+    const { delegationStatus, handshakeScreen } = await import("../src/agent/delegation.ts");
+    const { decide } = await import("../src/agent/guidance.ts");
+    const status = delegationStatus({ network: "mainnet", delegateAddress: `0x${"a".repeat(64)}` });
+    const surfaced =
+      handshakeScreen(status, { details: true }).join(" ") +
+      decide({
+        open: 0,
+        firstUnsettled: undefined,
+        pending: [],
+        configured: false,
+        missing: { signer: false, gas: false, account: true },
+        readOnly: false,
+        freeMargin: undefined,
+        positions: 0,
+        orders: 0,
+        blockers: [],
+        network: "mainnet",
+        mode: "undecided",
+        address: `0x${"a".repeat(64)}`,
+      })
+        .suggestions.map((x) => x.command)
+        .join(" ");
+
+    const invisible = flags.filter(
+      (flag) => !surfaced.includes(`--${flag.replace(/[A-Z]/gu, (c) => `-${c.toLowerCase()}`)}`),
+    );
+    const undeclared = invisible.filter((flag) => HELP_ONLY[flag] === undefined);
+
+    expect(
+      undeclared,
+      `these are in --help and nowhere an agent reads. Surface them on the handshake screen or ` +
+        `in next's suggestions, or add them to HELP_ONLY with a reason: ${undeclared.join(", ")}`,
+    ).toEqual([]);
+  });
+});
+
+/**
  * A maintainer tool must not be one typo away from a consumer.
  *
  * `waterx capture-corpus --help` ran the capture: the script has no argument

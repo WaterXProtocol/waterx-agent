@@ -9,6 +9,7 @@
  * sign-off that did not happen.
  */
 import { adoptAccount, NotAGrantError, OwnerMismatchError } from "../../src/agent/adopt.ts";
+import { exposureLine, exposureWarnings, summarise } from "../../src/agent/exposure.ts";
 import { AccountNotFoundError, accountObjectReader } from "../../src/chain/account-object.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
@@ -88,11 +89,28 @@ await run(async () => {
   note(`  owner         ${adopted.ownerAddress}  (read from chain)`);
   note(`  recorded as   ${recordedAs}`);
   note("  wrote         WATERX_ACCOUNT_ID — the owner is read from the account, not stored");
+
+  // What was just taken on. This is the moment of maximum ignorance -- an
+  // account id, and no idea whether it holds nothing or ten leveraged
+  // positions -- and the reads that answer it are two lines away.
+  let exposure;
+  try {
+    const overview: unknown = await agent.read.overview(adopted.accountId);
+    const open = await agent.read.positions(adopted.accountId);
+    const resting = await agent.read.orders({ account: adopted.accountId });
+    exposure = summarise({ overview, positions: open, orders: resting.length });
+    note(`  holding       ${exposureLine(exposure)}`);
+    for (const warning of exposureWarnings(exposure)) note(`  !             ${warning}`);
+  } catch {
+    // A failed read does not undo an adoption that has already been written.
+    note("  holding       could not be read just now — `next` will say");
+  }
   note("");
   show(
     {
       ...adopted,
       chosenBy: adopted.by,
+      ...(exposure === undefined ? {} : { exposure }),
       ...(adopted.gitignore.kind === "added" || adopted.gitignore.kind === "failed"
         ? { gitignore: adopted.gitignore }
         : {}),

@@ -30,6 +30,7 @@ import {
   REQUESTED_PERP_PERMISSIONS,
   requestedPermissions,
 } from "../../src/agent/delegation.ts";
+import { exposureLine, exposureWarnings, summarise } from "../../src/agent/exposure.ts";
 import {
   awaitGrants,
   DEFAULT_POLL_SECONDS,
@@ -86,6 +87,9 @@ const args = parseArgs(
         "Do not open a browser this run. A PERSON'S switch — an agent must not pass it; " +
         "WATERX_NO_BROWSER=1 turns it off for good",
       flag: true,
+    },
+    approver: {
+      desc: "A name to record against the adoption --wait makes. Without one a generated id is recorded, marked as generated",
     },
   },
   "onboard",
@@ -421,14 +425,34 @@ await run(async () => {
       network: agent.config.network,
       readAccount: deps.readAccount,
       ...(ownerAddress === undefined ? {} : { configuredOwner: ownerAddress }),
+      // `adopt` takes a name; this path could not, so every grant picked up by
+      // waiting was recorded as generated whether or not somebody was there to
+      // put their name on it.
+      ...(args.approver === undefined ? {} : { approver: args.approver }),
     });
     const recordedAs = `${adopted.by}${adopted.generated ? " (generated — no approver was given)" : ""}`;
     note("");
     note(`  granted by    ${adopted.accountId}`);
     note(`  owner         ${adopted.ownerAddress}  (read from chain)`);
     note(`  adopted       WATERX_ACCOUNT_ID written; recorded as ${recordedAs}`);
+
+  // What was just taken on. This is the moment of maximum ignorance -- an
+  // account id, and no idea whether it holds nothing or ten leveraged
+  // positions -- and the reads that answer it are two lines away.
+    let exposure;
+    try {
+      const overview: unknown = await agent.read.overview(adopted.accountId);
+      const open = await agent.read.positions(adopted.accountId);
+      const resting = await agent.read.orders({ account: adopted.accountId });
+      exposure = summarise({ overview, positions: open, orders: resting.length });
+      note(`  holding       ${exposureLine(exposure)}`);
+      for (const warning of exposureWarnings(exposure)) note(`  !             ${warning}`);
+    } catch {
+    // A failed read does not undo an adoption that has already been written.
+      note("  holding       could not be read just now — `next` will say");
+    }
     note("");
-    show({ ...found, adopted }, { rendered: true });
+    show({ ...found, adopted, ...(exposure === undefined ? {} : { exposure }) }, { rendered: true });
     setOutcome(
       succeeded(
         `This wallet now trades ${adopted.accountId}, owned by ${adopted.ownerAddress}. ` +
