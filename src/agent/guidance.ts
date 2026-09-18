@@ -52,6 +52,17 @@ export interface Guidance {
   /** One sentence, addressed to the agent, about what to say and why. */
   headline: string;
   /**
+   * The page the headline names, when it names one.
+   *
+   * Separate so a renderer can put it on a line of its own. The headline keeps
+   * it too — an agent that relays the headline and stops must not leave the
+   * owner with nowhere to go, which is the defect this field must not
+   * reintroduce — but a 115-character URL inside a 262-character paragraph
+   * wraps across three lines of an 80-column terminal, and a URL split across
+   * a wrap is one nobody can click or select.
+   */
+  link?: string;
+  /**
    * The account behind the headline, for a caller that is asked "why?".
    *
    * Separate because the headline is relayed on every turn and this is read
@@ -97,7 +108,7 @@ export interface Situation {
    * it has to outrank "ready" — otherwise the agent offers a trade that the
    * chain will refuse, and the refusal arrives as a generic 6002.
    */
-  delegation?: { state: string; headline: string; detail?: string };
+  delegation?: { state: string; headline: string; detail?: string; link?: string };
   readOnly: boolean;
   freeMargin: number | undefined;
   positions: number;
@@ -204,6 +215,7 @@ export function decide(s: Situation): Guidance {
       const page = s.address === undefined ? undefined : perpAuthorizeLink(s.network, s.address);
       return {
         state: "awaiting-grant",
+        ...(page === undefined ? {} : { link: page }),
         headline:
           page === undefined
             ? `There is a wallet and nothing has been granted to it yet. The account owner grants ` +
@@ -292,6 +304,7 @@ export function decide(s: Situation): Guidance {
     return {
       state: "not-delegated",
       headline: s.delegation.headline,
+      ...(s.delegation.link === undefined ? {} : { link: s.delegation.link }),
       ...(s.delegation.detail === undefined ? {} : { detail: s.delegation.detail }),
       suggestions: [
         {
@@ -376,4 +389,24 @@ export function decide(s: Situation): Guidance {
       `numbers, which are theirs to choose.`,
     suggestions,
   };
+}
+
+/**
+ * The headline without the link it ends on.
+ *
+ * For a renderer that is about to print the link on its own line: printing both
+ * whole would show the URL twice, and the reason the link moved to its own line
+ * was that seeing it twice is what the complaint was about.
+ *
+ * Every headline that carries a link ends on it, deliberately — see
+ * `grantHeadline` — so this is a slice rather than a search. A headline that
+ * does not end on its link is returned whole: guessing where a sentence stops
+ * is worse than printing one URL twice.
+ */
+export function sentenceOf(guidance: Pick<Guidance, "headline" | "link">): string {
+  const { headline, link } = guidance;
+  if (link === undefined || !headline.endsWith(link)) return headline;
+  // The punctuation that introduced it goes too — "…their key stays:" reads as
+  // a sentence somebody truncated.
+  return headline.slice(0, headline.length - link.length).replace(/[\s:—-]+$/u, "");
 }

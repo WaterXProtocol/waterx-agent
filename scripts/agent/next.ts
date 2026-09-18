@@ -12,7 +12,7 @@
  */
 import { list as listApprovals } from "../../src/agent/approvals.ts";
 import { delegationStatus, perpGrantCommand } from "../../src/agent/delegation.ts";
-import { decide } from "../../src/agent/guidance.ts";
+import { decide, sentenceOf } from "../../src/agent/guidance.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
 import { signsAsDelegate } from "../../src/config.ts";
@@ -57,6 +57,7 @@ await run(async () => {
     | {
         state: string;
         headline: string;
+        link?: string;
         detail?: string;
         reviewUrl: string;
         authorizeUrl?: string;
@@ -85,6 +86,7 @@ await run(async () => {
     delegation = {
       state: status.state,
       headline: status.headline,
+      ...(status.authorizeUrl === undefined ? {} : { link: status.authorizeUrl }),
       ...(status.detail === undefined ? {} : { detail: status.detail }),
       reviewUrl: status.reviewUrl,
       ...(status.authorizeUrl === undefined ? {} : { authorizeUrl: status.authorizeUrl }),
@@ -105,7 +107,7 @@ await run(async () => {
     orders = (await agent.read.orders({ account })).length;
   }
 
-  const { state, headline, detail, suggestions } = decide({
+  const { state, headline, detail, link, suggestions } = decide({
     open: open.length,
     firstUnsettled: open[0]?.submission.id,
     pending: pending.map((a) => ({ id: a.request.id, action: a.request.action })),
@@ -141,7 +143,15 @@ await run(async () => {
   });
 
   note("");
-  note(`  ${headline}`);
+  // The sentence, then the link on a line of its own. Inside the paragraph it
+  // wrapped across three lines of an 80-column terminal, which is where a URL
+  // stops being clickable; the envelope's `headline` still carries it whole,
+  // for an agent that relays one field and stops.
+  note(`  ${sentenceOf({ headline, ...(link === undefined ? {} : { link }) })}`);
+  if (link !== undefined) {
+    note("");
+    note(`  ${link}`);
+  }
   note("");
   for (const s of suggestions) {
     note(`    • ${s.what}`);
@@ -156,6 +166,7 @@ await run(async () => {
     {
       state,
       headline,
+      ...(link === undefined ? {} : { link }),
       // In the envelope, not on the screen: this is the answer to "why?", asked
       // by a minority of callers, and it is what made the headline unreadable.
       ...(detail === undefined ? {} : { detail }),

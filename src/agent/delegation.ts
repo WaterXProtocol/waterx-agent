@@ -160,9 +160,12 @@ export const grantHeadline = (input: {
 }): string => {
   const command =
     input.grantCommand ?? invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
+  // Both forms end on the thing to act on — the link, or the command. A URL in
+  // the middle of a sentence is a URL an 80-column terminal wraps across three
+  // lines, where it stops being clickable and starts being noise.
   return input.authorizeUrl === undefined
     ? `the owner grants it with their own key: ${command}`
-    : `the owner opens ${input.authorizeUrl} and signs with their wallet`;
+    : `the owner signs in their own wallet at ${input.authorizeUrl}`;
 };
 
 /**
@@ -327,7 +330,10 @@ export function ownerGrantStep(agentWallet: string): {
       `${DELEGATE_BOUNDARY} Once they have granted it, \`onboard --wait\` finds the account and ` +
       `adopts it — nobody copies an id.`,
     who: "the account owner",
-    command: invoke("onboard", "--json"),
+    // `--wait`, not bare `onboard`: this is the last step, and the bare form
+    // printed the link and stopped, leaving an agent to wait for the user to
+    // announce that they had signed. It prints the link first either way.
+    command: invoke("onboard", "--wait", "300", "--json"),
   };
 }
 
@@ -458,9 +464,8 @@ export function delegationStatus(input: {
       ...base,
       state: "awaiting-grant",
       headline:
-        `Nothing is granted to ${delegateAddress} yet. To grant perp trading, ` +
-        `${grantHeadline(grantArgs)}. Then \`onboard --wait\` finds the account and adopts ` +
-        `it — no id to copy.`,
+        `Nothing is granted to this wallet yet — \`onboard --wait\` finds the account and ` +
+        `adopts it once there is. To grant perp trading, ${grantHeadline(grantArgs)}`,
       detail,
     };
   }
@@ -482,8 +487,8 @@ export function delegationStatus(input: {
       ownerAddress,
       state: "awaiting-grant",
       headline:
-        `The owner is ${ownerAddress} but no account has been adopted. Once they have granted ` +
-        `${delegateAddress}, \`onboard --wait\` finds the account and adopts it — no id to copy.`,
+        `The owner is ${ownerAddress} but no account has been adopted. \`onboard --wait\` finds ` +
+        `the one they granted and adopts it — no id to copy.`,
       detail,
     };
   }
@@ -508,9 +513,8 @@ export function delegationStatus(input: {
       accountId,
       state: "not-granted",
       headline:
-        `${delegateAddress} is not a delegate of ${accountId}. To grant it, ` +
-        `${grantHeadline(grantArgs)}. ` +
-        `Until they do, every write refuses on chain.`,
+        `This wallet is not a delegate of ${accountId}, so every write refuses on chain. ` +
+        `To grant it, ${grantHeadline(grantArgs)}`,
       detail,
     };
   }
@@ -529,7 +533,7 @@ export function delegationStatus(input: {
       headline:
         "The grant is in the superseded authority slot, so every perp action aborts on chain " +
         `(EUnauthorized, surfaced as 6002). It has to be granted again: ` +
-        `${grantHeadline(grantArgs)}.`,
+        `${grantHeadline(grantArgs)}`,
       detail,
     };
   }
@@ -546,7 +550,7 @@ export function delegationStatus(input: {
       state: "insufficient",
       headline:
         `Granted, but without ${missing.join(", ")}. Those actions will refuse on chain; the ` +
-        `owner widens it by granting again: ${grantHeadline(grantArgs)}.`,
+        `owner widens it by granting again: ${grantHeadline(grantArgs)}`,
       detail:
         `If they used the console's PREDICT page (\`/agent/authorize\`), that is why: it grants ` +
         `prediction markets, not perps. The perp page is \`/agent/authorize/perp\`. ${detail}`,
