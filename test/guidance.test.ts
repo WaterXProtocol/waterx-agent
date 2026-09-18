@@ -116,6 +116,81 @@ describe("what to do next", () => {
     expect(g.headline).toContain("their key stays");
   });
 
+  it("adopts what is already granted instead of asking for a grant that exists", () => {
+    // The state a fresh install lands in was decided entirely by which
+    // variables were set, so a wallet granted minutes earlier was told nothing
+    // had been granted to it — and its owner was sent back to a link they had
+    // already used. The grant is keyed on the wallet; it is findable here.
+    const account = `0x${"c".repeat(64)}`;
+    const owner = `0x${"b".repeat(64)}`;
+    const g = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      network: "mainnet",
+      address: `0x${"a".repeat(64)}`,
+      discovered: [{ accountId: account, ownerAddress: owner }],
+    });
+
+    expect(g.state).toBe("granted-not-adopted");
+    expect(g.headline).toContain(account);
+    expect(g.suggestions[0]?.command).toContain(`adopt --account ${account}`);
+    // And does not hand out the authorize link again.
+    expect(g.headline).not.toContain("agent/authorize");
+    expect(g.link).toBeUndefined();
+  });
+
+  it("never picks between several accounts that grant the same wallet", () => {
+    const g = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      network: "mainnet",
+      address: `0x${"a".repeat(64)}`,
+      discovered: [
+        { accountId: `0x${"c".repeat(64)}`, ownerAddress: `0x${"b".repeat(64)}` },
+        { accountId: `0x${"d".repeat(64)}`, ownerAddress: `0x${"b".repeat(64)}` },
+      ],
+    });
+
+    expect(g.state).toBe("granted-not-adopted");
+    expect(g.suggestions).toHaveLength(2);
+    expect(g.headline).toMatch(/choice, not a guess/u);
+  });
+
+  it("does not claim the chain is empty when nothing asked the chain", () => {
+    // The same defect as in `delegationStatus`, in the surface an agent relays
+    // every turn: this sentence used to assert that nothing had been granted,
+    // in a branch reached entirely by looking at which variables were set.
+    const address = `0x${"a".repeat(64)}`;
+    const unasked = decide({ ...ok, mode: "undecided", configured: false, network: "mainnet", address });
+    expect(unasked.headline).toContain("recorded here");
+    expect(unasked.headline).not.toMatch(/nothing grants/iu);
+
+    const asked = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      network: "mainnet",
+      address,
+      discovered: [],
+    });
+    expect(asked.headline).toMatch(/nothing grants/iu);
+  });
+
+  it("still asks for the grant when the index answered that there is none", () => {
+    const g = decide({
+      ...ok,
+      mode: "undecided",
+      configured: false,
+      network: "mainnet",
+      address: `0x${"a".repeat(64)}`,
+      discovered: [],
+    });
+
+    expect(g.state).toBe("awaiting-grant");
+  });
+
   it("hands the link out as a field too, so a renderer can put it on its own line", () => {
     // The headline keeps it — an agent that relays one field and stops must not
     // leave the owner with nowhere to go. But inside the paragraph it wrapped

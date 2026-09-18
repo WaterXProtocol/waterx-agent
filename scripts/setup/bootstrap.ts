@@ -21,6 +21,10 @@
  * commits money, and money is a decision.
  */
 import { ownerGrantStep } from "../../src/agent/delegation.ts";
+import { type DiscoveredGrant, discoverGrants } from "../../src/agent/discovery.ts";
+import { accountObjectReader } from "../../src/chain/account-object.ts";
+import { loadDeployment } from "../../src/chain/deployment.ts";
+import { grantEventCandidates } from "../../src/chain/grant-events.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
 import { envPath, getOrCreateWallet, saveToEnv } from "../../src/chain/wallet.ts";
@@ -185,18 +189,47 @@ await run(async () => {
   }
 
   if (accountId === undefined) {
-    // On the delegate path there is nothing to create: the account is the
-    // owner's, and what is missing is their grant, not an account.
-    remaining.push(
-      ownerPath
-        ? {
-            what: "a WaterX account",
-            why: "every account-scoped write refuses without one",
-            who: "you",
-            command: invoke("bootstrap", "--create-account", "--yes", "--json"),
-          }
-        : ownerGrantStep(wallet.address),
-    );
+    // Before filing anything under the account owner: ask whether they have
+    // already done it. The grant is keyed on this wallet, so it is findable
+    // with no account id — and this step used to report "nothing has been
+    // granted" on the strength of which variables were set, which sent an
+    // owner who had already signed back to the link they signed at.
+    const found = ownerPath ? undefined : await grantsFor(agent, wallet.address);
+    const [firstGrant] = found ?? [];
+    if (found !== undefined && found.length === 1 && firstGrant !== undefined) {
+      note(`  grant      ${firstGrant.accountId} already grants this wallet`);
+      remaining.push({
+        what: "adopt the account that already grants this wallet",
+        why:
+          `${firstGrant.accountId}, owned by ${firstGrant.ownerAddress}, already grants ` +
+          `${wallet.address}. The owner has done their part — adopting re-checks the grant on ` +
+          `chain and writes the account down. Nothing more is needed from them.`,
+        who: "you",
+        command: invoke("adopt", "--account", firstGrant.accountId, "--json"),
+      });
+    } else if (found !== undefined && found.length > 1) {
+      remaining.push({
+        what: "choose which granted account this agent trades",
+        why:
+          `${String(found.length)} accounts already grant ${wallet.address}. Which one it trades ` +
+          `is whose money it trades, so it is a choice rather than a guess.`,
+        who: "you",
+        command: invoke("discover", "--json"),
+      });
+    } else {
+      // On the delegate path there is nothing to create: the account is the
+      // owner's, and what is missing is their grant, not an account.
+      remaining.push(
+        ownerPath
+          ? {
+              what: "a WaterX account",
+              why: "every account-scoped write refuses without one",
+              who: "you",
+              command: invoke("bootstrap", "--create-account", "--yes", "--json"),
+            }
+          : ownerGrantStep(wallet.address, { checked: found !== undefined }),
+      );
+    }
   } else {
     if (agent.config.accountId !== accountId) {
       // Written back rather than printed. "Copy this id into .env" is a step an
@@ -318,6 +351,32 @@ await run(async () => {
         },
   );
 });
+
+/**
+ * Accounts that already grant this wallet, or `undefined` when nobody could
+ * say. Never an empty array standing in for "could not look".
+ */
+async function grantsFor(
+  agent: ReturnType<typeof initAgent>,
+  wallet: string,
+): Promise<DiscoveredGrant[] | undefined> {
+  try {
+    const deployment = await loadDeployment(agent.config.configUrl);
+    // The ORIGINAL package id names event types; `idsFor` lists it last.
+    const accountPackage = deployment.idsFor("waterx_account").at(-1);
+    const discovery = await discoverGrants(wallet, {
+      delegatedAccounts: (delegate) => agent.read.delegatedAccounts(delegate),
+      recentGrantEvents:
+        accountPackage === undefined
+          ? () => Promise.reject(new Error("the deployment config names no waterx_account package"))
+          : grantEventCandidates(agent.config.network, accountPackage),
+      readAccount: accountObjectReader(agent.config),
+    });
+    return discovery.grants;
+  } catch {
+    return undefined;
+  }
+}
 
 /** The indexer publishes the id a moment after the transaction lands. */
 async function waitForAccount(

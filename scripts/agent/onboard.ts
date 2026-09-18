@@ -33,6 +33,8 @@ import {
 import {
   awaitGrants,
   DEFAULT_POLL_SECONDS,
+  type DiscoveredGrant,
+  discoverGrants,
   type DiscoveryDeps,
   MIN_POLL_SECONDS,
 } from "../../src/agent/discovery.ts";
@@ -66,6 +68,27 @@ const args = parseArgs(
 );
 
 const quiet = { submitted: false, reconcileRequired: false } as const;
+
+/**
+ * Where discovery looks: the backend's index first, recent grant events when it
+ * cannot answer, and the chain for every candidate either way.
+ *
+ * Built in one place because two paths need it — the look this command makes
+ * before it reports anything, and the wait `--wait` runs afterwards.
+ */
+async function discoveryDeps(agent: ReturnType<typeof initAgent>): Promise<DiscoveryDeps> {
+  const deployment = await loadDeployment(agent.config.configUrl);
+  // The ORIGINAL package id names event types; `idsFor` lists it last.
+  const accountPackage = deployment.idsFor("waterx_account").at(-1);
+  return {
+    delegatedAccounts: (delegate) => agent.read.delegatedAccounts(delegate),
+    recentGrantEvents:
+      accountPackage === undefined
+        ? () => Promise.reject(new Error("the deployment config names no waterx_account package"))
+        : grantEventCandidates(agent.config.network, accountPackage),
+    readAccount: accountObjectReader(agent.config),
+  };
+}
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
@@ -106,8 +129,23 @@ await run(async () => {
     }
   }
 
+  // Ask before reporting. A grant is keyed on the wallet, so it can be found
+  // with no account id — and reporting "nothing is granted" without asking is
+  // how a wallet that had been granted minutes earlier sent its owner back to
+  // a link they had already used. A failed look is left `undefined`, which
+  // reads as "nobody knows", never as "none".
+  let discovered: readonly DiscoveredGrant[] | undefined;
+  if (delegateAddress !== undefined && accountId === undefined) {
+    try {
+      discovered = (await discoverGrants(delegateAddress, await discoveryDeps(agent))).grants;
+    } catch {
+      discovered = undefined;
+    }
+  }
+
   const status = delegationStatus({
     network: agent.config.network,
+    ...(discovered === undefined ? {} : { discovered }),
     ...(args.label === undefined ? {} : { label: args.label }),
     ...(delegateAddress === undefined
       ? {}
@@ -159,18 +197,26 @@ await run(async () => {
 
   const waitSeconds = asNumber(args.wait);
   const granted = status.state === "granted" || status.state === "owner-key";
+  // Already granted, just not written down: `--wait` has nothing to wait for
+  // and goes straight to adopting it.
+  const readyToAdopt = status.state === "granted-not-adopted";
   // Waiting needs a wallet to have been granted TO, and something still to
   // wait for. Asked for otherwise it is not an error — it is just nothing.
   const waiting =
     waitSeconds !== undefined && waitSeconds >= 0 && delegateAddress !== undefined && !granted;
 
+  const firstGrant = status.grants?.[0];
   const next = waiting
     ? undefined
     : status.state === "no-wallet"
       ? invoke("bootstrap", "--json")
       : granted
         ? invoke("next", "--json")
-        : completeHandshakeCommand();
+        : readyToAdopt && status.grants?.length === 1 && firstGrant !== undefined
+          ? invoke("adopt", "--account", firstGrant.accountId, "--json")
+          : readyToAdopt
+            ? invoke("discover", "--json")
+            : completeHandshakeCommand();
 
   for (const line of handshakeScreen(status, {
     details: args.details === "true",
@@ -184,24 +230,22 @@ await run(async () => {
     setOutcome(
       granted
         ? succeeded(status.headline, { nextCommand: next ?? invoke("next", "--json") })
-        : config(status.headline, { nextCommand: next ?? completeHandshakeCommand() }),
+        : readyToAdopt && status.grants !== undefined && status.grants.length > 1
+          ? {
+              ...quiet,
+              status: "needs-approval",
+              message: status.headline,
+              retryable: false,
+              awaitingApproval: true,
+            }
+          : config(status.headline, { nextCommand: next ?? completeHandshakeCommand() }),
     );
     return;
   }
 
   // ── --wait: watch for the grant the owner is making right now ───────────
   const intervalSeconds = Math.max(MIN_POLL_SECONDS, asNumber(args.interval) ?? DEFAULT_POLL_SECONDS);
-  const deployment = await loadDeployment(agent.config.configUrl);
-  // The ORIGINAL package id names event types; `idsFor` lists it last.
-  const accountPackage = deployment.idsFor("waterx_account").at(-1);
-  const deps: DiscoveryDeps = {
-    delegatedAccounts: (delegate) => agent.read.delegatedAccounts(delegate),
-    recentGrantEvents:
-      accountPackage === undefined
-        ? () => Promise.reject(new Error("the deployment config names no waterx_account package"))
-        : grantEventCandidates(agent.config.network, accountPackage),
-    readAccount: accountObjectReader(agent.config),
-  };
+  const deps = await discoveryDeps(agent);
 
   note(
     `  waiting up to ${String(waitSeconds)}s for the grant, looking every ` +

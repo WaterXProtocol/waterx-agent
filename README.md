@@ -317,6 +317,15 @@ with the link because the person reading it has one job: send it to the owner.
 page, and it states on itself that it does not grant perps. An owner who signs
 there connects a wallet, signs, and has granted nothing this package can use.
 
+**A grant made before anyone asked is found, not missed.** The grant is keyed
+on the agent's wallet, so `onboard` and `next` ask the delegate index — one
+call, about half a second — before reporting anything that depends on it. A
+wallet granted an hour ago, or one whose `.env` lost `WATERX_ACCOUNT_ID` while
+the key survived, reports `granted-not-adopted` with the account that granted
+it, rather than sending its owner back to a link they have already used. When
+the index cannot be reached, the state says the grant is unconfirmed; it never
+reports "nothing is granted" on the strength of not having looked.
+
 **Nobody has to say "I signed it".** The console's completion screen tells the
 owner to go back to the terminal because the agent will pick the grant up within
 seconds, and `--wait` is what makes that true:

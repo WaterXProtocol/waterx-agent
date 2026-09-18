@@ -656,3 +656,114 @@ describe("the screen an operator reads", () => {
     expect(lines).not.toContain("Give this link");
   });
 });
+
+/**
+ * The grant that was already there.
+ *
+ * Every surface asked "is this wallet a delegate of WATERX_ACCOUNT_ID?" — a
+ * question with no answer until an account has been adopted, which is the very
+ * thing the grant is needed to find. `signsAsDelegate` gates the same check on
+ * WATERX_OWNER_ADDRESS, which is also only set after adoption. So the circle
+ * closed, and a wallet that had been granted minutes earlier was told "nothing
+ * is granted to you yet" — with the owner handed a link they had already used.
+ *
+ * The grant is keyed on the delegate address. It is findable before any of
+ * that, in one call, which is what these hold in place.
+ */
+describe("a grant made before anyone asked", () => {
+  const OTHER = `0x${"d".repeat(64)}`;
+  const found = (accountId: string): { accountId: string; ownerAddress: string; expiresAtMs: null } => ({
+    accountId,
+    ownerAddress: OWNER,
+    expiresAtMs: null,
+  });
+
+  it("reports the account that already grants this wallet, with no account id configured", () => {
+    const status = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      discovered: [found(ACCOUNT)],
+    });
+
+    expect(status.state).toBe("granted-not-adopted");
+    expect(status.headline).toContain(ACCOUNT);
+    expect(status.headline).toContain(OWNER);
+    expect(status.grants).toHaveLength(1);
+  });
+
+  it("does not send the owner back to a link they have already used", () => {
+    const status = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      grantCommand: "npx waterx add-delegate --delegate 0xagent --yes --json",
+      discovered: [found(ACCOUNT)],
+    });
+
+    expect(status.headline).not.toContain("agent/authorize");
+    expect(status.headline).not.toContain("add-delegate");
+  });
+
+  it("keeps bootstrap's relayed step honest about which question was answered", () => {
+    // `bootstrap` prints this verbatim under "1 thing(s) still needed", and it
+    // said "nothing has been granted to 0x… yet" without anything having
+    // looked. The wallet in the install report had been granted.
+    expect(ownerGrantStep(AGENT).why).toContain("recorded here");
+    expect(ownerGrantStep(AGENT).why).not.toMatch(/nothing grants/iu);
+    expect(ownerGrantStep(AGENT, { checked: true }).why).toMatch(/nothing grants/iu);
+  });
+
+  it("makes no claim about the chain when nothing asked the chain", () => {
+    // The defect itself. "Nothing is granted to this wallet" is a statement
+    // about the chain; the branch that made it had never read the chain. What
+    // it may honestly say is that no grant is recorded HERE.
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.state).toBe("awaiting-grant");
+    expect(status.headline).toContain("recorded here");
+    expect(status.headline).not.toMatch(/nothing grants/iu);
+  });
+
+  it("says so plainly once the index has answered 'none'", () => {
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT, discovered: [] });
+
+    expect(status.state).toBe("awaiting-grant");
+    expect(status.headline).toMatch(/nothing grants/iu);
+  });
+
+  it("never picks between several accounts that grant the same wallet", () => {
+    const status = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      discovered: [found(ACCOUNT), found(OTHER)],
+    });
+
+    expect(status.state).toBe("granted-not-adopted");
+    expect(status.grants).toHaveLength(2);
+    expect(status.headline).toMatch(/choice, not a guess/u);
+  });
+
+  it("leaves a configured account to the delegate list, which knows the permissions", () => {
+    // Discovery answers "who grants me?". Once an account is adopted the
+    // question is "what does this grant allow?", and only the delegate list
+    // carries that — including whether it landed in the superseded slot.
+    const status = delegationStatus({
+      network: "mainnet",
+      delegateAddress: AGENT,
+      ownerAddress: OWNER,
+      accountId: ACCOUNT,
+      delegates: [grant({ stale: true })],
+      discovered: [found(ACCOUNT)],
+    });
+
+    expect(status.state).toBe("stale-grant");
+  });
+
+  it("asks the index in the surfaces that report the state, not only in `discover`", () => {
+    // `discover` always knew how to find this. The bug was that nothing on the
+    // default path called it, so the answer existed and was never fetched.
+    for (const path of ["agent/onboard.ts", "agent/next.ts", "setup/bootstrap.ts"]) {
+      const source = readFileSync(new URL(`../scripts/${path}`, import.meta.url), "utf8");
+      expect(source, path).toContain("discoverGrants(");
+    }
+  });
+});
