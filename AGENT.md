@@ -42,6 +42,7 @@ warns about otherwise. `pnpm run doctor` reports which provider is in use.
 | Command | What it does |
 |---|---|
 | `pnpm run doctor` | Preflight against the live deployment |
+| `pnpm run policy` | The execution policy; `-- --set interactive --yes` writes it to `.env` |
 | `pnpm run generate-wallet` | Generate or load the wallet, saving the key to `.env` |
 | `pnpm run fund-sui` | Testnet **gas** from the public Sui faucet |
 | `pnpm run create-account -- --name my-agent --yes` | Create a trading account |

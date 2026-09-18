@@ -47,6 +47,7 @@
     "reconcile": "tsx scripts/agent/reconcile.ts",
     "approvals": "tsx scripts/agent/approvals.ts",
     "limits": "tsx scripts/agent/limits.ts",
+    "policy": "tsx scripts/agent/policy.ts",
     "typecheck": "tsc --noEmit",
     "generate-wallet": "tsx scripts/setup/generate-wallet.ts",
     "fund-sui": "tsx scripts/setup/fund-sui.ts",
