@@ -35,7 +35,7 @@ import { PolicyGate } from "./policy.ts";
 import { normalizeSuiAddress } from "@mysten/sui/utils";
 import { type AccountObject, accountObjectReader } from "./chain/account-object.ts";
 import { delegateScope } from "./chain/delegate-scope.ts";
-import { REQUESTED_PERMISSION_NAMES } from "./agent/delegation.ts";
+import { perpAuthorizeLink, REQUESTED_PERMISSION_NAMES } from "./agent/delegation.ts";
 
 export interface DoctorCheck {
   name: string;
@@ -667,6 +667,10 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   ) {
     const wallet = normalizeSuiAddress(signer.address);
 
+    // Named here rather than inline, so this check and `onboard` cannot come to
+    // disagree about where an owner goes to grant.
+    const grantPage = perpAuthorizeLink(config.network, signer.address);
+
     // The backend's view, for the permission names it decodes.
     let listed: DelegateData | undefined;
     try {
@@ -677,7 +681,12 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
           ? fail(
               "delegate",
               `${signer.address} is not a registered delegate of ${config.accountId}. ` +
-                `The owner must grant it first.`,
+                `The owner must grant it first` +
+                // Where, not just what. This is the check a stuck install reads,
+                // and "the owner must grant it" leaves whoever is reading to go
+                // and find out where — which is how an install ends up
+                // prescribing a private-key paste to someone who has a browser.
+                (grantPage === undefined ? "." : `: ${grantPage}`),
             )
           : ok(
               "delegate",

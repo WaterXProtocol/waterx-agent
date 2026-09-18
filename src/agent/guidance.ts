@@ -1,5 +1,5 @@
 import { invoke } from "../cli/contract.ts";
-import { DELEGATE_BOUNDARY } from "./delegation.ts";
+import { DELEGATE_BOUNDARY, perpAuthorizeLink } from "./delegation.ts";
 
 /**
  * What to tell a person next, decided rather than composed.
@@ -121,7 +121,12 @@ export interface Situation {
    *   cannot withdraw.
    */
   mode: "delegate" | "owner" | "undecided";
-  /** The address that needs gas, so the advice can name it. */
+  /**
+   * This process's own wallet: the address that needs gas on the owner path,
+   * and the one an owner grants to on the delegate path. Named in the advice
+   * either way, because "fund the wallet" and "grant this address" are both
+   * useless without it.
+   */
   address?: string;
 }
 
@@ -184,13 +189,22 @@ export function decide(s: Situation): Guidance {
     // ever needed. Asking a would-be delegate to fund a wallet is asking them
     // to solve a problem they do not have.
     if (s.mode === "undecided") {
+      // The state a fresh install lands in, and the one the owner is needed
+      // for. It described the grant and named no place to make it, so where to
+      // sign depended on the caller running `onboard` next — which an agent
+      // relaying a headline does not necessarily do.
+      const page = s.address === undefined ? undefined : perpAuthorizeLink(s.network, s.address);
       return {
         state: "awaiting-grant",
         headline:
           `There is a wallet and nothing has been granted to it yet. The usual arrangement is ` +
           `that the account owner grants THIS address permission to trade their account — they ` +
           `keep the funds, and it needs no SUI of its own because the backend sponsors a ` +
-          `delegate's transactions. ${DELEGATE_BOUNDARY} Ask them to grant it; then ` +
+          `delegate's transactions. ${DELEGATE_BOUNDARY} ` +
+          (page === undefined
+            ? `Ask them to grant it; then `
+            : `They grant it at ${page} — signing in their own wallet, where their key stays. ` +
+              `Then `) +
           `\`discover\` finds the account on its own and \`adopt\` takes it. Nobody has to copy an ` +
           `account id or an owner address.`,
         suggestions: [

@@ -57,33 +57,68 @@ export const delegatesUrl = (network: Network): string =>
   `${consoleUrl(network).replace(/\/+$/, "")}/en/account`;
 
 /**
- * The console's `/agent/authorize` page grants **prediction markets only**.
+ * The console page where an owner grants PERP trading, per deployment.
  *
- * This is not an inference. The page says so itself: "This grants — place and
- * close prediction-market orders"; "This does not grant — withdrawals,
- * transfers, **perps**, staking, or claiming settled winnings." It reads one
- * query parameter, `agent`, and there is no protocol to choose.
+ * Mind the `/perp`. The sibling route `/agent/authorize` is the PREDICT page
+ * and states on itself that it does not grant perps, so the two are different
+ * routes rather than different copy, and an owner sent to the wrong one signs
+ * and has granted nothing this package can use.
  *
- * So it is the wrong page for this agent, and sending an owner there is worse
- * than sending them nowhere: they connect a wallet, sign, and have granted
- * nothing this package can use — and the next thing they hear is that the
- * permissions are missing. An earlier revision of this file did exactly that.
+ * A lookup, never a guess, for the reason {@link CONSOLE_ENDPOINTS} gives —
+ * read off the console's own source rather than inferred from its URL: the page
+ * takes the agent address as `?agent=`, refuses anything that is not a 32-byte
+ * address, lets the owner choose which of their accounts to grant, and grants
+ * exactly the bits {@link REQUESTED_PERMISSION_NAMES} names.
  *
- * If WaterX ships a perp equivalent, name it here rather than changing code.
+ * This returned `undefined` for four days after that page shipped, because the
+ * fact lived here as a constant about somebody else's product and nothing goes
+ * stale more quietly. Every install in that window told owners to paste a
+ * private key into a CLI while the browser page they wanted was live. A wrong
+ * default gets reported; a missing one just costs everyone the safer path. So
+ * there IS a default now — and it is narrow: a console this package cannot name
+ * still gets no guess.
  */
-export const perpAuthorizeUrl = (): string | undefined =>
-  process.env.WATERX_PERP_AUTHORIZE_URL?.trim() || undefined;
+const PERP_AUTHORIZE_PATH = "/en/agent/authorize/perp";
+
+export const perpAuthorizeUrl = (network: Network): string | undefined => {
+  // A named page wins: a preview deployment, or a route that moves before this
+  // constant catches up. That escape hatch is what made the stale default
+  // survivable, and it stays the first thing consulted.
+  const named = process.env.WATERX_PERP_AUTHORIZE_URL?.trim();
+  if (named !== undefined && named !== "") return named;
+
+  // A private console's routes are its own. Appending a path this package knows
+  // to a host it does not would send an owner to a 404, and an owner at a 404
+  // concludes the product is broken rather than that the link was wrong.
+  const base = consoleUrl(network).replace(/\/+$/, "");
+  return base === CONSOLE_ENDPOINTS[network] ? `${base}${PERP_AUTHORIZE_PATH}` : undefined;
+};
 
 /**
- * How an owner grants perp trading today: with their own key, through this
- * package.
+ * That page with this agent's address already in it.
+ *
+ * One place, because two surfaces need the link — the handshake's status and
+ * the first thing `next` says to a fresh install — and because an override may
+ * arrive carrying a query string of its own, which a bare `?agent=` would
+ * truncate.
+ */
+export const perpAuthorizeLink = (network: Network, agentWallet: string): string | undefined => {
+  const page = perpAuthorizeUrl(network);
+  if (page === undefined) return undefined;
+  return `${page}${page.includes("?") ? "&" : "?"}agent=${encodeURIComponent(agentWallet)}`;
+};
+
+/**
+ * How an owner grants perp trading without a browser: with their own key,
+ * through this package.
  *
  * `account::add_delegate` and `account::set_delegate_protocol_permission` are
  * both confirmed against both deployments, so this is a path that demonstrably
- * works — which is more than can be said for a web page that does not cover
- * perps. It does mean the owner puts their key in a CLI rather than keeping it
- * in a browser wallet, and that is a real cost of the missing page, not a
- * design choice worth defending.
+ * works. It is no longer the only one — {@link perpAuthorizeUrl} has the page —
+ * and it is the second choice wherever that page exists, because this one asks
+ * an owner to put a private key in a terminal. It stays for the consoles this
+ * package can name no page for, and for owners who would rather not use a
+ * browser at all.
  */
 export const perpGrantCommand = (input: {
   agentWallet: string;
@@ -103,10 +138,15 @@ export const perpGrantCommand = (input: {
  * it, which is the only reason it was found — the env var is exercised by
  * nobody until the page ships.
  *
- * The CLI path is not deprecated by this. It is the only one that works when no
- * page is configured, and it is honest about its cost: the owner puts their key
- * in a terminal instead of keeping it in a browser wallet. That cost is the
- * reason the page is being built, not an argument that the CLI is fine.
+ * The CLI path is not deprecated by this. It is the one that works when this
+ * package can name no page, and it is honest about its cost: the owner puts
+ * their key in a terminal instead of keeping it in a browser wallet. That cost
+ * is the reason the page exists, not an argument that the CLI is fine.
+ *
+ * `authorizeUrl` is the FULL link, agent address included. It used to be the
+ * bare page with `?agent=` appended here, which put the query-string building
+ * in two places — and only one of them learned that an override may already
+ * carry one.
  */
 export const grantInstruction = (input: {
   agentWallet: string;
@@ -117,13 +157,13 @@ export const grantInstruction = (input: {
     input.grantCommand ?? invoke("add-delegate", "--delegate", input.agentWallet, "--yes", "--json");
   if (input.authorizeUrl === undefined) {
     return (
-      `the owner grants it with their own key: ${command}. Granting PERP permission is not ` +
-      `something the console does today — its \`/agent/authorize\` page covers prediction ` +
-      `markets and states that it does not grant perps`
+      `the owner grants it with their own key: ${command}. There is no browser page to send ` +
+      `them to, because this deployment's console is not one this package knows a perp ` +
+      `authorize page for — name it in WATERX_PERP_AUTHORIZE_URL if it has one`
     );
   }
   return (
-    `the owner opens ${input.authorizeUrl}?agent=${input.agentWallet} and signs with their ` +
+    `the owner opens ${input.authorizeUrl} and signs with their ` +
     `wallet — the key never leaves the browser. If they would rather not use the ` +
     `browser, ${command} does the same thing with their key in a terminal`
   );
@@ -283,10 +323,10 @@ export interface DelegationStatus {
   /** Where to review and revoke — Account → Delegates. Always the delegates page. */
   reviewUrl: string;
   /**
-   * Where the owner GRANTS, when a perp authorize page is configured — with the
-   * agent address already in the query string once there is a wallet. Absent
-   * otherwise: the console's own `/agent/authorize` grants prediction markets,
-   * not perps, so there is no default to point at.
+   * Where the owner GRANTS — the console's perp authorize page, with the agent
+   * address already in the query string once there is a wallet. Absent only
+   * when this package can name no page for the console in force: a private
+   * `WATERX_CONSOLE_URL` with no `WATERX_PERP_AUTHORIZE_URL` beside it.
    */
   authorizeUrl?: string;
   /**
@@ -322,13 +362,12 @@ export function delegationStatus(input: {
 }): DelegationStatus {
   // Two different places, and conflating them is what made the override inert.
   //
-  // `authorizePage` is where an owner GRANTS, and it exists only once somebody
-  // configures one — the console's own `/agent/authorize` covers prediction
-  // markets and says outright that it does not grant perps, so there is no
-  // default to fall back on. `delegatesUrl` is where they REVIEW and revoke,
-  // which the console does have today (verified from its own copy: "Revoke any
-  // time from Account → Delegates").
-  const authorizePage = perpAuthorizeUrl();
+  // `authorizePage` is where an owner GRANTS: `/agent/authorize/perp` on a
+  // console this package knows, whatever `WATERX_PERP_AUTHORIZE_URL` names
+  // otherwise, and nothing at all for a private console. `delegatesUrl` is
+  // where they REVIEW and revoke (verified from the console's own copy: "Revoke
+  // any time from Account → Delegates") — a different page, and it stays one.
+  const authorizePage = perpAuthorizeUrl(input.network);
   const reviewUrl = delegatesUrl(input.network);
   const { delegateAddress, ownerAddress, accountId } = input;
 
@@ -342,13 +381,16 @@ export function delegationStatus(input: {
     };
   }
 
+  // The link, not the page: every headline below hands this to the owner, and
+  // building the query string at each of them is how one of them kept an
+  // override's own parameters and the others dropped them.
+  const authorizeLink = perpAuthorizeLink(input.network, delegateAddress);
+
   const base = {
     delegateAddress,
     reviewUrl,
     grantUrl: reviewUrl,
-    ...(authorizePage === undefined
-      ? {}
-      : { authorizeUrl: `${authorizePage}?agent=${delegateAddress}` }),
+    ...(authorizeLink === undefined ? {} : { authorizeUrl: authorizeLink }),
     ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }),
   };
 
@@ -358,7 +400,7 @@ export function delegationStatus(input: {
       state: "awaiting-grant",
       headline:
         `Give ${delegateAddress} to the account owner. To grant perp trading, ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizeLink, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
         `They can review and revoke it at ${reviewUrl} (Account → Delegates). ` +
         `Once they have signed, \`discover\` finds the account — no id to copy.`,
     };
@@ -407,7 +449,7 @@ export function delegationStatus(input: {
       state: "not-granted",
       headline:
         `${delegateAddress} is not a delegate of ${accountId}. To grant it, ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizeLink, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}. ` +
         `Until they do, every write refuses on chain.`,
     };
   }
@@ -426,7 +468,7 @@ export function delegationStatus(input: {
       headline:
         "The grant is in the superseded authority slot, so every perp action aborts on chain " +
         `(EUnauthorized, surfaced as 6002). It has to be granted again: ` +
-        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizePage, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}.`,
+        `${grantInstruction({ agentWallet: delegateAddress, authorizeUrl: authorizeLink, ...(input.grantCommand === undefined ? {} : { grantCommand: input.grantCommand }) })}.`,
     };
   }
 
@@ -442,8 +484,9 @@ export function delegationStatus(input: {
       state: "insufficient",
       headline:
         `Granted, but without ${missing.join(", ")}. Those actions will refuse on chain; the ` +
-        `owner widens the grant by re-running it with a fuller perp mask. If they granted through ` +
-        `the console's authorize page, that is why: it grants prediction markets, not perps.`,
+        `owner widens the grant by granting again with a fuller perp mask. If they used the ` +
+        `console's PREDICT page (\`/agent/authorize\`), that is why: it grants prediction ` +
+        `markets, not perps. The perp page is \`/agent/authorize/perp\`.`,
     };
   }
 

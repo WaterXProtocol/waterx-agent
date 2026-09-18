@@ -19,6 +19,7 @@ import {
   delegatesUrl,
   delegationStatus,
   ownerGrantStep,
+  perpAuthorizeLink,
   perpAuthorizeUrl,
   REQUESTED_PERMISSION_NAMES,
   requestedPermissions,
@@ -51,17 +52,57 @@ describe("where an owner is sent", () => {
     expect(CONSOLE_ENDPOINTS.testnet).toBe("https://testnet.waterx.app");
   });
 
-  it("has no perp authorize page to point at, and does not invent one", () => {
-    // The console's `/agent/authorize` grants prediction markets and says, on
-    // the page itself, that it does not grant perps. Sending a perp owner there
-    // is worse than sending them nowhere: they connect a wallet, sign, and have
-    // granted nothing this package can use.
-    expect(perpAuthorizeUrl()).toBeUndefined();
+  it("knows the perp authorize page each console ships", () => {
+    // This was `undefined` for four days after the page shipped, and every
+    // install in that window told an account owner to paste a private key into
+    // a CLI. The fact lived here as a constant about another team's product,
+    // and nothing goes stale more quietly than that.
+    expect(perpAuthorizeUrl("mainnet")).toBe("https://waterx.app/en/agent/authorize/perp");
+    expect(perpAuthorizeUrl("testnet")).toBe(
+      "https://testnet.waterx.app/en/agent/authorize/perp",
+    );
   });
 
-  it("uses it once WaterX ships one, without a code change", () => {
-    vi.stubEnv("WATERX_PERP_AUTHORIZE_URL", "https://waterx.app/agent/authorize-perp");
-    expect(perpAuthorizeUrl()).toBe("https://waterx.app/agent/authorize-perp");
+  it("never sends a perp owner to the predict page", () => {
+    // `/agent/authorize` and `/agent/authorize/perp` are different routes, not
+    // different copy. The one without `/perp` grants prediction markets and
+    // says so on itself; an owner who signs there has granted nothing usable.
+    for (const network of ["mainnet", "testnet"] as const) {
+      expect(perpAuthorizeUrl(network)).toMatch(/\/agent\/authorize\/perp$/);
+    }
+  });
+
+  it("puts the agent address in the link, so the page cannot be aimed at another", () => {
+    expect(perpAuthorizeLink("mainnet", AGENT)).toBe(
+      `https://waterx.app/en/agent/authorize/perp?agent=${AGENT}`,
+    );
+  });
+
+  it("does not guess the routes of a console it does not know", () => {
+    // Appending a known path to an unknown host sends an owner to a 404, and an
+    // owner at a 404 concludes the product is broken rather than that the link
+    // was wrong. Same reason CONSOLE_ENDPOINTS is a lookup.
+    vi.stubEnv("WATERX_CONSOLE_URL", "https://console.internal/");
+    expect(perpAuthorizeUrl("mainnet")).toBeUndefined();
+    vi.unstubAllEnvs();
+  });
+
+  it("takes a named page, for a private console or a route that has moved", () => {
+    vi.stubEnv("WATERX_CONSOLE_URL", "https://console.internal/");
+    vi.stubEnv("WATERX_PERP_AUTHORIZE_URL", "https://console.internal/grant");
+    expect(perpAuthorizeLink("mainnet", AGENT)).toBe(
+      `https://console.internal/grant?agent=${AGENT}`,
+    );
+    vi.unstubAllEnvs();
+  });
+
+  it("keeps a query string the named page already carries", () => {
+    // `?agent=` appended blindly truncates one. The link is built in a single
+    // place so this is decided once rather than at each headline.
+    vi.stubEnv("WATERX_PERP_AUTHORIZE_URL", "https://console.internal/grant?flow=perp");
+    expect(perpAuthorizeLink("mainnet", AGENT)).toBe(
+      `https://console.internal/grant?flow=perp&agent=${AGENT}`,
+    );
     vi.unstubAllEnvs();
   });
 
@@ -102,7 +143,7 @@ describe("the delegate handshake", () => {
     expect(delegationStatus({ network: "mainnet",}).state).toBe("no-wallet");
   });
 
-  it("tells the agent to hand its address to the owner, with the command that works", () => {
+  it("tells the agent to hand its address to the owner, with the page that grants it", () => {
     const status = delegationStatus({
       network: "mainnet",
       delegateAddress: AGENT,
@@ -110,9 +151,10 @@ describe("the delegate handshake", () => {
     });
     expect(status.state).toBe("awaiting-grant");
     expect(status.headline).toContain(AGENT);
-    // The command, not a web page that cannot grant perps.
+    // The browser page first: the owner keeps their key in their wallet.
+    expect(status.headline).toContain("https://waterx.app/en/agent/authorize/perp");
+    // And the CLI still named, for an owner who would rather not use a browser.
     expect(status.headline).toContain("add-delegate");
-    expect(status.headline).toContain("does not grant perps");
   });
 
   it("sends a delegate whose owner is known to discover, not to copy an id", () => {
@@ -221,6 +263,7 @@ describe("a configured authorize page", () => {
 
   afterEach(() => {
     delete process.env.WATERX_PERP_AUTHORIZE_URL;
+    delete process.env.WATERX_CONSOLE_URL;
   });
 
   it("sends the owner to the browser instead of a terminal", () => {
@@ -251,11 +294,22 @@ describe("a configured authorize page", () => {
     expect(status.grantUrl).toBe(status.reviewUrl);
   });
 
-  it("has no authorizeUrl when no page is configured", () => {
+  it("has an authorizeUrl with no configuration at all", () => {
+    const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
+
+    expect(status.authorizeUrl).toBe(
+      `https://waterx.app/en/agent/authorize/perp?agent=${AGENT}`,
+    );
+    expect(status.grantUrl).toBe("https://waterx.app/en/account");
+  });
+
+  it("has no authorizeUrl for a console it cannot name a page for", () => {
+    process.env.WATERX_CONSOLE_URL = "https://console.internal";
+
     const status = delegationStatus({ network: "mainnet", delegateAddress: AGENT });
 
     expect(status.authorizeUrl).toBeUndefined();
-    expect(status.grantUrl).toBe("https://waterx.app/en/account");
+    expect(status.reviewUrl).toBe("https://console.internal/en/account");
   });
 
   it("prints review/revoke from reviewUrl on the onboard screen, never from grantUrl", () => {
@@ -298,9 +352,12 @@ describe("a configured authorize page", () => {
     expect(status.headline).toContain("npx waterx add-delegate");
   });
 
-  it("prescribes the CLI when no page is configured, and says why", () => {
-    // No default: the console's own authorize page grants prediction markets
-    // and states that it does not grant perps, so there is nothing to point at.
+  it("prescribes the CLI for a console it cannot name a page for, and says why", () => {
+    // The only remaining route to the CLI-only advice. It says which knob turns
+    // the browser path back on, rather than reporting the product as unable to
+    // do something it can.
+    process.env.WATERX_CONSOLE_URL = "https://console.internal";
+
     const status = delegationStatus({
       network: "mainnet",
       delegateAddress: AGENT,
@@ -308,8 +365,20 @@ describe("a configured authorize page", () => {
     });
 
     expect(status.headline).toContain("npx waterx add-delegate");
-    expect(status.headline).toContain("does not grant perps");
+    expect(status.headline).toContain("WATERX_PERP_AUTHORIZE_URL");
     expect(status.headline).not.toContain("signs with their wallet");
+  });
+
+  it("names the grant page in the preflight failure an owner is stuck on", () => {
+    // `doctor` is the check a stuck install reads, and it said "the owner must
+    // grant it first" without saying where. Whoever read that had to go and
+    // find out — which is how one ended up relaying a private-key paste to a
+    // person who had a browser open.
+    const source = readFileSync(new URL("../src/doctor.ts", import.meta.url), "utf8");
+
+    expect(source).toContain("perpAuthorizeLink(config.network, signer.address)");
+    expect(source).toContain("is not a registered delegate");
+    expect(source).toContain("grantPage === undefined");
   });
 
   it("gives next's caller the grant page and the review page under their own names", () => {
