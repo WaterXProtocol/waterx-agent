@@ -39,6 +39,8 @@ import {
   MIN_POLL_SECONDS,
 } from "../../src/agent/discovery.ts";
 import { AccountNotFoundError, accountObjectReader } from "../../src/chain/account-object.ts";
+import { openUrl } from "../../src/cli/open-url.ts";
+import { qrLines } from "../../src/cli/qr.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
 import { grantEventCandidates } from "../../src/chain/grant-events.ts";
@@ -63,6 +65,14 @@ const args = parseArgs(
       desc: "Wait this many seconds for the owner's grant, then adopt the account that made it (writes WATERX_ACCOUNT_ID)",
     },
     interval: { desc: `Seconds between looks while waiting (default ${String(DEFAULT_POLL_SECONDS)})` },
+    qr: {
+      desc: "Draw the authorize link as a QR code, for an owner who is not at this machine",
+      flag: true,
+    },
+    open: {
+      desc: "Open the authorize page in a browser ON THIS MACHINE (for when you are the account owner)",
+      flag: true,
+    },
   },
   "onboard",
 );
@@ -205,6 +215,18 @@ await run(async () => {
   const waiting =
     waitSeconds !== undefined && waitSeconds >= 0 && delegateAddress !== undefined && !granted;
 
+  // Colour only where something can render it. A code drawn as ink on the
+  // terminal's own background inverts on a dark theme; explicit colours make it
+  // scan either way, and are noise in a log file.
+  const drawn =
+    args.qr === "true" && status.authorizeUrl !== undefined
+      ? qrLines(status.authorizeUrl, {
+          color:
+            process.env.NO_COLOR === undefined &&
+            (process.stdout.isTTY === true || process.stderr.isTTY === true),
+        })
+      : undefined;
+
   const firstGrant = status.grants?.[0];
   const next = waiting
     ? undefined
@@ -221,12 +243,38 @@ await run(async () => {
   for (const line of handshakeScreen(status, {
     details: args.details === "true",
     ...(next === undefined ? {} : { next }),
+    ...(drawn === undefined ? {} : { qr: drawn }),
   })) {
     note(line);
   }
 
+  if (args.qr === "true" && drawn === undefined) {
+    note(
+      status.authorizeUrl === undefined
+        ? "  no authorize page is known for this console, so there is no link to draw"
+        : "  the link is too long to draw as a scannable code — hand it over as text",
+    );
+  }
+
+  // Opening is a side effect on somebody's desktop, so it is asked for. It
+  // happens after the screen: the link is already printed, so a machine with no
+  // opener on it loses nothing.
+  let opened: { opened: boolean; detail: string } | undefined;
+  if (args.open === "true" && status.authorizeUrl !== undefined) {
+    const outcome = await openUrl(status.authorizeUrl);
+    opened = outcome.opened
+      ? { opened: true, detail: outcome.command }
+      : { opened: false, detail: outcome.reason };
+    note(outcome.opened ? `  opened in a browser here (${outcome.command})` : `  ${outcome.reason}`);
+  } else if (args.open === "true") {
+    note("  no authorize page is known for this console, so there is nothing to open");
+  }
+
   if (!waiting || delegateAddress === undefined) {
-    show({ ...payload, next: next ?? null }, { rendered: true });
+    show(
+      { ...payload, next: next ?? null, ...(opened === undefined ? {} : { browser: opened }) },
+      { rendered: true },
+    );
     setOutcome(
       granted
         ? succeeded(status.headline, { nextCommand: next ?? invoke("next", "--json") })

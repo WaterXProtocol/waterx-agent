@@ -326,6 +326,28 @@ it, rather than sending its owner back to a link they have already used. When
 the index cannot be reached, the state says the grant is unconfirmed; it never
 reports "nothing is granted" on the strength of not having looked.
 
+**Two ways to shorten the handover.** `--qr` draws the link as a code the owner
+scans with the phone their wallet is already on — which is the case the delegate
+arrangement is built for, where they are not at this machine. `--open` opens the
+page in a browser **here**, for the other case: you are the account owner, and
+the wallet is in this machine's browser. Both are opt-in and the link is printed
+either way, so a machine with no browser on it loses nothing.
+
+```bash
+npx waterx onboard --qr      # a code to scan
+npx waterx onboard --open    # a browser on this machine
+```
+
+The encoder is written out rather than installed: a QR encoder is a few hundred
+lines of arithmetic with no reason to change, and a dependency for it would be a
+supply-chain surface on a program that signs transactions against real money.
+The suite checks it module for module against reference matrices from an
+independent implementation (`test/fixtures/qr.json`, committed as an oracle).
+Separately, during development, the codes it draws were fed to an independent
+*decoder* and came back byte-identical — a one-off check rather than a
+standing test, because that would mean a dependency for the sake of one
+assertion.
+
 **Nobody has to say "I signed it".** The console's completion screen tells the
 owner to go back to the terminal because the agent will pick the grant up within
 seconds, and `--wait` is what makes that true:

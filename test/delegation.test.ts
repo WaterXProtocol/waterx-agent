@@ -628,6 +628,26 @@ describe("the screen an operator reads", () => {
     expect(lines).toContain("npx waterx add-delegate");
   });
 
+  it("draws a code under the link, never instead of it", () => {
+    // Whoever is at this terminal may be the one who signs, and a link they can
+    // click beats a code they cannot. The code is for the owner who is
+    // somewhere else, so it goes below, and the link stays where it was.
+    const lines = handshakeScreen(awaiting(), { qr: ["##CODE-TOP##", "##CODE-BOTTOM##"] });
+    const link = lines.findIndex((line) => line.includes("agent/authorize/perp"));
+    const code = lines.findIndex((line) => line.includes("##CODE-TOP##"));
+
+    expect(link).toBeGreaterThanOrEqual(0);
+    expect(code).toBeGreaterThan(link);
+    expect(lines.filter((line) => line.includes("##CODE"))).toHaveLength(2);
+  });
+
+  it("draws nothing when nobody asked for a code", () => {
+    const lines = handshakeScreen(awaiting()).join("\n");
+
+    expect(lines).toContain("agent/authorize/perp");
+    expect(lines).not.toContain("##CODE");
+  });
+
   it("labels the next command for where the handshake actually is", () => {
     const next = "node bin/waterx.mjs onboard --wait 300 --json";
     expect(handshakeScreen(awaiting(), { next }).join("\n")).toContain("when they have signed");
