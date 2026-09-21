@@ -131,5 +131,32 @@ export const succeeded = (message: string, extra: Partial<Outcome> = {}): Outcom
  * shim knows which it is, because it is the thing being run, so it states it in
  * `WATERX_INVOKED_AS` rather than leaving this to guess.
  */
+/**
+ * The first of these commands a caller can run as printed, or the fallback.
+ *
+ * `nextCommand` is a promise -- copy it, do not compose one -- and a command
+ * carrying a `<placeholder>` breaks it: the caller either fills it in by
+ * guessing, which is the one thing this package refuses to let an agent do, or
+ * runs it and gets a usage error. Those are skipped.
+ *
+ * It exists because `bootstrap` handed back NO `nextCommand` on the path it
+ * takes most often, the one where setup is not finished. An install read that
+ * envelope as the end of the road: it had a wallet, a remaining item addressed
+ * to somebody else, and nothing to run. Every other command in this package
+ * hands back a pointer, and the loop SKILL.md documents -- run `next`, do the
+ * one thing it says, run `next` again -- needs the exit to be there.
+ */
+export function firstRunnable(
+  commands: readonly (string | undefined)[],
+  fallback: string,
+): string {
+  for (const command of commands) {
+    if (command === undefined || command.trim() === "") continue;
+    if (command.includes("<")) continue;
+    return command;
+  }
+  return fallback;
+}
+
 export const invoke = (command: string, ...args: string[]): string =>
   [process.env.WATERX_INVOKED_AS?.trim() || "node bin/waterx.mjs", command, ...args].join(" ");

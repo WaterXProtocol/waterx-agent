@@ -346,8 +346,15 @@ export function ownerGrantStep(
         : `no grant to ${agentWallet} is recorded here`) +
       `. The account owner grants it trading ` +
       `permission from their own wallet; they keep the funds, and it needs no SUI of its own. ` +
-      `${DELEGATE_BOUNDARY} Once they have granted it, \`onboard --wait\` finds the account and ` +
-      `adopts it — nobody copies an id.`,
+      // WHEN to run it, not just what it does. This used to read "Once they
+      // have granted it, `onboard --wait` finds the account and adopts it",
+      // and an install read that as "run this afterwards": it decided the
+      // command would "just poll for 5 minutes" if run first, so it withheld
+      // the link, handed over the wallet address instead, and stopped. The
+      // waiting is the last thing that command does, not the first.
+      `${DELEGATE_BOUNDARY} Run \`onboard --wait\` now, not after: it prints the link to hand ` +
+      `them and opens the page here, and only then waits for the grant — which it adopts on ` +
+      `its own, so nobody copies an id.`,
     who: "the account owner",
     // `--wait`, not bare `onboard`: this is the last step, and the bare form
     // printed the link and stopped, leaving an agent to wait for the user to

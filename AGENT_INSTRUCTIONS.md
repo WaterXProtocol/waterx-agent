@@ -274,7 +274,7 @@ the field that matters:
 | `who` | What it means |
 |---|---|
 | `"you"` | Run the command. |
-| `"the account owner"` | Only the owner can do it — their grant. Give them the link `onboard` prints; nobody at the venue can grant it for them. `onboard --wait <s>` then picks the grant up on its own. |
+| `"the account owner"` | Only the owner can do it — their grant, from their own wallet. **You still run `onboard --wait 300 --json`**: it prints the link to hand them and opens the page here, and only then waits for the grant, which it adopts on its own. Run it when you reach this step, not after they have signed — the waiting is the last thing it does. The wallet address on its own is not something they can act on. |
 | `"an operator"` | Stop and ask a human at the venue — testnet collateral, for one. |
 | `"the maintainers"` | Nothing anyone at this terminal can fix — an argument layout nobody has captured. Report it. Do not set `WATERX_ALLOW_UNCONFIRMED_ABI` on your own initiative: accepting an unconfirmed layout is a person's decision. |
 
