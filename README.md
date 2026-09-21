@@ -299,11 +299,17 @@ summary the backend reports as degraded. They ride on every state rather than
 being one, because a dead price feed matters whether the process is `ready` or
 halfway through setup — and they are computed from reads `next` already makes.
 
-`policy --set interactive --yes` writes the execution policy to `.env`.
+`policy` lists the three execution modes with what each one costs, marks the one
+in force, and gives the exact command for each: `read-only` (nothing can be
+signed), `interactive` (every write needs a person — preview → approve →
+execute, and `approve` records their name), and `delegated-auto` (signs
+unattended inside a scope file's ceilings, and is refused without one).
+
 Narrowing to `read-only` needs no confirmation; widening does, because it
-changes what this process may sign. It exists because every other setup step had
-a command and this one did not, so the documented loop ended at a state whose
-only suggestion could not change it.
+changes what this process may sign. The command exists because every other setup
+step had one and this did not — and it lists all three because both surfaces
+that led people here used to name exactly one of them, so an install relayed
+that single command to its user as the next step rather than as one of three.
 
 ## Trading someone else's account
 

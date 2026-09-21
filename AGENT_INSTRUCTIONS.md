@@ -237,10 +237,21 @@ summary the backend itself reports as degraded. **Say them before anything
 else.** They are orthogonal to `state` — a dead feed matters whether the process
 is `ready` or half configured — and they come from reads `next` already makes.
 
-Widening the execution policy has a command now, `policy --set <mode> --yes`,
-and it is one **a person runs**. Narrowing to `read-only` needs no confirmation;
-widening needs `--yes`, and an agent adding `--yes` on its own initiative is the
-same mistake as approving its own preview.
+Widening the execution policy has a command now, and it is one **a person
+runs**. There are three modes, and which one to run is the decision:
+
+| mode | what it allows |
+|---|---|
+| `read-only` | nothing can be signed; reads keep working |
+| `interactive` | can sign, and every write needs a person: preview → approve → execute, where `approve` records their name |
+| `delegated-auto` | signs with nobody watching, bounded by a scope file — and refused without one |
+
+`policy --json` returns all three as `data.choices`, each with `means`, the
+exact `command`, and — where something stands in the way — `requires` and the
+`requiresCommand` that satisfies it. **Relay them and let the person pick.**
+Naming one of the three yourself is the same mistake as approving your own
+preview; narrowing to `read-only` needs no confirmation, widening needs `--yes`,
+and an agent adding `--yes` on its own initiative is that mistake twice.
 
 ## 7. Setting up wallet, account, delegation and risk limits
 

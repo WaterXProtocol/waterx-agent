@@ -414,9 +414,15 @@ function choose(s: Situation): Guidance {
           // and cannot change it -- so the documented loop ("run `next`, do the
           // one thing it says") ended at a command that could not move it. A
           // real install stopped here and said there was nothing left to run.
+          //
+          // Then it named one mode of three, and the next install relayed that
+          // single command to its user as THE next step. One suggestion is not
+          // a choice, and which of the three to run is exactly the part that is
+          // theirs: this lists all of them with what each costs.
           what:
-            "a person -- not you -- widens it when they mean to: this writes the policy to .env",
-          command: invoke("policy", "--set", "interactive", "--yes"),
+            "a person -- not you -- chooses one of the three modes; this lists them with what " +
+            "each one allows and costs",
+          command: invoke("policy", "--json"),
         },
         { what: "see the policy and ceilings in force", command: invoke("limits", "--json") },
       ],

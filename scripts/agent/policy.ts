@@ -20,7 +20,7 @@
 import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
 import { envPath, saveToEnv } from "../../src/chain/wallet.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
-import type { PolicyMode } from "../../src/policy.ts";
+import { type PolicyMode, policyChoices, POLICY_MODES } from "../../src/policy.ts";
 import { confirmed, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
@@ -34,26 +34,80 @@ const args = parseArgs(
   "policy",
 );
 
-/** In rank order: each one may sign everything the one before it may, and more. */
-const MODES: readonly PolicyMode[] = ["read-only", "interactive", "delegated-auto"];
+const MODES = POLICY_MODES;
 
 const rank = (mode: PolicyMode): number => MODES.indexOf(mode);
 
 const quiet = { submitted: false, reconcileRequired: false, awaitingApproval: false } as const;
+
+/**
+ * Break prose to a width a terminal holds, so it does not wrap mid-sentence.
+ *
+ * Commands are never passed through this: a wrapped command is one nobody can
+ * copy, which is the same reason the authorize link gets a line of its own.
+ */
+function wrap(text: string, width: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    if (line === "") {
+      line = word;
+    } else if (`${line} ${word}`.length > width) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = `${line} ${word}`;
+    }
+  }
+  if (line !== "") lines.push(line);
+  return lines;
+}
 
 await run(async () => {
   const agent = initAgent();
   const current = agent.config.executionPolicy;
   const wanted = args.set;
 
+  // With no `--set`, this is the choosing screen rather than a report. It used
+  // to print one command -- `--set interactive --yes` -- and an install relayed
+  // that to its user as THE next step, because a single suggestion is not a
+  // choice. All three are here, in rank order, with what each costs.
+  const choices = policyChoices({
+    current,
+    hasScope: agent.config.policyScope !== undefined,
+    invoke,
+  });
+
   if (wanted === undefined) {
     note("");
     note(`  policy     ${current} on ${agent.config.network}`);
     note(`  file       ${envPath()}`);
-    note(`  change it  ${invoke("policy", "--set", "interactive", "--yes")}`);
     note("");
-    show({ executionPolicy: current, network: agent.config.network, envFile: envPath() }, { rendered: true });
-    setOutcome(succeeded(`policy ${current} on ${agent.config.network}`));
+    note("  Pick one. This is a person's decision, not the agent's:");
+    note("");
+    for (const choice of choices) {
+      const head = `  ${choice.current ? "→" : " "} ${choice.mode.padEnd(16)}`;
+      const pad = " ".repeat(head.length);
+      const [first, ...rest] = wrap(choice.means, 58);
+      note(`${head}${first ?? ""}`);
+      for (const line of rest) note(`${pad}${line}`);
+      if (choice.requires !== undefined) {
+        for (const line of wrap(`needs ${choice.requires}`, 58)) note(`${pad}${line}`);
+      }
+      // Unwrapped, always: a command is for copying. The prerequisite's command
+      // is a field of its own for exactly this reason -- put inside the
+      // sentence, the wrapper broke it across three lines.
+      if (choice.requiresCommand !== undefined) note(`${pad}${choice.requiresCommand}`);
+      note(`${pad}${choice.command}`);
+      note("");
+    }
+    show(
+      { executionPolicy: current, network: agent.config.network, envFile: envPath(), choices },
+      { rendered: true },
+    );
+    setOutcome(
+      succeeded(`policy ${current} on ${agent.config.network}; three modes to choose from`),
+    );
     return;
   }
 
@@ -120,8 +174,18 @@ await run(async () => {
   note("");
   note(`  policy     ${current} → ${mode}`);
   note(`  wrote      WATERX_EXECUTION_POLICY to ${envPath()}`);
+  if (mode === "interactive") {
+    // What it means in practice for the caller that is usually driving this: an
+    // agent still cannot sign on its own. `--yes` is the human shortcut; the
+    // agent path is preview -> approve -> execute, and `approve` takes a name.
+    note("  means      every write needs a person: preview → approve → execute, and");
+    note("             `approve` records their name against the exact plan");
+  }
+  if (mode === "delegated-auto") {
+    note("  means      this process signs with nobody watching, inside the scope file's ceilings");
+  }
   if (agent.config.network === "mainnet" && widening) {
-    note("  mainnet    this is real money; every write still goes preview → approve → execute");
+    note("  mainnet    this is real money");
   }
   note("");
   show(

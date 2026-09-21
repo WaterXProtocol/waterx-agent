@@ -385,6 +385,18 @@ describe("what to do next", () => {
     expect(g.suggestions.map((x) => x.command).join(" ")).not.toContain("bootstrap");
   });
 
+  it("offers the choice rather than one of the three", () => {
+    // It named `--set interactive --yes` and nothing else, and an install
+    // relayed that to its user as THE next step. Which mode to run is the part
+    // that belongs to the person.
+    const g = decide({ ...ok, readOnly: true });
+    const commands = g.suggestions.map((x) => x.command).join(" ");
+
+    expect(commands).toContain("policy");
+    expect(commands, "a single mode is a prescription, not a choice").not.toContain("--set");
+    expect(g.suggestions[0]?.what).toMatch(/three modes/u);
+  });
+
   it("still calls a read-only process unconfigured when it also is", () => {
     const g = decide({
       ...ok,
