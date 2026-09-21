@@ -603,7 +603,94 @@ const digestOf = (txBytes: string): string =>
   createHash("sha256").update(txBytes).digest("hex");
 
 /** Ranked weakest-first, so `--policy` can be checked for "narrows only". */
+/**
+ * The three modes, in rank order: each may sign everything the one before it
+ * may, and more.
+ *
+ * Exported because choosing between them is a decision a person makes, and a
+ * decision needs all of its options in front of it. Both surfaces that led
+ * someone here -- `next`'s `read-only` state and `policy` itself -- named
+ * exactly one of the three, the middle one, without saying why. A real install
+ * relayed that single command to its user verbatim, as the next step rather
+ * than as one of three.
+ */
+export const POLICY_MODES: readonly PolicyMode[] = ["read-only", "interactive", "delegated-auto"];
+
 const RANK: Record<PolicyMode, number> = { "read-only": 0, interactive: 1, "delegated-auto": 2 };
+
+export interface PolicyChoice {
+  mode: PolicyMode;
+  /** Whether this is the one in force. */
+  current: boolean;
+  /** What it lets this process do, and what it costs. */
+  means: string;
+  /**
+   * What is not true yet and has to be before it can be set.
+   *
+   * Absent when nothing stands in the way. `delegated-auto` is refused without
+   * a scope file -- naming it here is the difference between an option and a
+   * refusal somebody walks into.
+   *
+   * Prose only. It is printed through a wrapper, and a command broken across
+   * lines is one nobody can copy -- which is why the command that satisfies it
+   * is {@link PolicyChoice.requiresCommand} rather than a clause in here.
+   */
+  requires?: string;
+  /** The command that satisfies `requires`, printed unwrapped. */
+  requiresCommand?: string;
+  /** Whether choosing it widens what may be signed, which is what needs `--yes`. */
+  widens: boolean;
+  /** The command that sets it, spelled for where it is printed. */
+  command: string;
+}
+
+/**
+ * The three, with what each one costs — for a person to choose between.
+ *
+ * Deliberately not neutral. They are listed in rank order and say what they
+ * allow, because `delegated-auto` is the one where this process signs against
+ * real money with nobody watching, and presenting it as the third radio button
+ * on a setup screen would be an interface that nudges toward it.
+ */
+export function policyChoices(input: {
+  current: PolicyMode;
+  hasScope: boolean;
+  invoke: (command: string, ...args: string[]) => string;
+}): PolicyChoice[] {
+  const means: Record<PolicyMode, string> = {
+    "read-only":
+      "nothing can be signed. Reads keep working — markets, positions, balance, orders.",
+    interactive:
+      "can sign, and every write needs a person: preview → approve → execute, where " +
+      "`approve` records their name against the exact plan.",
+    "delegated-auto":
+      "signs with nobody watching, bounded by a scope file — collateral per order and in " +
+      "total, leverage, which markets and sides, and an expiry. A delegate key only.",
+  };
+
+  return POLICY_MODES.map((mode) => {
+    const widens = RANK[mode] > RANK[input.current];
+    const unmet = mode === "delegated-auto" && !input.hasScope;
+    const requires = unmet
+      ? "a scope file first, and WATERX_POLICY_SCOPE_FILE pointing at it"
+      : undefined;
+    return {
+      mode,
+      current: mode === input.current,
+      means: means[mode],
+      ...(requires === undefined ? {} : { requires }),
+      ...(unmet
+        ? { requiresCommand: input.invoke("limits", "--write", "policy.json", "…") }
+        : {}),
+      widens,
+      // Narrowing needs no confirmation: refusing to let someone turn writes
+      // off would be absurd.
+      command: widens
+        ? input.invoke("policy", "--set", mode, "--yes")
+        : input.invoke("policy", "--set", mode),
+    };
+  });
+}
 
 /**
  * A per-invocation override may only **narrow**. Widening is a change to the

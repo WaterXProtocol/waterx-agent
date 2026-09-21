@@ -5,6 +5,8 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { policyChoices } from "../src/policy.ts";
+
 import { ExecutionPolicyError } from "../src/errors.ts";
 import { loadConfig, signsAsDelegate } from "../src/config.ts";
 import { narrowOnly, PolicyGate, type PolicyScope, type WriteIntent } from "../src/policy.ts";
@@ -316,5 +318,87 @@ describe("the ceilings never trap a position", () => {
     await expect(
       gate.authorizeAndBuild(exiting("openLong"), {}, () => Promise.resolve({ txBytes: "AA==" })),
     ).rejects.toThrow(/exceeds the ceiling/);
+  });
+});
+
+/**
+ * Three modes, offered as three.
+ *
+ * Both surfaces that lead someone here named exactly one of them -- the middle
+ * one -- and an install relayed that single command to its user as the next
+ * step rather than as one of three. Which mode to run is the part that is
+ * theirs; a decision needs all of its options in front of it.
+ */
+describe("policyChoices", () => {
+  const invoke = (command: string, ...args: string[]): string =>
+    ["npx waterx", command, ...args].join(" ");
+
+  it("offers all three, in rank order, and marks the one in force", () => {
+    const choices = policyChoices({ current: "read-only", hasScope: false, invoke });
+
+    expect(choices.map((c) => c.mode)).toEqual(["read-only", "interactive", "delegated-auto"]);
+    expect(choices.filter((c) => c.current).map((c) => c.mode)).toEqual(["read-only"]);
+  });
+
+  it("says what each one costs, not just what it is called", () => {
+    const [readOnly, interactive, auto] = policyChoices({
+      current: "read-only",
+      hasScope: true,
+      invoke,
+    });
+
+    expect(readOnly?.means).toMatch(/nothing can be signed/u);
+    // The approval ceremony is the point of this one, and it is not `--yes`.
+    expect(interactive?.means).toMatch(/preview → approve → execute/u);
+    expect(interactive?.means).toMatch(/records their name/u);
+    // And this one says out loud that nobody is watching.
+    expect(auto?.means).toMatch(/nobody watching/u);
+    expect(auto?.means).toMatch(/scope file/u);
+  });
+
+  it("asks for confirmation only where the choice widens what may be signed", () => {
+    const fromReadOnly = policyChoices({ current: "read-only", hasScope: true, invoke });
+    expect(fromReadOnly.find((c) => c.mode === "read-only")?.command).not.toContain("--yes");
+    expect(fromReadOnly.find((c) => c.mode === "interactive")?.command).toContain("--yes");
+
+    // Turning writes off is never something to confirm.
+    const fromAuto = policyChoices({ current: "delegated-auto", hasScope: true, invoke });
+    expect(fromAuto.find((c) => c.mode === "read-only")?.command).not.toContain("--yes");
+    expect(fromAuto.find((c) => c.mode === "interactive")?.command).not.toContain("--yes");
+    expect(fromAuto.map((c) => c.widens)).toEqual([false, false, false]);
+  });
+
+  it("names the prerequisite rather than letting someone walk into a refusal", () => {
+    // `--set delegated-auto` is refused without a scope file. An option that
+    // cannot be taken yet has to say so where it is offered.
+    const without = policyChoices({ current: "read-only", hasScope: false, invoke });
+    const auto = without.find((c) => c.mode === "delegated-auto");
+
+    expect(auto?.requires).toMatch(/scope file/u);
+    expect(auto?.requiresCommand).toMatch(/limits --write/u);
+
+    const with_ = policyChoices({ current: "read-only", hasScope: true, invoke });
+    const satisfied = with_.find((c) => c.mode === "delegated-auto");
+    expect(satisfied?.requires).toBeUndefined();
+    expect(satisfied?.requiresCommand).toBeUndefined();
+  });
+
+  it("keeps commands out of the prose, because the prose gets wrapped", () => {
+    // The prerequisite read "a scope file first: npx waterx limits --write
+    // policy.json …, then WATERX_POLICY_SCOPE_FILE pointing at it", and the
+    // screen's wrapper broke that command across three lines. A wrapped command
+    // is one nobody can copy -- the same rule the authorize link is under.
+    for (const scope of [true, false]) {
+      for (const choice of policyChoices({ current: "read-only", hasScope: scope, invoke })) {
+        expect(choice.means, choice.mode).not.toMatch(/waterx /u);
+        expect(choice.requires ?? "", choice.mode).not.toMatch(/waterx /u);
+      }
+    }
+  });
+
+  it("emits commands that can be run as printed", () => {
+    for (const choice of policyChoices({ current: "read-only", hasScope: true, invoke })) {
+      expect(choice.command).toMatch(/^npx waterx policy --set /u);
+    }
   });
 });
