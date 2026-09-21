@@ -268,8 +268,11 @@ reports free margin. It signs **nothing** unless you add
 `--create-account --yes`, and even then only account creation, which moves no
 funds. It never deposits — that commits money, and money is a decision.
 
-Read `data.remaining`. Each entry is `{ what, why, who, command }`, and `who` is
-the field that matters:
+Read `data.remaining`. Each entry is `{ what, why, who, command }`. `who` says
+whose ACT the step needs — **not who runs the command**. Where the step carries
+a command that can be run as printed, the screen says both: *"THE ACCOUNT OWNER
+signs it — YOU run the command below"*. Where it carries a placeholder nobody
+may fill in by guessing, it says `ASK …`, and stopping is the whole of it:
 
 | `who` | What it means |
 |---|---|

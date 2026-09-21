@@ -158,5 +158,36 @@ export function firstRunnable(
   return fallback;
 }
 
+/** Who can supply a missing setup step, as `bootstrap` reports it. */
+export type StepWho = "you" | "an operator" | "the account owner" | "the maintainers";
+
+/**
+ * How a remaining step is labelled: whose act it needs, and who runs the
+ * command under it.
+ *
+ * `who` answers the first question. It used to be rendered as the second --
+ * "ASK THE ACCOUNT OWNER" -- and an install obeyed exactly that: it stopped,
+ * asked, and waited to be told to run the command printed underneath, so the
+ * person never got the link that command exists to produce.
+ *
+ * Both halves are true and they attach to different things. The owner signs;
+ * the agent runs the command that hands them the link. A step whose command
+ * cannot be run as printed -- a `<placeholder>` nobody may fill in by guessing
+ * -- is the other case, where stopping to ask really is the whole of it.
+ */
+export function stepOwnerLabel(who: StepWho, command: string | undefined): string {
+  if (who === "you") return "you";
+  const runnable = command !== undefined && command.trim() !== "" && !command.includes("<");
+  if (!runnable) return `ASK ${who.toUpperCase()}`;
+  const act: Record<Exclude<StepWho, "you">, string> = {
+    "an operator": "AN OPERATOR supplies it",
+    "the account owner": "THE ACCOUNT OWNER signs it",
+    "the maintainers": "THE MAINTAINERS fix it",
+  };
+  // A semicolon, not a dash: the caller joins this to the step's name with a
+  // dash of its own, and two at the same level read as one sentence trailing off.
+  return `${act[who]}; YOU run the command below`;
+}
+
 export const invoke = (command: string, ...args: string[]): string =>
   [process.env.WATERX_INVOKED_AS?.trim() || "node bin/waterx.mjs", command, ...args].join(" ");

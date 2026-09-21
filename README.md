@@ -51,7 +51,10 @@ route depends on lifecycle scripts being allowed. Two things to know:
 
 - **npm** runs it, with a `npm warn allow-scripts` notice on npm ≥ 11. That
   notice is bookkeeping, not a refusal: measured on npm 11.16.0, the build runs
-  and `npx waterx next --json` answers `ok`. Where it *is* a refusal —
+  and `npx waterx next --json` answers `ok`. The `dist/` you find afterwards is
+  what `prepare` just built — **this package does not ship one**, so seeing it
+  there is evidence the script ran, not evidence it was unnecessary. Two
+  separate installs read the warning and concluded the opposite. Where it *is* a refusal —
   `ignore-scripts`, an approval policy, a locked-down CI — the package installs
   with no `dist/`, and the first command says so — `status: "config"`, exit 3 —
   instead of dying with a module-not-found stack. The fix is to **re-run the

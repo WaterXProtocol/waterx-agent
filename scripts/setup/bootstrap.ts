@@ -30,7 +30,7 @@ import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
 import { envPath, getOrCreateWallet, saveToEnv } from "../../src/chain/wallet.ts";
 import { runDoctor } from "../../src/doctor.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
-import { firstRunnable, invoke, succeeded } from "../../src/cli/contract.ts";
+import { firstRunnable, invoke, stepOwnerLabel, succeeded } from "../../src/cli/contract.ts";
 import { confirmed, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
@@ -304,13 +304,11 @@ await run(async () => {
   } else {
     note(`  ${String(remaining.length)} thing(s) left:`);
     for (const step of remaining) {
-      const whose = {
-        you: "you",
-        "an operator": "ASK AN OPERATOR",
-        "the account owner": "ASK THE ACCOUNT OWNER",
-        "the maintainers": "FOR THE MAINTAINERS",
-      }[step.who];
-      note(`    • ${step.what} — ${whose}`);
+      // Whose act it needs AND who runs the command. This printed only the
+      // first half, as an instruction to ask, and an install did exactly that:
+      // it stopped at "ASK THE ACCOUNT OWNER" and waited to be told to run the
+      // line underneath -- so the owner never got the link it produces.
+      note(`    • ${step.what} — ${stepOwnerLabel(step.who, step.command)}`);
       note(`      ${step.why}`);
       if (step.command !== undefined) note(`      ${step.command}`);
     }

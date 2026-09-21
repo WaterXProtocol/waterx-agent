@@ -51,6 +51,7 @@ import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
 import { grantEventCandidates } from "../../src/chain/grant-events.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
+import { nextAfterAdoption } from "../../src/policy.ts";
 import type { DelegateData } from "../../src/api/types.ts";
 import { asNumber, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
@@ -435,6 +436,9 @@ await run(async () => {
     note(`  granted by    ${adopted.accountId}`);
     note(`  owner         ${adopted.ownerAddress}  (read from chain)`);
     note(`  adopted       WATERX_ACCOUNT_ID written; recorded as ${recordedAs}`);
+    if (agent.config.executionPolicy === "read-only") {
+      note("  cannot sign   the execution policy is still read-only — `policy` lists the three");
+    }
 
   // What was just taken on. This is the moment of maximum ignorance -- an
   // account id, and no idea whether it holds nothing or ten leveraged
@@ -456,8 +460,12 @@ await run(async () => {
     setOutcome(
       succeeded(
         `This wallet now trades ${adopted.accountId}, owned by ${adopted.ownerAddress}. ` +
-          `Recorded as ${recordedAs}.`,
-        { nextCommand: invoke("next", "--json") },
+          `Recorded as ${recordedAs}.` +
+          (agent.config.executionPolicy === "read-only"
+            ? ` Nothing can be signed yet: the execution policy is read-only, and which of the ` +
+              `three modes to run is a person's choice.`
+            : ""),
+        { nextCommand: nextAfterAdoption(agent.config.executionPolicy, invoke) },
       ),
     );
   } catch (error) {
