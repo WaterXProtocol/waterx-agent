@@ -618,6 +618,23 @@ export const POLICY_MODES: readonly PolicyMode[] = ["read-only", "interactive", 
 
 const RANK: Record<PolicyMode, number> = { "read-only": 0, interactive: 1, "delegated-auto": 2 };
 
+/**
+ * Where a caller goes once an account has been adopted.
+ *
+ * Adoption is the moment the grant lands, and the moment it becomes obvious
+ * that a grant is not permission to trade: the local policy is still
+ * `read-only`, so nothing can be signed. There are two independent locks here
+ * -- one on chain, one in `.env` -- and an install worked that out for itself
+ * and said so. Pointing at `next` from here costs a hop before the person is
+ * shown the choice that is actually theirs to make.
+ */
+export function nextAfterAdoption(
+  policy: PolicyMode,
+  invoke: (command: string, ...args: string[]) => string,
+): string {
+  return policy === "read-only" ? invoke("policy", "--json") : invoke("next", "--json");
+}
+
 export interface PolicyChoice {
   mode: PolicyMode;
   /** Whether this is the one in force. */

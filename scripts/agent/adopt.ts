@@ -13,6 +13,7 @@ import { exposureLine, exposureWarnings, summarise } from "../../src/agent/expos
 import { AccountNotFoundError, accountObjectReader } from "../../src/chain/account-object.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
+import { nextAfterAdoption } from "../../src/policy.ts";
 import { demand, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
@@ -89,6 +90,11 @@ await run(async () => {
   note(`  owner         ${adopted.ownerAddress}  (read from chain)`);
   note(`  recorded as   ${recordedAs}`);
   note("  wrote         WATERX_ACCOUNT_ID — the owner is read from the account, not stored");
+  if (agent.config.executionPolicy === "read-only") {
+    // The second lock. A grant is not permission to trade: the policy is local
+    // and still read-only, and which mode to run is the person's choice.
+    note("  cannot sign   the execution policy is still read-only — `policy` lists the three");
+  }
 
   // What was just taken on. This is the moment of maximum ignorance -- an
   // account id, and no idea whether it holds nothing or ten leveraged
@@ -119,8 +125,13 @@ await run(async () => {
   );
   setOutcome(
     succeeded(
-      `This wallet now trades ${adopted.accountId}, owned by ${adopted.ownerAddress}. Recorded as ${recordedAs}.`,
-      { nextCommand: invoke("next", "--json") },
+      `This wallet now trades ${adopted.accountId}, owned by ${adopted.ownerAddress}. ` +
+        `Recorded as ${recordedAs}.` +
+        (agent.config.executionPolicy === "read-only"
+          ? ` Nothing can be signed yet: the execution policy is read-only, and which of the ` +
+            `three modes to run is a person's choice.`
+          : ""),
+      { nextCommand: nextAfterAdoption(agent.config.executionPolicy, invoke) },
     ),
   );
 });

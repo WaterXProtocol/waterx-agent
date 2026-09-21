@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { policyChoices } from "../src/policy.ts";
+import { nextAfterAdoption, policyChoices } from "../src/policy.ts";
 
 import { ExecutionPolicyError } from "../src/errors.ts";
 import { loadConfig, signsAsDelegate } from "../src/config.ts";
@@ -400,5 +400,27 @@ describe("policyChoices", () => {
     for (const choice of policyChoices({ current: "read-only", hasScope: true, invoke })) {
       expect(choice.command).toMatch(/^npx waterx policy --set /u);
     }
+  });
+});
+
+/**
+ * Two locks, and the second one is a choice.
+ *
+ * Adoption is when the on-chain grant lands, and when it becomes obvious that a
+ * grant is not permission to trade: the local policy is still `read-only`. An
+ * install worked that out for itself and told its user. Sending them to `next`
+ * from here costs a hop before they are shown the decision that is theirs.
+ */
+describe("nextAfterAdoption", () => {
+  const invoke = (command: string, ...args: string[]): string =>
+    ["npx waterx", command, ...args].join(" ");
+
+  it("sends a read-only process to the choice, not to another status read", () => {
+    expect(nextAfterAdoption("read-only", invoke)).toBe("npx waterx policy --json");
+  });
+
+  it("leaves a process that can already sign on the normal loop", () => {
+    expect(nextAfterAdoption("interactive", invoke)).toBe("npx waterx next --json");
+    expect(nextAfterAdoption("delegated-auto", invoke)).toBe("npx waterx next --json");
   });
 });

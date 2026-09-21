@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { classify } from "../src/cli/classify.ts";
-import { EXIT, firstRunnable, invoke } from "../src/cli/contract.ts";
+import { EXIT, firstRunnable, invoke, stepOwnerLabel } from "../src/cli/contract.ts";
 import { SignerError } from "../src/chain/signer.ts";
 import {
   AmbiguousSubmissionError,
@@ -191,5 +191,40 @@ describe("firstRunnable", () => {
   it("always yields something, so no envelope is a dead end", () => {
     expect(firstRunnable([], FALLBACK)).toBe(FALLBACK);
     expect(firstRunnable([undefined, undefined], FALLBACK)).toBe(FALLBACK);
+  });
+});
+
+/**
+ * Whose act a step needs, and who runs the command under it.
+ *
+ * These were the same field, rendered as "ASK THE ACCOUNT OWNER", and an
+ * install obeyed it exactly: it stopped, asked, and waited to be told to run
+ * the line underneath — so the owner never got the link that command produces.
+ */
+describe("stepOwnerLabel", () => {
+  const GRANT = "npx waterx onboard --wait 300 --json";
+
+  it("says the owner signs it AND that the agent runs the command", () => {
+    const label = stepOwnerLabel("the account owner", GRANT);
+
+    expect(label).toContain("THE ACCOUNT OWNER signs it");
+    expect(label).toMatch(/YOU run the command/u);
+    // The old label was an instruction to stop.
+    expect(label).not.toMatch(/^ASK/u);
+  });
+
+  it("still says ask when there is nothing the agent can run", () => {
+    // Testnet collateral: the command needs a number nobody may guess, so
+    // stopping to ask really is the whole of the step.
+    expect(stepOwnerLabel("an operator", "npx waterx deposit --amount <n> --yes --json")).toBe(
+      "ASK AN OPERATOR",
+    );
+    expect(stepOwnerLabel("the maintainers", undefined)).toBe("ASK THE MAINTAINERS");
+    expect(stepOwnerLabel("an operator", "   ")).toBe("ASK AN OPERATOR");
+  });
+
+  it("leaves the caller's own steps alone", () => {
+    expect(stepOwnerLabel("you", "npx waterx fund-sui --json")).toBe("you");
+    expect(stepOwnerLabel("you", undefined)).toBe("you");
   });
 });
