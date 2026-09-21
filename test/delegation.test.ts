@@ -553,6 +553,14 @@ describe("what the grant is said to mean", () => {
     // And names what finishes it, so the owner's grant does not land somewhere
     // nobody goes looking for it.
     expect(step.why).toContain("onboard --wait");
+    // And says WHEN. This read "Once they have granted it, `onboard --wait`
+    // finds the account and adopts it", and an install took that as "run it
+    // afterwards": it decided the command would only poll, withheld the link,
+    // handed over the wallet address instead, and stopped. The waiting is the
+    // last thing that command does.
+    expect(step.why).toMatch(/now, not after/u);
+    expect(step.why).toMatch(/prints the link/u);
+    expect(step.why).not.toMatch(/Once they have granted/u);
   });
 
   it("puts the meanings and the boundary on the detailed screen, not just the names", () => {

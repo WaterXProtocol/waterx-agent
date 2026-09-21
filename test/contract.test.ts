@@ -10,7 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { classify } from "../src/cli/classify.ts";
-import { EXIT, invoke } from "../src/cli/contract.ts";
+import { EXIT, firstRunnable, invoke } from "../src/cli/contract.ts";
 import { SignerError } from "../src/chain/signer.ts";
 import {
   AmbiguousSubmissionError,
@@ -146,5 +146,50 @@ describe("exit codes", () => {
   it("gives every status its own code", () => {
     const codes = Object.values(EXIT);
     expect(new Set(codes).size).toBe(codes.length);
+  });
+});
+
+/**
+ * An envelope with no exit is where an agent stops.
+ *
+ * `bootstrap` handed back no `nextCommand` on the path it takes most often --
+ * setup unfinished -- and an install read that as the end of the road: it had
+ * a wallet, a remaining item addressed to the account owner, and nothing to
+ * run. It stopped one command short of the link its user needed.
+ */
+describe("firstRunnable", () => {
+  const FALLBACK = "npx waterx next --json";
+
+  it("hands back the first command there is", () => {
+    expect(firstRunnable(["npx waterx onboard --wait 300 --json"], FALLBACK)).toBe(
+      "npx waterx onboard --wait 300 --json",
+    );
+  });
+
+  it("skips the steps that carry no command at all", () => {
+    expect(firstRunnable([undefined, "", "  ", "npx waterx doctor --json"], FALLBACK)).toBe(
+      "npx waterx doctor --json",
+    );
+  });
+
+  it("skips a command nobody can run as printed", () => {
+    // `nextCommand` is a promise: copy it, do not compose one. A placeholder
+    // asks the caller to invent a number, which is the one thing an agent must
+    // not do here.
+    expect(firstRunnable(["npx waterx deposit --amount <n> --yes --json"], FALLBACK)).toBe(FALLBACK);
+  });
+
+  it("prefers a runnable command over an earlier placeholder", () => {
+    expect(
+      firstRunnable(
+        ["npx waterx deposit --amount <n> --yes --json", "npx waterx onboard --wait 300 --json"],
+        FALLBACK,
+      ),
+    ).toBe("npx waterx onboard --wait 300 --json");
+  });
+
+  it("always yields something, so no envelope is a dead end", () => {
+    expect(firstRunnable([], FALLBACK)).toBe(FALLBACK);
+    expect(firstRunnable([undefined, undefined], FALLBACK)).toBe(FALLBACK);
   });
 });

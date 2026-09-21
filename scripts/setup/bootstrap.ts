@@ -30,7 +30,7 @@ import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
 import { envPath, getOrCreateWallet, saveToEnv } from "../../src/chain/wallet.ts";
 import { runDoctor } from "../../src/doctor.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
-import { invoke, succeeded } from "../../src/cli/contract.ts";
+import { firstRunnable, invoke, succeeded } from "../../src/cli/contract.ts";
 import { confirmed, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
@@ -347,6 +347,15 @@ await run(async () => {
           submitted: false,
           reconcileRequired: false,
           awaitingApproval: false,
+          // Every other command hands back a pointer; this one did not, on the
+          // path it takes most often. An install read the envelope as the end
+          // of the road -- a wallet, a remaining item addressed to somebody
+          // else, and nothing to run -- and stopped one command short of the
+          // link its user needed.
+          nextCommand: firstRunnable(
+            remaining.map((step) => step.command),
+            invoke("next", "--json"),
+          ),
           details: { remaining },
         },
   );
