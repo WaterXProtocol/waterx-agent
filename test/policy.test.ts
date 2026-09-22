@@ -563,3 +563,74 @@ describe("the cumulative ceiling across restarts", () => {
     expect(m.entries).toEqual([]);
   });
 });
+
+describe("a build that never produced bytes", () => {
+  const meterOf = (): { spent: number; entries: { action: string; collateral: number }[]; record: (e: { action: string; accountId: string; collateral: number }) => void } => {
+    const entries: { action: string; collateral: number }[] = [];
+    return { spent: 0, entries, record: (e) => entries.push({ action: e.action, collateral: e.collateral }) };
+  };
+
+  it("gives the budget back, and says so in the ledger", async () => {
+    // Counted at authorize, which happens before the backend is asked. Left
+    // counted, a backend refusing builds would spend the whole budget on
+    // transactions that never existed — and the ledger now persists, so a
+    // restart would no longer quietly clear it.
+    const m = meterOf();
+    const g = new PolicyGate("delegated-auto", scope(), true, m);
+
+    await expect(
+      g.authorizeAndBuild(open({ collateral: 50 }), NOTHING_OPEN, () =>
+        Promise.reject(new Error("backend refused to build")),
+      ),
+    ).rejects.toThrow(/refused to build/);
+
+    expect(g.spentCollateral).toBe(0);
+    // Append-only: the reversal is recorded, not edited away.
+    expect(m.entries).toEqual([
+      { action: "openLong", collateral: 50 },
+      { action: "openLong:released", collateral: -50 },
+    ]);
+  });
+
+  it("keeps the commitment when the build succeeds", async () => {
+    const m = meterOf();
+    const g = new PolicyGate("delegated-auto", scope(), true, m);
+    await g.authorizeAndBuild(open({ collateral: 50 }), NOTHING_OPEN, () =>
+      Promise.resolve({ txBytes: "AA==" }),
+    );
+
+    expect(g.spentCollateral).toBe(50);
+    expect(m.entries).toEqual([{ action: "openLong", collateral: 50 }]);
+  });
+
+  it("leaves a signed transaction counted once the bytes exist", async () => {
+    // The release is deliberately narrow. Once bytes exist and may have been
+    // sent, an unknown outcome stays counted: over-counting a ceiling is the
+    // safe direction, under-counting hands a restarted process room it used.
+    const m = meterOf();
+    const g = new PolicyGate("delegated-auto", scope(), true, m);
+    const intent = open({ collateral: 50 });
+    const { permit } = await g.authorizeAndBuild(intent, NOTHING_OPEN, () =>
+      Promise.resolve({ txBytes: "AA==" }),
+    );
+    g.consume(permit, intent, "AA==");
+
+    expect(g.spentCollateral).toBe(50);
+    expect(m.entries).toEqual([{ action: "openLong", collateral: 50 }]);
+  });
+
+  it("records nothing either way for an action that commits nothing", async () => {
+    const m = meterOf();
+    const g = new PolicyGate("delegated-auto", scope(), true, m);
+    await expect(
+      g.authorizeAndBuild(
+        { action: "closePosition", accountId: ACCOUNT, increasesExposure: false, ticker: "BTCUSD" },
+        NOTHING_OPEN,
+        () => Promise.reject(new Error("backend refused to build")),
+      ),
+    ).rejects.toThrow(/refused to build/);
+
+    expect(m.entries).toEqual([]);
+    expect(g.spentCollateral).toBe(0);
+  });
+});

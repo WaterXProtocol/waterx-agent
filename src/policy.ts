@@ -486,9 +486,45 @@ export class PolicyGate {
     build: () => Promise<T>,
   ): Promise<{ built: T; permit: Permit }> {
     const permit = this.authorize(intent, options);
-    const built = await build();
+    let built: T;
+    try {
+      built = await build();
+    } catch (error) {
+      // The commitment is counted at authorize, before this could be known. A
+      // build that threw returned no bytes, so nothing was signed and nothing
+      // was sent — releasing it is not optimism about an unknown outcome, it
+      // is the outcome. Left counted, a backend that is refusing builds would
+      // spend the whole budget on transactions that never existed, and now
+      // that the ledger persists, a restart would no longer clear it.
+      this.#release(intent, permit);
+      throw error;
+    }
     this.#bind(permit, built.txBytes);
     return { built, permit };
+  }
+
+  /**
+   * Give back what an intent committed, because it demonstrably did not happen.
+   *
+   * The ledger is append-only, so this appends the reversal rather than
+   * editing the entry away: "committed $50, released $50" is the honest
+   * history, and an append cannot lose a concurrent writer's line.
+   *
+   * Deliberately narrow. It is called only where the failure proves no bytes
+   * existed. Once something is signed, an unknown outcome must stay counted —
+   * over-counting a ceiling is the safe direction, and under-counting hands a
+   * restarted process room it has already used.
+   */
+  #release(intent: WriteIntent, permit: Permit): void {
+    this.permits.delete(permit);
+    // Exactly the condition that counted it, so the two can never diverge.
+    if (EXITS.has(intent.action) || intent.collateral === undefined) return;
+    this.cumulativeCollateral -= intent.collateral;
+    this.meter?.record?.({
+      action: `${intent.action}:released`,
+      accountId: intent.accountId,
+      collateral: -intent.collateral,
+    });
   }
 
   /**

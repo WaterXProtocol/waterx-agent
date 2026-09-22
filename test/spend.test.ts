@@ -126,3 +126,24 @@ describe("budgetWarnings", () => {
     expect(budgetWarnings(undefined, 200).join(" ")).toMatch(/could not be read/u);
   });
 });
+
+describe("a released commitment, read back", () => {
+  it("nets out across a restart", () => {
+    // The reversal has to survive the same way the commitment does: a process
+    // that crashed after a failed build must not come back to a budget that
+    // still counts the transaction which never existed.
+    const path = ledger();
+    recordSpend({ action: "openLong", accountId: "0xa", collateral: 50 }, 1, path);
+    recordSpend({ action: "openLong:released", accountId: "0xa", collateral: -50 }, 2, path);
+    recordSpend({ action: "openLong", accountId: "0xa", collateral: 30 }, 3, path);
+
+    expect(spentTotal(path)).toBe(30);
+    // And the history is still there to read, which is the point of appending
+    // the reversal rather than editing the entry away.
+    expect(readSpend(path)?.map((e) => e.action)).toEqual([
+      "openLong",
+      "openLong:released",
+      "openLong",
+    ]);
+  });
+});

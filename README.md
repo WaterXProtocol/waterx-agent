@@ -804,6 +804,14 @@ warns from four fifths spent, so an unattended runner reports the coming stop
 while there is still room to act on it. If the ledger exists but cannot be
 read, writes refuse rather than silently restarting the count from zero.
 
+The budget is committed when an order is authorized, which is before the
+backend is asked to build it — so a build that fails releases the commitment
+and appends the reversal, rather than charging the budget for a transaction
+that never existed. That release is deliberately narrow: once bytes exist and
+may have been submitted, an unknown outcome stays counted. Over-counting a
+ceiling is the safe direction; under-counting hands a restarted process room it
+has already used.
+
 ## Signer boundary
 
 By default the key is read from `SUI_PRIVATE_KEY` into this process. That is the

@@ -237,6 +237,10 @@ concurrent measurement is supplied by the caller as
 `openCollateralOf(positions, unsettled, maxCollateralPerOrder)` — and an
 exposure-increasing write that arrives without one is refused.
 
+`authorizeAndBuild` commits the amount before calling `build()`, and releases
+it — appending the reversal to the ledger — if the build throws, since no bytes
+existed and nothing was sent. Nothing after a successful build is released.
+
 `--policy` narrows one invocation and can never widen: `--policy read-only` on an
 unattended machine is a safety belt, `--policy delegated-auto` on an interactive
 one is an error. Widening is a change to the configuration, made deliberately
