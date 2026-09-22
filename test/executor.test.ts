@@ -339,6 +339,7 @@ const sponsoredFor = async (action: string): Promise<SponsoredTxResponse> => ({
 const SCOPE: PolicyScope = {
   accounts: [`0x${"a".repeat(64)}`],
   maxCollateralPerOrder: 50,
+  maxOpenCollateral: 1000,
   maxCumulativeCollateral: 200,
   maxLeverage: 5,
   maxSlippagePercent: 1,
@@ -619,7 +620,8 @@ describe("the pre-submit digest", () => {
 });
 
 describe("a permit is bound to its intent", () => {
-  const SCOPED = { ...SCOPE, maxCollateralPerOrder: 1000, maxCumulativeCollateral: 5000 };
+  const SCOPED = { ...SCOPE, maxCollateralPerOrder: 1000,
+  maxOpenCollateral: 1000, maxCumulativeCollateral: 5000 };
 
   it("cannot be spent on a different action", async () => {
     // The escalation this closes. `cancelOrder` passes every ceiling trivially —
@@ -645,7 +647,7 @@ describe("a permit is bound to its intent", () => {
       ...intentFor("openLong"), accountId: account, increasesExposure: true,
       ticker: "BTCUSD", collateral: 10, leverage: 2,
     };
-    const { permit } = await gate.authorizeAndBuild(small, {}, () =>
+    const { permit } = await gate.authorizeAndBuild(small, { openCollateral: 0 }, () =>
       Promise.resolve({ txBytes }),
     );
 
@@ -671,7 +673,8 @@ describe("a permit is bound to its intent", () => {
 });
 
 describe("a permit is bound to its transaction bytes", () => {
-  const SCOPED = { ...SCOPE, maxCollateralPerOrder: 1000, maxCumulativeCollateral: 5000 };
+  const SCOPED = { ...SCOPE, maxCollateralPerOrder: 1000,
+  maxOpenCollateral: 1000, maxCumulativeCollateral: 5000 };
 
   it("cannot be presented alongside different bytes", async () => {
     // Binding the intent proved the request SHAPE was authorized and said

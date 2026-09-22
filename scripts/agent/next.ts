@@ -14,6 +14,7 @@ import { list as listApprovals } from "../../src/agent/approvals.ts";
 import { delegationStatus, perpGrantCommand } from "../../src/agent/delegation.ts";
 import { type DiscoveredGrant, discoverGrants } from "../../src/agent/discovery.ts";
 import { exposureWarnings, summarise } from "../../src/agent/exposure.ts";
+import { budgetWarnings, spentTotal } from "../../src/agent/spend.ts";
 import { decide, sentenceOf } from "../../src/agent/guidance.ts";
 import { accountObjectReader } from "../../src/chain/account-object.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
@@ -146,6 +147,16 @@ await run(async () => {
     freeMargin = exposure.freeMargin;
     positions = exposure.positions;
     orders = exposure.orders;
+  }
+
+  // Only `delegated-auto` spends the cumulative budget, so only it is warned
+  // about one: under the other modes a person is present for every write and
+  // the ceiling is not what will stop them.
+  if (agent.config.executionPolicy === "delegated-auto" && agent.config.policyScope !== undefined) {
+    warnings = [
+      ...warnings,
+      ...budgetWarnings(spentTotal(), agent.config.policyScope.maxCumulativeCollateral),
+    ];
   }
 
   const guidance = decide({

@@ -9,7 +9,12 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { exposureLine, exposureWarnings, summarise } from "../src/agent/exposure.ts";
+import {
+  exposureLine,
+  exposureWarnings,
+  openCollateralOf,
+  summarise,
+} from "../src/agent/exposure.ts";
 import type { Position } from "../src/api/types.ts";
 
 const position = (over: Partial<Position> = {}): Position =>
@@ -143,5 +148,41 @@ describe("exposureLine", () => {
     expect(line).toContain("$11.85 free margin");
     expect(line).toContain("1 open position(s) worth $312");
     expect(line).toContain("2 resting order(s)");
+  });
+});
+
+describe("openCollateralOf", () => {
+  it("adds up what the open positions are holding", () => {
+    expect(openCollateralOf([position({ collateral: 20 }), position({ collateral: 30.5 })], [], 50)).toBe(
+      50.5,
+    );
+  });
+
+  it("counts orders already sent that nobody has filled yet", () => {
+    // The keeper fills asynchronously — measured between ~2 and ~7 minutes on
+    // testnet. Two opens sent seconds apart are both absent from `positions`,
+    // so a ceiling that read only positions would let the second one through
+    // no matter how large the first was.
+    expect(openCollateralOf([], [{ action: "openLong", collateral: 40 }], 50)).toBe(40);
+  });
+
+  it("charges a full per-order ceiling for an in-flight order whose amount was not kept", () => {
+    // Records written before submissions carried an amount have no number to
+    // add. Guessing zero would understate exposure precisely while an order is
+    // outstanding, so the measurement assumes the largest that order could
+    // have been — the per-order ceiling that authorized it.
+    expect(openCollateralOf([], [{ action: "openLong" }], 50)).toBe(50);
+  });
+
+  it("does not count an in-flight order that reduces exposure", () => {
+    // A close in flight is exposure on its way out; charging for it would make
+    // the ceiling refuse the very orders that bring it back down.
+    expect(
+      openCollateralOf([], [{ action: "closePosition" }, { action: "openLong", collateral: 10 }], 50),
+    ).toBe(10);
+  });
+
+  it("reads an account with nothing in it as nothing at risk", () => {
+    expect(openCollateralOf([], [], 50)).toBe(0);
   });
 });

@@ -208,6 +208,7 @@ scope is refused at load:
   "markets": ["BTCUSD"],
   "sides": ["long"],
   "maxCollateralPerOrder": 50,
+  "maxOpenCollateral": 150,
   "maxCumulativeCollateral": 200,
   "maxLeverage": 5,
   "maxSlippagePercent": 1,
@@ -226,6 +227,19 @@ Actions that *reduce* exposure — close, reduce, add margin, cancel — are nev
 metered. A risk limit that could trap a position open would be worse than none.
 Only exposure-increasing actions accrue against `maxCumulativeCollateral`, and a
 refused order does not accrue at all.
+
+`maxOpenCollateral` bounds concurrent exposure — open positions plus unfilled
+orders — and recovers when a position closes; `maxCumulativeCollateral` is a
+lifetime budget that only decays, persisted across restarts in
+`.waterx/spend.jsonl` (`WATERX_SPEND_FILE`). `PolicyGate` does no I/O, so the
+concurrent measurement is supplied by the caller as
+`AuthorizeOptions.openCollateral` — `Agent.submit` measures it with
+`openCollateralOf(positions, unsettled, maxCollateralPerOrder)` — and an
+exposure-increasing write that arrives without one is refused.
+
+`authorizeAndBuild` commits the amount before calling `build()`, and releases
+it — appending the reversal to the ledger — if the build throws, since no bytes
+existed and nothing was sent. Nothing after a successful build is released.
 
 `--policy` narrows one invocation and can never widen: `--policy read-only` on an
 unattended machine is a safety belt, `--policy delegated-auto` on an interactive

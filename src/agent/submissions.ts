@@ -38,6 +38,15 @@ export interface Submission {
   ticker?: string;
   positionId?: number;
   orderId?: number;
+  /**
+   * Display USD this submission commits, when it commits any.
+   *
+   * Recorded so an in-flight order counts against a concurrent ceiling. Without
+   * it, two orders sent seconds apart both pass that check: neither is in
+   * `positions` yet, because a keeper has not filled them. Absent on records
+   * written before this existed, and on actions that commit nothing.
+   */
+  collateral?: number;
 }
 
 /** What the chain and the indexer eventually said. */

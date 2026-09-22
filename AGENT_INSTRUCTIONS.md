@@ -349,13 +349,26 @@ policy and the ceilings in force. To write a scope file for unattended
 ```bash
 npx waterx limits --write policy.json \
   --accounts 0x… --markets BTCUSD,ETHUSD --sides long \
-  --max-collateral-per-order 50 --max-cumulative-collateral 200 \
+  --max-collateral-per-order 50 --max-open-collateral 150 \
+  --max-cumulative-collateral 200 \
   --max-leverage 5 --max-slippage-percent 1 \
   --not-after 2026-12-31T00:00:00Z --json
 ```
 
 Every ceiling is mandatory. An optional ceiling is one somebody forgets, and a
 forgotten ceiling under an auto-approving policy is an unbounded one.
+
+Two of them bound different things, and picking the wrong one to tune is the
+mistake to avoid. `--max-open-collateral` is what may be at risk **at once** —
+open positions plus orders already sent that nobody has filled — and it frees
+up when a position closes. `--max-cumulative-collateral` is a **lifetime
+budget** that only decays, and it survives restarts. Opening and closing the
+same $50 position four times never holds more than $50 at risk and still
+spends $200 of the budget, so set the budget as a long-run bound on total
+activity and treat the concurrent ceiling as the risk limit. `npx waterx
+limits --json` reports how much budget is left; `npx waterx next` warns from
+four fifths spent. Neither ceiling can be raised for one invocation — that is a
+deliberate edit to the scope file.
 `delegated-auto` also requires a **delegate** key, not the owner's: a delegate
 cannot withdraw or grant authority on chain, which is the whole reason
 unattended trading is a bounded risk.
