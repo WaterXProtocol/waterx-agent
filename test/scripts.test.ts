@@ -319,3 +319,40 @@ describe("the bin shim", () => {
     expect(files).toContain("!dist/scripts/dev");
   });
 });
+
+/**
+ * The scope-writing command as an agent will copy it.
+ *
+ * Every ceiling in a scope is mandatory and the file is refused whole when one
+ * is missing, so the example in the docs is not illustrative — it is the
+ * command that runs. Adding a required ceiling is exactly the change that
+ * leaves that example one flag short, and the result is not a clear error at
+ * the point of the mistake: `limits --write` fails, or writes a file that a
+ * runner refuses later, for a reason the agent did not cause and cannot see.
+ *
+ * So the example is checked against what the script actually demands.
+ */
+describe("the documented scope-writing command", () => {
+  const source = readFileSync("scripts/agent/limits.ts", "utf8");
+  // The two helpers that refuse a missing value, and the flag each one names.
+  const required = new Set(
+    [...source.matchAll(/(?:numeric|demand)\(\s*args\.\w+,\s*"(--[a-z-]+)"/g)].map(
+      (m) => m[1] as string,
+    ),
+  );
+
+  it("names every flag the script refuses to run without", () => {
+    expect(required.size, "no required flags found — the regex stopped matching").toBeGreaterThan(5);
+
+    for (const doc of ["AGENT_INSTRUCTIONS.md", "SKILL.md", "README.md", "AGENT.md"]) {
+      const text = readFileSync(doc, "utf8");
+      for (const block of text.matchAll(/```bash\n([^`]*?limits[^`]*?--write[^`]*?)```/g)) {
+        const example = block[1] as string;
+        const missing = [...required].filter((flag) => !example.includes(flag));
+        expect(missing, `${doc}: the \`limits --write\` example omits ${missing.join(", ")}`).toEqual(
+          [],
+        );
+      }
+    }
+  });
+});

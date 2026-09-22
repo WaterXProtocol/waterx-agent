@@ -42,7 +42,28 @@ export interface PolicyScope {
   sides?: ("long" | "short")[];
   /** Required. Display USD per opening order. */
   maxCollateralPerOrder: number;
-  /** Required. Display USD summed across this process's lifetime. */
+  /**
+   * Required. Display USD committed to OPEN positions at any one moment,
+   * counting orders already sent that no keeper has filled yet.
+   *
+   * The ceiling people mean when they say "this agent may risk at most $X of
+   * my money". `maxCumulativeCollateral` bounds it too, arithmetically — what
+   * is open can never exceed what was ever committed — but it is a bound that
+   * decays: every close-and-reopen spends headroom without changing what is at
+   * risk, so a strategy that turns over stops trading long before it has taken
+   * the risk anyone agreed to.
+   */
+  maxOpenCollateral: number;
+  /**
+   * Required. Display USD summed across this installation's life, including
+   * across restarts — see `src/agent/spend.ts`.
+   *
+   * Not the same job as `maxOpenCollateral`, and not replaceable by it: a
+   * concurrent ceiling alone permits unbounded churn. Open, close, repeat, and
+   * exposure never breaches $X while fees, slippage and funding bleed the
+   * account down. This is the only ceiling that bounds how much capital is put
+   * at risk in total, so it belongs well above the concurrent one.
+   */
   maxCumulativeCollateral: number;
   /** Required. */
   maxLeverage: number;
@@ -297,11 +318,35 @@ export function fingerprintIntent(intent: WriteIntent): string {
 export interface AuthorizeOptions {
   /** Required under `interactive`. Absent means "do not sign". */
   confirm?: boolean;
+  /**
+   * Display USD already committed to open positions and to orders still in
+   * flight, MEASURED by the caller.
+   *
+   * Required under `delegated-auto` for anything that commits collateral: the
+   * gate is synchronous and reads nothing, so the number has to arrive from
+   * somebody who looked. Absent, the concurrent ceiling refuses rather than
+   * assuming zero — an unchecked ceiling is not a ceiling.
+   */
+  openCollateral?: number;
+}
+
+/**
+ * The running total, and where to write the next entry.
+ *
+ * Kept outside the gate so the gate stays synchronous and free of I/O — the
+ * same reason `adoptAccount` takes its effects. `spent` is seeded from the
+ * ledger on disk; `record` appends. A gate built without one starts from zero,
+ * which is only correct for a mode that has no cumulative ceiling.
+ */
+export interface SpendMeter {
+  spent: number;
+  record?: (entry: { action: string; accountId: string; collateral: number }) => void;
 }
 
 export class PolicyGate {
   private readonly permits = new Set<Permit>();
-  private cumulativeCollateral = 0;
+  private cumulativeCollateral: number;
+  private readonly meter: SpendMeter | undefined;
 
   constructor(
     readonly mode: PolicyMode,
@@ -315,7 +360,16 @@ export class PolicyGate {
      * owner key in an unattended process.
      */
     signingAsDelegate = false,
+    /**
+     * What has already been committed, and where to write what this gate
+     * commits. Without it the cumulative ceiling starts from zero every time a
+     * process starts, which is what it used to do — and a runner that crashes
+     * and restarts is a thing this package is built to survive.
+     */
+    meter?: SpendMeter,
   ) {
+    this.cumulativeCollateral = meter?.spent ?? 0;
+    this.meter = meter;
     if (mode === "delegated-auto") {
       if (scope === undefined) {
         throw new ExecutionPolicyError(
@@ -376,12 +430,21 @@ export class PolicyGate {
               `delegated-auto. Run it deliberately under "interactive" with the owner key.`,
           );
         }
-        this.assertInScope(intent);
+        this.assertInScope(intent, options);
         break;
     }
 
     if (!EXITS.has(intent.action) && intent.collateral !== undefined) {
       this.cumulativeCollateral += intent.collateral;
+      // Written where it is counted, so a crash between here and the signature
+      // leaves the budget SPENT rather than free. Over-counting a ceiling is
+      // the safe direction; the other one hands a restarted process room it
+      // has already used.
+      this.meter?.record?.({
+        action: intent.action,
+        accountId: intent.accountId,
+        collateral: intent.collateral,
+      });
     }
     const permit: Permit = { action: intent.action, fingerprint: fingerprintIntent(intent) };
     this.permits.add(permit);
@@ -481,10 +544,14 @@ export class PolicyGate {
     this.permits.delete(permit);
   }
 
-  private assertInScope(intent: WriteIntent): void {
+  private assertInScope(intent: WriteIntent, options: AuthorizeOptions): void {
     // `scope` is non-undefined for this mode — the constructor refuses otherwise.
     const scope = this.scope as PolicyScope;
-    const refuse = (reason: string): never => {
+    // The annotation is on the binding, not only on the arrow. Control-flow
+    // analysis narrows after a `never` call only when the *variable* is typed
+    // that way, and without it every check that refuses a value still has to
+    // prove that value usable on the next line.
+    const refuse: (reason: string) => never = (reason) => {
       throw new ExecutionPolicyError(`Out of scope: ${intent.action} — ${reason}.`);
     };
 
@@ -528,6 +595,28 @@ export class PolicyGate {
             `${String(scope.maxCollateralPerOrder)}`,
         );
       }
+      // What is open right now. The gate reads nothing, so this arrives
+      // measured; absent, the ceiling cannot be checked and the only honest
+      // answer is no. A NaN measurement would pass every comparison below, so
+      // it is refused by the same rule as a NaN intent.
+      const open = options.openCollateral;
+      if (open === undefined) {
+        refuse(
+          `the concurrent ceiling (${String(scope.maxOpenCollateral)}) cannot be checked without a ` +
+            `measurement of what is already open, and none was supplied`,
+        );
+      }
+      if (!Number.isFinite(open) || open < 0) {
+        refuse(`the measurement of open collateral (${String(open)}) is not a usable number`);
+      }
+      const projectedOpen = open + intent.collateral;
+      if (projectedOpen > scope.maxOpenCollateral) {
+        refuse(
+          `open collateral would reach ${String(projectedOpen)}, past the ceiling ` +
+            `${String(scope.maxOpenCollateral)} (${String(open)} already open)`,
+        );
+      }
+
       const projected = this.cumulativeCollateral + intent.collateral;
       if (projected > scope.maxCumulativeCollateral) {
         refuse(
@@ -573,6 +662,7 @@ function assertScopeComplete(scope: PolicyScope): void {
   if (scope.accounts.length === 0) missing.push("accounts (non-empty)");
   for (const [key, value] of [
     ["maxCollateralPerOrder", scope.maxCollateralPerOrder],
+    ["maxOpenCollateral", scope.maxOpenCollateral],
     ["maxCumulativeCollateral", scope.maxCumulativeCollateral],
     ["maxLeverage", scope.maxLeverage],
     ["maxSlippagePercent", scope.maxSlippagePercent],

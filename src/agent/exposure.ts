@@ -14,6 +14,7 @@
  * feed matters whether the process is `ready` or half configured.
  */
 import type { Position } from "../api/types.ts";
+import { EXITS } from "../chain/verify.ts";
 
 /** How close to its liquidation estimate a position has to be to be worth saying. */
 export const NEAR_LIQUIDATION_PERCENT = 15;
@@ -32,6 +33,14 @@ export interface NearLiquidation {
 
 export interface Exposure {
   freeMargin: number;
+  /**
+   * Collateral committed to open positions, in display USD.
+   *
+   * The money that can actually be lost right now, which is what an operator
+   * means when they cap "how much this agent may risk at a time". Notional is
+   * the leveraged figure; this is the stake.
+   */
+  openCollateral: number;
   /** Open notional in USD, which is what leverage is applied to. */
   notional: number;
   positions: number;
@@ -72,9 +81,11 @@ export function summarise(input: {
 
   const nearLiquidation: NearLiquidation[] = [];
   let notional = 0;
+  let openCollateral = 0;
   let stale = 0;
   for (const position of input.positions) {
     notional += asNumber(position.size);
+    openCollateral += asNumber(position.collateral);
     if (position.priceStale) {
       stale += 1;
       // Distance is computed from spot, and spot is not a live read here. A
@@ -97,6 +108,7 @@ export function summarise(input: {
 
   return {
     freeMargin,
+    openCollateral: Math.round(openCollateral * 100) / 100,
     notional: Math.round(notional * 100) / 100,
     positions: input.positions.length,
     orders: input.orders,
@@ -156,4 +168,38 @@ export function exposureLine(exposure: Exposure): string {
     `$${String(exposure.freeMargin)} free margin, ${String(exposure.positions)} open position(s) ` +
     `worth $${String(exposure.notional)}, ${String(exposure.orders)} resting order(s)`
   );
+}
+
+/** An order that was sent and has not settled, as the concurrent ceiling sees it. */
+export interface InFlight {
+  action: string;
+  /** Display USD it commits. Absent on records written before this was kept. */
+  collateral?: number;
+}
+
+/**
+ * Collateral at risk right now: open positions, plus orders already sent that
+ * nobody has filled.
+ *
+ * The second term is not a nicety. A keeper fills asynchronously, so two opens
+ * sent seconds apart are both absent from `positions` — and a concurrent
+ * ceiling that counted only positions would let them both through.
+ *
+ * A submission from before sizes were recorded has no amount. It is counted as
+ * `perOrderCeiling`, because that is the most it can have been: every order
+ * that got sent had already passed that ceiling. Counting it as zero would
+ * widen the one thing this function exists to hold.
+ */
+export function openCollateralOf(
+  positions: readonly Position[],
+  inFlight: readonly InFlight[],
+  perOrderCeiling: number,
+): number {
+  let total = 0;
+  for (const position of positions) total += asNumber(position.collateral);
+  for (const order of inFlight) {
+    if (EXITS.has(order.action)) continue;
+    total += order.collateral === undefined ? perOrderCeiling : asNumber(order.collateral);
+  }
+  return Math.round(total * 100) / 100;
 }

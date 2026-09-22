@@ -145,6 +145,12 @@ await run(async () => {
           ? {}
           : { positionId: request.preview.positionId }),
         ...(request.preview.orderId === undefined ? {} : { orderId: request.preview.orderId }),
+        // What it commits, so an order nobody has filled yet still counts
+        // against the concurrent ceiling. Two opens sent seconds apart are both
+        // invisible in `positions` until a keeper gets to them.
+        ...(request.plan.intent.collateral === undefined
+          ? {}
+          : { collateral: request.plan.intent.collateral }),
       });
       submissionId = submission.id;
       // Before the transaction, not after it. An approval that only becomes

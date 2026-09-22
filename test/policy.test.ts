@@ -17,12 +17,21 @@ const OTHER = `0x${"b".repeat(64)}`;
 const scope = (overrides: Partial<PolicyScope> = {}): PolicyScope => ({
   accounts: [ACCOUNT],
   maxCollateralPerOrder: 50,
+  maxOpenCollateral: 1000,
   maxCumulativeCollateral: 200,
   maxLeverage: 5,
   maxSlippagePercent: 1,
   notAfter: "2099-01-01T00:00:00Z",
   ...overrides,
 });
+
+/**
+ * A world with no open positions. The gate refuses a write it cannot measure
+ * against the concurrent ceiling, so tests about every *other* rule have to
+ * state this rather than leave it out — a default of "assume nothing is open"
+ * living in the gate is exactly the hole this ceiling closes.
+ */
+const NOTHING_OPEN = { openCollateral: 0 };
 
 const open = (overrides: Partial<WriteIntent> = {}): WriteIntent => ({
   action: "openLong",
@@ -64,7 +73,8 @@ describe("scope completeness", () => {
 
   it("refuses a cumulative ceiling below the per-order one — nothing could pass", () => {
     expect(() =>
-      new PolicyGate("delegated-auto", scope({ maxCollateralPerOrder: 100, maxCumulativeCollateral: 50 }), true),
+      new PolicyGate("delegated-auto", scope({ maxCollateralPerOrder: 100,
+  maxOpenCollateral: 1000, maxCumulativeCollateral: 50 }), true),
     ).toThrow(/no order could ever be placed/);
   });
 });
@@ -162,7 +172,7 @@ describe("unmeasurable amounts", () => {
     expect(() => gate.authorize(open({ collateral: Number.NaN }))).toThrow(/no ceiling can bound/);
     expect(gate.spentCollateral).toBe(0);
     // The gate must still work afterwards.
-    expect(() => gate.authorize(open({ collateral: 10 }))).not.toThrow();
+    expect(() => gate.authorize(open({ collateral: 10 }), NOTHING_OPEN)).not.toThrow();
     expect(gate.spentCollateral).toBe(10);
   });
 
@@ -188,7 +198,7 @@ describe("scope enforcement", () => {
     new PolicyGate("delegated-auto", scope(overrides), true);
 
   it("allows an in-scope order", () => {
-    expect(() => gate().authorize(open())).not.toThrow();
+    expect(() => gate().authorize(open(), NOTHING_OPEN)).not.toThrow();
   });
 
   it("refuses an account the scope does not name", () => {
@@ -198,7 +208,7 @@ describe("scope enforcement", () => {
   it("refuses a market outside an allowlist, and allows one inside it", () => {
     const g = gate({ markets: ["BTCUSD"] });
     expect(() => g.authorize(open({ ticker: "ETHUSD" }))).toThrow(/ETHUSD/);
-    expect(() => g.authorize(open({ ticker: "BTCUSD" }))).not.toThrow();
+    expect(() => g.authorize(open({ ticker: "BTCUSD" }), NOTHING_OPEN)).not.toThrow();
   });
 
   it("refuses a side the scope excludes", () => {
@@ -225,10 +235,12 @@ describe("scope enforcement", () => {
 describe("the cumulative ceiling", () => {
   it("accrues across orders and refuses the one that would cross it", () => {
     const g = new PolicyGate("delegated-auto", scope({ maxCumulativeCollateral: 100 }), true);
-    g.authorize(open({ collateral: 50 }));
-    g.authorize(open({ collateral: 40 }));
+    g.authorize(open({ collateral: 50 }), NOTHING_OPEN);
+    g.authorize(open({ collateral: 40 }), NOTHING_OPEN);
     expect(g.spentCollateral).toBe(90);
-    expect(() => g.authorize(open({ collateral: 20 }))).toThrow(/cumulative collateral/);
+    expect(() => g.authorize(open({ collateral: 20 }), NOTHING_OPEN)).toThrow(
+      /cumulative collateral/,
+    );
     // The refused order must not have been counted.
     expect(g.spentCollateral).toBe(90);
   });
@@ -236,10 +248,10 @@ describe("the cumulative ceiling", () => {
   it("does not meter actions that reduce exposure", () => {
     const g = new PolicyGate(
       "delegated-auto",
-      scope({ maxCollateralPerOrder: 100, maxCumulativeCollateral: 100 }),
+      scope({ maxCollateralPerOrder: 100, maxOpenCollateral: 1000, maxCumulativeCollateral: 100 }),
       true,
     );
-    g.authorize(open({ collateral: 100 }));
+    g.authorize(open({ collateral: 100 }), NOTHING_OPEN);
     // Closing must stay available at the ceiling: a risk limit that trapped a
     // position open would be worse than none.
     expect(() =>
@@ -287,6 +299,7 @@ describe("the ceilings never trap a position", () => {
   const scope: PolicyScope = {
     accounts: [`0x${"a".repeat(64)}`],
     maxCollateralPerOrder: 10,
+  maxOpenCollateral: 1000,
     maxCumulativeCollateral: 20,
     maxLeverage: 3,
     maxSlippagePercent: 1,
@@ -422,5 +435,131 @@ describe("nextAfterAdoption", () => {
   it("leaves a process that can already sign on the normal loop", () => {
     expect(nextAfterAdoption("interactive", invoke)).toBe("npx waterx next --json");
     expect(nextAfterAdoption("delegated-auto", invoke)).toBe("npx waterx next --json");
+  });
+});
+
+describe("the concurrent ceiling", () => {
+  const gate = (overrides: Partial<PolicyScope> = {}): PolicyGate =>
+    new PolicyGate("delegated-auto", scope({ maxOpenCollateral: 100, ...overrides }), true);
+
+  it("refuses a write it cannot measure", () => {
+    // The gate performs no I/O, so the measurement arrives from the caller. If
+    // a caller forgets it, the honest answer is no: treating "unmeasured" as
+    // "nothing open" would silently disable the only ceiling that bounds how
+    // much can be at risk at one time.
+    expect(() => gate().authorize(open({ collateral: 10 }))).toThrow(/without a measurement/);
+  });
+
+  it("refuses a measurement that is not a usable number", () => {
+    // NaN > x is false for every x, so an unchecked NaN measurement would pass
+    // the ceiling below no matter how much was actually open.
+    expect(() => gate().authorize(open({ collateral: 10 }), { openCollateral: Number.NaN })).toThrow(
+      /not a usable number/,
+    );
+    expect(() => gate().authorize(open({ collateral: 10 }), { openCollateral: -1 })).toThrow(
+      /not a usable number/,
+    );
+  });
+
+  it("refuses the order that would carry open collateral past the ceiling", () => {
+    expect(() => gate().authorize(open({ collateral: 20 }), { openCollateral: 95 })).toThrow(
+      /open collateral would reach 115, past the ceiling 100/,
+    );
+  });
+
+  it("allows the order that lands exactly on it", () => {
+    // A ceiling is a bound, not a gap: refusing 100 of 100 would make the
+    // configured number mean something other than what it says.
+    expect(() => gate().authorize(open({ collateral: 20 }), { openCollateral: 80 })).not.toThrow();
+  });
+
+  it("frees up when positions close, where the cumulative one never does", () => {
+    // The two ceilings answer different questions, and this is the case that
+    // separates them. An agent that opens and closes the same $50 position is
+    // never holding more than $50 at risk, but each open still spends $50 of
+    // the cumulative budget, which only ever decays. So a $200 cumulative
+    // ceiling stops the fifth round trip on an account whose risk never moved:
+    const cumulativeOnly = new PolicyGate(
+      "delegated-auto",
+      scope({ maxOpenCollateral: 100, maxCumulativeCollateral: 200 }),
+      true,
+    );
+    for (let i = 0; i < 4; i += 1) {
+      cumulativeOnly.authorize(open({ collateral: 50 }), { openCollateral: 50 });
+    }
+    expect(() =>
+      cumulativeOnly.authorize(open({ collateral: 50 }), { openCollateral: 50 }),
+    ).toThrow(/cumulative collateral/);
+
+    // The concurrent ceiling measures what is open NOW, so the same round trip
+    // is unbounded in count and still bounded in risk.
+    const g = gate({ maxCumulativeCollateral: 100_000 });
+    for (let i = 0; i < 20; i += 1) {
+      expect(() => g.authorize(open({ collateral: 50 }), { openCollateral: 50 })).not.toThrow();
+    }
+  });
+
+  it("does not measure an action that reduces exposure", () => {
+    // Closing must stay available with the book full, or the ceiling traps
+    // positions open — worse than having no ceiling at all.
+    expect(() =>
+      gate().authorize({
+        action: "closePosition",
+        accountId: ACCOUNT,
+        increasesExposure: false,
+        ticker: "BTCUSD",
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe("the cumulative ceiling across restarts", () => {
+  const meter = (spent: number): { spent: number; entries: unknown[]; record: (e: unknown) => void } => {
+    const entries: unknown[] = [];
+    return { spent, entries, record: (e) => entries.push(e) };
+  };
+
+  it("starts from what was already spent, not from zero", () => {
+    // Before this, a runner that crashed and restarted got its whole budget
+    // back — so the cumulative ceiling bounded a process, not an installation.
+    const m = meter(150);
+    const g = new PolicyGate("delegated-auto", scope({ maxCumulativeCollateral: 200 }), true, m);
+
+    expect(g.spentCollateral).toBe(150);
+    expect(() => g.authorize(open({ collateral: 40 }), NOTHING_OPEN)).not.toThrow();
+    expect(() => g.authorize(open({ collateral: 40 }), NOTHING_OPEN)).toThrow(
+      /cumulative collateral/,
+    );
+  });
+
+  it("records what it commits, so the next process can read it back", () => {
+    const m = meter(0);
+    const g = new PolicyGate("delegated-auto", scope(), true, m);
+    g.authorize(open({ collateral: 10 }), NOTHING_OPEN);
+
+    expect(m.entries).toEqual([{ action: "openLong", accountId: ACCOUNT, collateral: 10 }]);
+  });
+
+  it("records nothing for a write it refused", () => {
+    // A ledger that counted refused orders would ratchet the ceiling down on
+    // trades that never happened.
+    const m = meter(0);
+    const g = new PolicyGate("delegated-auto", scope(), true, m);
+
+    expect(() => g.authorize(open({ collateral: 51 }), NOTHING_OPEN)).toThrow(/per-order/);
+    expect(m.entries).toEqual([]);
+  });
+
+  it("records nothing for an action that reduces exposure", () => {
+    const m = meter(0);
+    const g = new PolicyGate("delegated-auto", scope(), true, m);
+    g.authorize({
+      action: "closePosition",
+      accountId: ACCOUNT,
+      increasesExposure: false,
+      ticker: "BTCUSD",
+    });
+
+    expect(m.entries).toEqual([]);
   });
 });

@@ -28,6 +28,7 @@ import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { succeeded } from "../../src/cli/contract.ts";
 import { UsageError } from "../../src/errors.ts";
 import { demand, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
+import { spentTotal } from "../../src/agent/spend.ts";
 
 const args = parseArgs(
   {
@@ -36,7 +37,12 @@ const args = parseArgs(
     markets: { desc: "Comma-separated tickers to allow. Omit for every listed market (--write)" },
     sides: { desc: "long,short — omit for both (--write)" },
     maxCollateralPerOrder: { desc: "Display USD per opening order (--write)" },
-    maxCumulativeCollateral: { desc: "Display USD across this process's lifetime (--write)" },
+    maxOpenCollateral: {
+      desc: "Display USD committed to open positions at any one moment (--write)",
+    },
+    maxCumulativeCollateral: {
+      desc: "Display USD across this installation's life, persisted across restarts (--write)",
+    },
     maxLeverage: { desc: "Leverage ceiling (--write)" },
     maxSlippagePercent: { desc: "Slippage ceiling in percent (--write)" },
     notAfter: { desc: "ISO-8601 instant after which nothing is signed (--write)" },
@@ -55,6 +61,10 @@ await run(async () => {
   const scope = config.policyScope;
   const readiness = signerReadiness(config);
 
+  // `undefined` means the ledger could not be read, which is not the same as
+  // nothing spent -- writes refuse in that state rather than starting over.
+  const spent = spentTotal();
+
   note("");
   note(`  policy        ${config.executionPolicy} on ${config.network}`);
   note(`  signer        ${readiness.ready ? readiness.kind : `none — ${readiness.reason ?? ""}`}`);
@@ -69,7 +79,16 @@ await run(async () => {
     note(`  markets       ${scope.markets?.join(", ") ?? "any listed"}`);
     note(`  sides         ${scope.sides?.join(", ") ?? "both"}`);
     note(`  per order     $${String(scope.maxCollateralPerOrder)}`);
-    note(`  cumulative    $${String(scope.maxCumulativeCollateral)}`);
+    note(`  at once       $${String(scope.maxOpenCollateral)}  (open positions and orders in flight)`);
+    // What is LEFT, not just what the ceiling is. `spentCollateral` existed and
+    // nothing rendered it, so the first sign of an exhausted budget was the
+    // agent refusing to trade.
+    note(
+      spent === undefined
+        ? `  cumulative    $${String(scope.maxCumulativeCollateral)}  (ledger unreadable — writes refuse)`
+        : `  cumulative    $${String(spent)} used of $${String(scope.maxCumulativeCollateral)}` +
+          `, $${String(Math.max(0, scope.maxCumulativeCollateral - spent))} left`,
+    );
     note(`  max leverage  ${String(scope.maxLeverage)}x`);
     note(`  max slippage  ${String(scope.maxSlippagePercent)}%`);
     note(`  expires       ${scope.notAfter}`);
@@ -147,6 +166,7 @@ function writeScope(path: string): void {
     ...(listOf(args.markets) === undefined ? {} : { markets: listOf(args.markets) as string[] }),
     ...(sides === undefined ? {} : { sides: sides as ("long" | "short")[] }),
     maxCollateralPerOrder: numeric(args.maxCollateralPerOrder, "--max-collateral-per-order"),
+    maxOpenCollateral: numeric(args.maxOpenCollateral, "--max-open-collateral"),
     maxCumulativeCollateral: numeric(args.maxCumulativeCollateral, "--max-cumulative-collateral"),
     maxLeverage: numeric(args.maxLeverage, "--max-leverage"),
     maxSlippagePercent: numeric(args.maxSlippagePercent, "--max-slippage-percent"),

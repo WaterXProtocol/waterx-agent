@@ -3,6 +3,7 @@
   "markets": ["BTCUSD", "ETHUSD"],
   "sides": ["long"],
   "maxCollateralPerOrder": 50,
+  "maxOpenCollateral": 150,
   "maxCumulativeCollateral": 200,
   "maxLeverage": 5,
   "maxSlippagePercent": 1,

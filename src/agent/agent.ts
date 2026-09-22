@@ -17,6 +17,9 @@ import { ReadApi } from "../api/read.ts";
 import { TxApi } from "../api/tx.ts";
 import type { AccountData, DelegateData, OrderResponse, Position, TxResponse } from "../api/types.ts";
 import { type AgentConfig, loadConfig, requireAccountId, signsAsDelegate } from "../config.ts";
+import { openCollateralOf } from "./exposure.ts";
+import { recordSpend, spentTotal } from "./spend.ts";
+import { unsettled } from "./submissions.ts";
 import { type ExecuteResult, TxExecutor } from "../chain/executor.ts";
 import { createSigner, signerReadiness } from "../chain/create-signer.ts";
 import type { SignerProvider } from "../chain/signer.ts";
@@ -192,10 +195,50 @@ export class WaterXAgent {
         this.config.executionPolicy,
         this.config.policyScope,
         signsAsDelegate(this.config, signer.address),
+        // Only where there is a cumulative ceiling to account against. Reading
+        // the ledger for a mode that has none would be I/O for nothing.
+        this.config.executionPolicy === "delegated-auto" ? this.#meter() : undefined,
       );
       this.#writer = { gate, executor: new TxExecutor(signer, this.config, this.tx, gate) };
     }
     return this.#writer;
+  }
+
+  /**
+   * The running total, read from disk, and where the next entry goes.
+   *
+   * Unreadable is not zero: a ceiling that cannot be accounted against is not a
+   * ceiling, so an unattended process refuses rather than starting over with a
+   * fresh budget.
+   */
+  #meter(): { spent: number; record: (entry: { action: string; accountId: string; collateral: number }) => void } {
+    const spent = spentTotal();
+    if (spent === undefined) {
+      throw new ExecutionPolicyError(
+        `The spend ledger could not be read, so the cumulative ceiling cannot be accounted ` +
+          `against. delegated-auto refuses rather than starting from zero — fix the file, or ` +
+          `move it aside deliberately if the budget really should restart.`,
+      );
+    }
+    return { spent, record: (entry) => void recordSpend(entry) };
+  }
+
+  /**
+   * Collateral at risk right now, measured — positions plus orders in flight.
+   *
+   * The gate is synchronous and reads nothing, so the number has to come from
+   * here. Only under `delegated-auto`: every other mode has a person on each
+   * write, and the read would cost a round trip on every one of them.
+   */
+  async #measureOpenCollateral(accountId: string): Promise<number> {
+    const positions = await this.read.positions(accountId);
+    const inFlight = unsettled().map((status) => ({
+      action: status.submission.action,
+      ...(status.submission.collateral === undefined
+        ? {}
+        : { collateral: status.submission.collateral }),
+    }));
+    return openCollateralOf(positions, inFlight, this.config.policyScope?.maxCollateralPerOrder ?? 0);
   }
 
   /** Authorizes writes. Touching it loads the key. */
@@ -284,7 +327,14 @@ export class WaterXAgent {
     const executor = this.executor;
     const { built, permit } = await this.gate.authorizeAndBuild(
       plan.intent,
-      options.confirm === undefined ? {} : { confirm: options.confirm },
+      {
+        ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
+        // Measured before the decision, not after it, and only where a ceiling
+        // needs it.
+        ...(this.config.executionPolicy === "delegated-auto"
+          ? { openCollateral: await this.#measureOpenCollateral(plan.intent.accountId) }
+          : {}),
+      },
       () => buildTx(this.tx, plan.request, executor.txBody()),
     );
     return executor.execute(

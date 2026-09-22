@@ -757,8 +757,9 @@ backend-composed protocol extends; the difference is that it is written down.
   "accounts": ["0x…"],            // required; "any account" is not a scope
   "markets": ["BTCUSD"],          // optional allowlist
   "sides": ["long"],              // optional
-  "maxCollateralPerOrder": 50,    // required — display USD
-  "maxCumulativeCollateral": 200, // required — summed over this process's life
+  "maxCollateralPerOrder": 50,    // required — display USD, one order
+  "maxOpenCollateral": 150,       // required — most that may be at risk AT ONCE
+  "maxCumulativeCollateral": 200, // required — lifetime budget; see below
   "maxLeverage": 5,               // required
   "maxSlippagePercent": 1,        // required
   "notAfter": "2026-12-31T00:00:00Z"  // required
@@ -777,6 +778,31 @@ Checks run locally, before any request, so an out-of-scope order costs nothing.
 Actions that *reduce* exposure — close, reduce, add margin, cancel — are
 deliberately never metered: a risk limit that trapped a position open would be
 worse than none.
+
+**Two of these ceilings bound different things, and the difference matters.**
+
+`maxOpenCollateral` bounds what is at risk *right now*: open positions plus
+orders already sent that nobody has filled. It goes back down when a position
+closes. That second term is not a nicety — the keeper fills asynchronously, so
+two opens sent seconds apart are both still absent from `positions`, and a
+ceiling that counted only positions would let the second one through however
+large the first was. Because the gate performs no I/O, the measurement is taken
+by the caller and passed in; **a write that arrives unmeasured is refused**,
+since treating "unmeasured" as "nothing open" would quietly disable the ceiling
+in exactly the situation it exists for.
+
+`maxCumulativeCollateral` is a lifetime budget across this installation, and it
+only ever decays — including across restarts, because it is now recorded in an
+append-only ledger (`.waterx/spend.jsonl`, or `WATERX_SPEND_FILE`) rather than
+held in memory. An agent that opens and closes the same $50 position is never
+holding more than $50 at risk, and still spends $50 of the budget each time, so
+a $200 budget stops the fifth round trip on an account whose risk never moved.
+That is the intended behaviour of a budget, not of a risk limit — set it as a
+long-run bound on total activity and let `maxOpenCollateral` be the ceiling you
+actually tune. `waterx limits` prints how much of it is left, and `waterx next`
+warns from four fifths spent, so an unattended runner reports the coming stop
+while there is still room to act on it. If the ledger exists but cannot be
+read, writes refuse rather than silently restarting the count from zero.
 
 ## Signer boundary
 
