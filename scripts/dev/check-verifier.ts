@@ -17,10 +17,11 @@
 import { initAgent } from "../lib/cli.ts";
 import { assertTransactionMatches } from "../../src/chain/verify.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
+import { configDocumentUrl } from "../../src/configUrl.ts";
 import type { WriteIntent } from "../../src/policy.ts";
 
 const agent = initAgent();
-const deployment = await loadDeployment(agent.config.configUrl);
+const deployment = await loadDeployment(configDocumentUrl(agent.config));
 
 /**
  * Whose account these shapes are built for.

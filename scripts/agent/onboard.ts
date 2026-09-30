@@ -49,6 +49,7 @@ import {
 import { qrLines } from "../../src/cli/qr.ts";
 import { signerReadiness } from "../../src/chain/create-signer.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
+import { configDocumentUrl } from "../../src/configUrl.ts";
 import { grantEventCandidates } from "../../src/chain/grant-events.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
 import { nextAfterAdoption } from "../../src/policy.ts";
@@ -106,7 +107,7 @@ const quiet = { submitted: false, reconcileRequired: false } as const;
  * before it reports anything, and the wait `--wait` runs afterwards.
  */
 async function discoveryDeps(agent: ReturnType<typeof initAgent>): Promise<DiscoveryDeps> {
-  const deployment = await loadDeployment(agent.config.configUrl);
+  const deployment = await loadDeployment(configDocumentUrl(agent.config));
   // The ORIGINAL package id names event types; `idsFor` lists it last.
   const accountPackage = deployment.idsFor("waterx_account").at(-1);
   return {

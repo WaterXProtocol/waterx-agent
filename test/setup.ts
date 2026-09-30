@@ -9,7 +9,9 @@
  *
  * `.env` is deliberately not loaded either. Tests state their own configuration.
  */
-const OWNED = /^(WATERX_|SUI_PRIVATE_KEY$|SUI_NETWORK$|SUI_GRPC_URL$)/;
+// The retired WATERX_CONFIG_URL aliases too: `loadConfig` refuses any one set.
+const OWNED =
+  /^(WATERX_|SUI_PRIVATE_KEY$|SUI_NETWORK$|SUI_GRPC_URL$|E2E_CONFIG_URL$|PREDICT_CONFIG_URL$|CONFIG_URL$)/;
 
 for (const name of Object.keys(process.env)) {
   if (OWNED.test(name)) delete process.env[name];

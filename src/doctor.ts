@@ -16,6 +16,7 @@ import { ReadApi } from "./api/read.ts";
 import { TxApi } from "./api/tx.ts";
 import type { AppInfo, DelegateData } from "./api/types.ts";
 import { type AgentConfig, isDefaultExtraPackage, loadConfig, signsAsDelegate } from "./config.ts";
+import { configDocumentUrl } from "./configUrl.ts";
 import { ExecutionPolicyError } from "./errors.ts";
 import { createSigner, signerReadiness } from "./chain/create-signer.ts";
 import type { SignerProvider } from "./chain/signer.ts";
@@ -108,6 +109,9 @@ const fail = (name: string, detail: string): DoctorCheck => ({ name, status: "fa
 
 export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<DoctorReport> {
   const config = loadConfig(overrides);
+  // The one document URL every check below reads — resolved by the same helper
+  // `execute()` uses, so the preflight cannot vouch for a different document.
+  const configDocument = configDocumentUrl(config);
   const read = new ReadApi(new HttpClient({ baseUrl: config.apiUrl }));
   const checks: DoctorCheck[] = [];
 
@@ -252,7 +256,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // PTB from these ids; the point is that a version bump is visible here rather
   // than surfacing later as an on-chain version-gate abort.
   try {
-    const deployment = await fetchDeploymentConfig(config.configUrl);
+    const deployment = await fetchDeploymentConfig(configDocument);
     const summary = ["waterx_perp", "waterx_account", "waterx_oracle", "waterx_rule"]
       .map((name) => {
         const pkg = deployment.packages[name];
@@ -261,7 +265,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
       .join(" ");
     checks.push(ok("deployment config", summary));
   } catch (error) {
-    checks.push(warn("deployment config", `${config.configUrl} unreadable — ${describe(error)}`));
+    checks.push(warn("deployment config", `${configDocument} unreadable — ${describe(error)}`));
   }
 
   // ── The deployment manifest ───────────────────────────────────────────
@@ -271,8 +275,8 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // agent that cannot trade.
   let deployment: Deployment | undefined;
   try {
-    deployment = await loadDeployment(config.configUrl);
-    const age = manifestAgeMs(config.configUrl) ?? 0;
+    deployment = await loadDeployment(configDocument);
+    const age = manifestAgeMs(configDocument) ?? 0;
     checks.push(
       ok(
         "manifest",
@@ -289,7 +293,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     checks.push(
       fail(
         "manifest",
-        `${config.configUrl} could not be read — ${describe(error)}. Every package pin, object ` +
+        `${configDocument} could not be read — ${describe(error)}. Every package pin, object ` +
           `role and recorded layout is checked against it, so no write can be signed until it ` +
           `is readable.`,
       ),

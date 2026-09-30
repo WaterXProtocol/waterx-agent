@@ -26,6 +26,7 @@ import { corpusFor } from "../src/chain/corpus.ts";
 const corpus = corpusFor("testnet");
 import { KeypairSigner } from "../src/chain/signer.ts";
 import { loadConfig } from "../src/config.ts";
+import { configDocumentUrl } from "../src/configUrl.ts";
 import { ExecutionPolicyError, TxExecutionError } from "../src/errors.ts";
 import {
   type PolicyMode,
@@ -100,7 +101,7 @@ function seedCurrentDeployment(): void {
     ]),
   );
   const pkgs = new Set([...byName.values(), normalizePackage("0x2")]);
-  seedDeployment(loadConfig().configUrl, {
+  seedDeployment(configDocumentUrl(loadConfig()), {
     callable: pkgs,
     typeable: pkgs,
     byName,
@@ -490,7 +491,7 @@ describe("the recorded layouts must describe the running deployment", () => {
     // nobody else — a runner signs for weeks without one. So it is asserted
     // where the signature is produced.
     const { executor: exec, gate } = executor("interactive");
-    const url = loadConfig().configUrl;
+    const url = configDocumentUrl(loadConfig());
     const moved = new Map(
       Object.keys(corpus.packages as Record<string, string>).map((name) => [
         name,

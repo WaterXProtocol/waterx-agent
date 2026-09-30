@@ -121,8 +121,8 @@ export function assertSchemaV2(document: unknown, configUrl: string): void {
       `document (found ${legacy ? "a pre-v2 per-package document with no schema_version" : `schema_version ${JSON.stringify(version)}`}). ` +
       `This agent reads object ids from \`objects.*\` and rule wiring from \`oracle_rules.*\`, ` +
       `which that shape does not carry, so nothing could be checked against it. Point ` +
-      `WATERX_CONFIG_URL at a v2 endpoint — https://main-v2.waterx-config.pages.dev/<network>.json ` +
-      `(production) or https://staging-v2.waterx-config.pages.dev/<network>.json (staging).`,
+      `WATERX_CONFIG_URL at a v2 CDN root — https://main-v2.waterx-config.pages.dev (production) ` +
+      `or https://staging-v2.waterx-config.pages.dev (staging); <network>.json is appended.`,
   );
 }
 

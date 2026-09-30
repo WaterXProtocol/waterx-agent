@@ -55,6 +55,7 @@ import { fromBase64 } from "@mysten/sui/utils";
 
 import { ABI, SDK_VERSION } from "../../src/chain/abi.generated.ts";
 import { loadDeployment, normalizePackage } from "../../src/chain/deployment.ts";
+import { assertNoRetiredConfigAliases, configDocumentUrl } from "../../src/configUrl.ts";
 import { HttpClient } from "../../src/api/http.ts";
 import { ReadApi } from "../../src/api/read.ts";
 import { TxApi } from "../../src/api/tx.ts";
@@ -191,6 +192,12 @@ const capture = async (
 };
 
 const info = await read.info();
+// The network the backend serves decides which config document describes it —
+// the same `{root}/{network}.json` the agent itself reads.
+const network = info.network.replace(/^sui_/, "");
+if (network !== "testnet" && network !== "mainnet") {
+  throw new Error(`the backend reports network ${info.network}, which has no waterx-config document`);
+}
 const asset = info.backingAssets[0]?.coinType ?? "";
 const spot = (await read.ticker("SUIUSD")).spotPrice;
 
@@ -543,8 +550,11 @@ for (const entrypoint of Object.keys(ABI)) {
 // fixture is a photograph with no date on it: the contract can be upgraded, the
 // arguments can move, and every test still passes against a corpus that
 // describes the old one.
+// Resolved exactly as `loadConfig` does: WATERX_CONFIG_URL is a ROOT, unset
+// means the per-network v2 root, and a retired alias refuses.
+assertNoRetiredConfigAliases();
 const deployment = await loadDeployment(
-  process.env.WATERX_CONFIG_URL ?? "https://staging-v2.waterx-config.pages.dev/testnet.json",
+  configDocumentUrl({ configUrl: process.env.WATERX_CONFIG_URL ?? "", network }),
 );
 const packages = Object.fromEntries(
   [...deployment.byName.entries()].sort(([a], [b]) => a.localeCompare(b)),
@@ -619,7 +629,6 @@ const PLACEHOLDERS: Record<string, string> = {
 // capture of one describes the other as entirely changed — and a whole-file
 // write would have made capturing mainnet the act of un-capturing testnet.
 const CORPUS_PATH = "src/chain/abi-corpus.json";
-const network = info.network.replace(/^sui_/, "");
 const existing = JSON.parse(readFileSync(CORPUS_PATH, "utf8")) as {
   version?: number;
   networks?: Record<string, unknown>;

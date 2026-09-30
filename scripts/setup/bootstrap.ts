@@ -24,6 +24,7 @@ import { ownerGrantStep } from "../../src/agent/delegation.ts";
 import { type DiscoveredGrant, discoverGrants } from "../../src/agent/discovery.ts";
 import { accountObjectReader } from "../../src/chain/account-object.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
+import { configDocumentUrl } from "../../src/configUrl.ts";
 import { grantEventCandidates } from "../../src/chain/grant-events.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { ensureEnvIgnored } from "../../src/chain/secrets.ts";
@@ -368,7 +369,7 @@ async function grantsFor(
   wallet: string,
 ): Promise<DiscoveredGrant[] | undefined> {
   try {
-    const deployment = await loadDeployment(agent.config.configUrl);
+    const deployment = await loadDeployment(configDocumentUrl(agent.config));
     // The ORIGINAL package id names event types; `idsFor` lists it last.
     const accountPackage = deployment.idsFor("waterx_account").at(-1);
     const discovery = await discoverGrants(wallet, {

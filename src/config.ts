@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { corpusFor } from "./chain/corpus.ts";
 import { ACTION_RULES } from "./chain/verify.ts";
 import { manifestGraceMs } from "./chain/deployment.ts";
+import { assertNoRetiredConfigAliases, resolveConfigRoot } from "./configUrl.ts";
 import { ConfigError, ExecutionPolicyError } from "./errors.ts";
 import type { PolicyMode, PolicyScope } from "./policy.ts";
 
@@ -47,26 +48,6 @@ const DEFAULT_API_URL: Record<Network, string> = {
 const DEFAULT_GRPC_URL: Record<Network, string> = {
   testnet: "https://fullnode.testnet.sui.io:443",
   mainnet: "https://fullnode.mainnet.sui.io:443",
-};
-
-/**
- * waterx-config deployment document — the single source of truth for package
- * and object ids. The agent never builds a PTB from it, because the backend
- * owns PTB composition; it reads it to pin every call and shared object a
- * backend-built transaction names (`deployment.ts`) and to report what it is
- * pointed at (`pnpm run doctor`). Override with `WATERX_CONFIG_URL` — a COMPLETE
- * document URL, never a base.
- *
- * These are the consolidated `schema_version: 2` documents (`objects.*` /
- * `oracle_rules.*`). The legacy hosts — `config.waterx.app` and
- * `staging.waterx-config.pages.dev` — still serve the pre-v2 per-package shape
- * while they are retired, and this agent refuses that shape outright rather
- * than reading an empty object set out of it. Never `raw.githubusercontent.com`:
- * it rate-limits, and the config repo forbids it.
- */
-const DEFAULT_CONFIG_URL: Record<Network, string> = {
-  testnet: "https://staging-v2.waterx-config.pages.dev/testnet.json",
-  mainnet: "https://main-v2.waterx-config.pages.dev/mainnet.json",
 };
 
 /**
@@ -114,7 +95,13 @@ export interface AgentConfig {
   apiUrl: string;
   /** Sui fullnode gRPC endpoint used to submit unsponsored transactions. */
   grpcUrl: string;
-  /** waterx-config deployment document URL. */
+  /**
+   * waterx-config CDN ROOT, no filename and no trailing slash (e.g.
+   * `https://main-v2.waterx-config.pages.dev`). The document read is
+   * `{configUrl}/{network}.json` — see `configDocumentUrl`. Defaults to the
+   * per-network v2 root; override with `WATERX_CONFIG_URL`. A document URL
+   * (`….json`) is refused, not rewritten.
+   */
   configUrl: string;
   /**
    * Package ids to accept in a transaction on top of the ones the deployment
@@ -337,14 +324,20 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     overrides.network ??
     parseNetwork(stated(process.env.WATERX_NETWORK) ?? stated(process.env.SUI_NETWORK));
 
+  // Before anything else: a retired alias means someone expected an override
+  // to take effect, and reading the default instead would hide that it did not.
+  assertNoRetiredConfigAliases();
+
   const config: AgentConfig = {
     network,
     apiUrl: trimTrailingSlash(
       overrides.apiUrl ?? stated(process.env.WATERX_API_URL) ?? DEFAULT_API_URL[network],
     ),
     grpcUrl: overrides.grpcUrl ?? stated(process.env.SUI_GRPC_URL) ?? DEFAULT_GRPC_URL[network],
-    configUrl:
-      overrides.configUrl ?? stated(process.env.WATERX_CONFIG_URL) ?? DEFAULT_CONFIG_URL[network],
+    configUrl: resolveConfigRoot(
+      overrides.configUrl ?? stated(process.env.WATERX_CONFIG_URL),
+      network,
+    ),
     // Named exceptions REPLACE the shipped ones rather than adding to them: an
     // operator who writes the variable is stating the whole set deliberately,
     // and silently unioning would make it impossible to narrow a default.

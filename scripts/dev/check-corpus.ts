@@ -21,6 +21,7 @@ import { corpusFor, hasCorpusFor, measuredNetworks } from "../../src/chain/corpu
 import { assertCorpusDescribes, loadDeployment } from "../../src/chain/deployment.ts";
 import { ACTION_RULES } from "../../src/chain/verify.ts";
 import { loadConfig } from "../../src/config.ts";
+import { configDocumentUrl } from "../../src/configUrl.ts";
 import { EXIT } from "../../src/cli/contract.ts";
 
 const config = loadConfig();
@@ -34,12 +35,13 @@ if (!hasCorpusFor(config.network)) {
   process.exit(EXIT.config);
 }
 
+const configDocument = configDocumentUrl(config);
 let deployment;
 try {
-  deployment = await loadDeployment(config.configUrl);
+  deployment = await loadDeployment(configDocument);
 } catch (error) {
   process.stderr.write(
-    `unavailable: ${config.configUrl} could not be read — ` +
+    `unavailable: ${configDocument} could not be read — ` +
       `${error instanceof Error ? error.message : String(error)}\n` +
       `This says nothing about whether the corpus is stale.\n`,
   );
