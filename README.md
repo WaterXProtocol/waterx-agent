@@ -897,6 +897,25 @@ await agent.openLong({
 await agent.closePosition({ ticker: "BTC", positionId: 0, confirm: true });
 ```
 
+### Which config document it reads
+
+Package and object ids come from the waterx-config document at
+`{root}/{network}.json`. `WATERX_CONFIG_URL` — and the `configUrl` field of
+`AgentConfig` / `new WaterXAgent({ config: { configUrl } })` — is that **root**,
+a CDN origin with no filename; the network comes from `WATERX_NETWORK` (or the
+`network` override). Unset, it defaults per network:
+
+| network | default root | document read |
+|---|---|---|
+| mainnet | `https://main-v2.waterx-config.pages.dev` | `…/mainnet.json` |
+| testnet | `https://staging-v2.waterx-config.pages.dev` | `…/testnet.json` |
+
+A full document URL (anything ending in `.json`), a non-https URL, a GitHub
+host (`github.com`, `*.githubusercontent.com`) or a root with a query or
+fragment is refused at `loadConfig`, never rewritten. `configDocumentUrl(config)`
+returns the URL actually read. The retired names `E2E_CONFIG_URL`,
+`PREDICT_CONFIG_URL`, `CONFIG_URL` and `WATERX_CONFIG_ROOT` refuse if set.
+
 Amounts are display units everywhere on this surface — USD for collateral and
 prices, base-asset units for size. The conversion to raw `u64`/`u128` strings
 happens once, in `src/units.ts`, which refuses precision it cannot represent
