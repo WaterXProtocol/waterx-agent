@@ -51,13 +51,22 @@ const DEFAULT_GRPC_URL: Record<Network, string> = {
 
 /**
  * waterx-config deployment document — the single source of truth for package
- * and object ids. The agent reads it only to *report* what it is pointed at
- * (`pnpm run doctor`); it never builds a PTB from it, because the backend owns
- * PTB composition. Override with `WATERX_CONFIG_URL`.
+ * and object ids. The agent never builds a PTB from it, because the backend
+ * owns PTB composition; it reads it to pin every call and shared object a
+ * backend-built transaction names (`deployment.ts`) and to report what it is
+ * pointed at (`pnpm run doctor`). Override with `WATERX_CONFIG_URL` — a COMPLETE
+ * document URL, never a base.
+ *
+ * These are the consolidated `schema_version: 2` documents (`objects.*` /
+ * `oracle_rules.*`). The legacy hosts — `config.waterx.app` and
+ * `staging.waterx-config.pages.dev` — still serve the pre-v2 per-package shape
+ * while they are retired, and this agent refuses that shape outright rather
+ * than reading an empty object set out of it. Never `raw.githubusercontent.com`:
+ * it rate-limits, and the config repo forbids it.
  */
 const DEFAULT_CONFIG_URL: Record<Network, string> = {
-  testnet: "https://staging.waterx-config.pages.dev/testnet.json",
-  mainnet: "https://config.waterx.app/mainnet.json",
+  testnet: "https://staging-v2.waterx-config.pages.dev/testnet.json",
+  mainnet: "https://main-v2.waterx-config.pages.dev/mainnet.json",
 };
 
 /**

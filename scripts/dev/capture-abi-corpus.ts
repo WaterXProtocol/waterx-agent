@@ -544,7 +544,7 @@ for (const entrypoint of Object.keys(ABI)) {
 // arguments can move, and every test still passes against a corpus that
 // describes the old one.
 const deployment = await loadDeployment(
-  process.env.WATERX_CONFIG_URL ?? "https://staging.waterx-config.pages.dev/testnet.json",
+  process.env.WATERX_CONFIG_URL ?? "https://staging-v2.waterx-config.pages.dev/testnet.json",
 );
 const packages = Object.fromEntries(
   [...deployment.byName.entries()].sort(([a], [b]) => a.localeCompare(b)),
