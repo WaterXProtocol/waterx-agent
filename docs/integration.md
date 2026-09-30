@@ -30,9 +30,9 @@ the way it stopped is the argument for the current shape.
 A perp PTB carries oracle legs. Which legs are required is a property of the
 *deployment*, not of the call: a rule that is weighted on chain must be fed, and
 `remove_outliers` aborts the transaction with `EMissingPriceSource` when a
-client omits it. That set moved twice in three months — testnet retired
-`PythRule` in favour of the enclave-backed `WaterxRule`, and mainnet weighted,
-then partially unweighted, its Lazer leg. On top of that, package ids and the
+client omits it. That set moves with the deployment — the enclave-backed
+`WaterxRule` carries the feeds, and mainnet weighted, then partially
+unweighted, its Lazer leg. On top of that, package ids and the
 account registry moved (the registry left `waterx_perp` for its own
 `waterx_account` package), and the version gates were realigned to the source
 `PACKAGE_VERSION`.

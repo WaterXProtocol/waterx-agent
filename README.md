@@ -8,10 +8,10 @@ transaction, signs the bytes, and submits them.
 
 A perp PTB has to refresh the right oracle rules for the deployment it targets,
 dedup those refreshes per ticker, and respect the per-position reentrancy lock.
-Which rules are live changes — testnet retired `PythRule` for the enclave-backed
-`WaterxRule`, mainnet re-weighted its Lazer leg — and when a client omits a leg
-that is weighted on chain, the transaction aborts with `EMissingPriceSource`
-rather than failing a type check.
+Which rules are live changes per deployment — the enclave-backed `WaterxRule`
+and mainnet's Lazer leg are weighted on chain and re-weighted over time — and
+when a client omits a leg that is weighted on chain, the transaction aborts with
+`EMissingPriceSource` rather than failing a type check.
 
 That composition already exists in the backend, is exercised by production
 traffic, and moves with each deployment. A second copy in this repo would be a
