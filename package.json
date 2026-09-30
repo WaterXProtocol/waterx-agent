@@ -98,7 +98,7 @@
   },
   "dependencies": {
     "@mysten/sui": "2.9.1",
-    "@waterx/sdk": "4.3.3",
+    "@waterx/sdk": "6.0.0",
     "dotenv": "^17.0.0"
   },
   "devDependencies": {

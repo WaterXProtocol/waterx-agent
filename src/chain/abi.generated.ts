@@ -1,7 +1,7 @@
 /**
  * GENERATED — do not edit. Run `pnpm run generate-abi`.
  *
- * Move signatures extracted from @waterx/sdk 4.3.3's generated bindings.
+ * Move signatures extracted from @waterx/sdk 6.0.0's generated bindings.
  * `params` names each argument in order; `types` is one longer when the
  * contract takes a `Clock` the SDK injects without naming.
  */
@@ -14,7 +14,7 @@ export interface AbiEntry {
   readonly types: readonly (string | null)[];
 }
 
-export const SDK_VERSION = "4.3.3";
+export const SDK_VERSION = "6.0.0";
 
 export const ABI: Readonly<Record<string, AbiEntry>> = {
   "account::add_delegate": {
@@ -324,10 +324,6 @@ export const KNOWN_FUNCTIONS: ReadonlyMap<string, readonly number[]> = new Map([
   ["native_custody::custody_vault::sheet", [1]],
   ["native_custody::custody_vault::single_vault", [1]],
   ["native_custody::custody_vault::withdraw_liquidity", [4]],
-  ["pyth_sponsor_rule::pyth_sponsor_rule::reimburse", [3]],
-  ["pyth_sponsor_rule::pyth_sponsor_rule::request", [1]],
-  ["pyth_sponsor_rule::pyth_sponsor_rule::split", [1]],
-  ["pyth_sponsor_rule::pyth_sponsor_rule::supply", [2]],
   ["waterx_account::account::account_address", [1]],
   ["waterx_account::account::account_alias", [1]],
   ["waterx_account::account::account_balance", [2]],
@@ -1297,14 +1293,6 @@ export const KNOWN_FUNCTIONS: ReadonlyMap<string, readonly number[]> = new Map([
   ["waterx_prediction::waterx_prediction::unresolved_market_next", [2]],
   ["waterx_prediction::waterx_prediction::unresolved_market_prev", [2]],
   ["waterx_prediction::waterx_prediction::unresolved_markets", [1]],
-  ["waterx_pyth_rule::pyth_rule::default_max_confidence_bps", [1]],
-  ["waterx_pyth_rule::pyth_rule::feed", [5]],
-  ["waterx_pyth_rule::pyth_rule::max_confidence_bps", [2]],
-  ["waterx_pyth_rule::pyth_rule::set_default_max_confidence_bps", [3]],
-  ["waterx_pyth_rule::pyth_rule::set_identifier", [4]],
-  ["waterx_pyth_rule::pyth_rule::set_symbol_max_confidence_bps", [4]],
-  ["waterx_pyth_rule::pyth_rule::set_tolerance_sec", [4]],
-  ["waterx_pyth_rule::pyth_rule::unset_symbol_max_confidence_bps", [3]],
   ["waterx_referral::referral_table::add_version", [3]],
   ["waterx_referral::referral_table::code_to_refer", [1]],
   ["waterx_referral::referral_table::is_valid_referral_code", [1]],
@@ -1423,12 +1411,6 @@ export const KNOWN_FUNCTIONS: ReadonlyMap<string, readonly number[]> = new Map([
   ["waterx_staking::waterx_staking::update_flow_rate", [5]],
   ["waterx_staking::waterx_staking::withdraw_from_source", [4]],
   ["waterx_staking::waterx_staking::withdrawable_amount", [2]],
-  ["waterx_supra_rule::supra_rule::feed", [4]],
-  ["waterx_supra_rule::supra_rule::pair_id", [2]],
-  ["waterx_supra_rule::supra_rule::remove_pair_id", [3]],
-  ["waterx_supra_rule::supra_rule::set_pair_id", [4]],
-  ["waterx_supra_rule::supra_rule::set_tolerance_ms", [4]],
-  ["waterx_supra_rule::supra_rule::tolerance_ms", [2]],
   ["withdrawal_queue::withdrawal_queue::add_executor", [3]],
   ["withdrawal_queue::withdrawal_queue::add_version", [3]],
   ["withdrawal_queue::withdrawal_queue::bridge_chain_min_fees", [1]],
