@@ -338,7 +338,9 @@ const SENDER_REQUEST: ProducedBy = { producedBy: "account::request" };
  * where a type lives, not which type it is.
  */
 const COIN = {
-  usd: { pkg: "usd", type: "usd::USD" },
+  // The v2 document names the USD credit package `usd_credit` (v1 also carried
+  // it under a duplicate `usd` alias, which v2 dropped).
+  usd: { pkg: "usd_credit", type: "usd::USD" },
   wlp: { pkg: "wlp", type: "wlp::WLP" },
 } as const;
 
@@ -527,7 +529,7 @@ function isDeploymentType(
  */
 export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>>> = {
   "trading::place_order_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     // The order itself, and the reduce-only legs attached to it. Both are
@@ -538,14 +540,14 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     preOrder: { vectorOf: ORDER_ARG_CONSTRUCTOR },
   },
   "trading::close_position_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
     acceptablePrice: "acceptablePriceRaw",
   },
   "trading::decrease_position_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
@@ -553,7 +555,7 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     acceptablePrice: "acceptablePriceRaw",
   },
   "trading::increase_position_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     // An `Option<u64>`, absent when increasing a position directly. A hand
@@ -566,21 +568,21 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     acceptablePrice: "acceptablePriceRaw",
   },
   "trading::deposit_collateral_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
     collateralAmount: "collateralRaw",
   },
   "trading::withdraw_collateral_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
     amount: "collateralRaw",
   },
   "trading::cancel_order_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     orderId: "orderId",
@@ -588,7 +590,7 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     orderTypeTag: LOCATOR,
   },
   "trading::update_order_request": {
-    globalConfig: obj("waterx_perp.global_config"), wxaRegistry: obj("waterx_account.account_registry"), marketRegistry: obj("waterx_perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     orderId: "orderId",
@@ -598,12 +600,12 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     newTriggerPrice: "triggerPriceRaw",
   },
   "lp_pool::mint_wlp": {
-    pool: obj("wlp.wlp_pool"),
-    globalConfig: obj("waterx_perp.global_config"),
-    wxaRegistry: obj("waterx_account.account_registry"),
-    aum: obj("wlp.wlp_aum"),
+    pool: obj("objects.wlp.pool"),
+    globalConfig: obj("objects.perp.global_config"),
+    wxaRegistry: obj("objects.account.registry"),
+    aum: obj("objects.wlp.aum"),
     senderRequest: SENDER_REQUEST,
-    oracle: obj("waterx_oracle.oracle"),
+    oracle: obj("objects.oracle.oracle"),
     accountId: "accountId",
     depositAmount: "collateralRaw",
     minLpAmount: {
@@ -611,17 +613,17 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     },
   },
   "lp_pool::request_redeem": {
-    pool: obj("wlp.wlp_pool"),
-    globalConfig: obj("waterx_perp.global_config"),
-    wxaRegistry: obj("waterx_account.account_registry"),
+    pool: obj("objects.wlp.pool"),
+    globalConfig: obj("objects.perp.global_config"),
+    wxaRegistry: obj("objects.account.registry"),
     senderRequest: SENDER_REQUEST,
     accountId: "accountId",
     lpAmount: "amountRaw",
   },
   "lp_pool::cancel_redeem": {
-    pool: obj("wlp.wlp_pool"),
-    globalConfig: obj("waterx_perp.global_config"),
-    wxaRegistry: obj("waterx_account.account_registry"),
+    pool: obj("objects.wlp.pool"),
+    globalConfig: obj("objects.perp.global_config"),
+    wxaRegistry: obj("objects.account.registry"),
     senderRequest: SENDER_REQUEST,
     requestId: "requestId",
   },
@@ -636,13 +638,13 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     request: {
       free: "an authority handle, unobserved: no claim could be built to read how it is produced",
     },
-    wxaRegistry: obj("waterx_account.account_registry"),
+    wxaRegistry: obj("objects.account.registry"),
     accountId: "accountId",
   },
   "custody_vault::mint": {
-    vault: obj("native_custody.vault"),
-    registry: obj("waterx_credit.credit_registry"),
-    accountRegistry: obj("waterx_account.account_registry"),
+    vault: obj("objects.custody.vault"),
+    registry: obj("objects.credit.registry"),
+    accountRegistry: obj("objects.account.registry"),
     accountId: "accountId",
     // The coin being credited comes from the sender's own balance withdrawal,
     // whose amount and asset are bound against that input.
@@ -650,7 +652,7 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     extraData: { free: "an opaque routing blob the backend composes; the agent supplies none" },
   },
   "account::request_withdraw": {
-    registry: obj("waterx_account.account_registry"), senderRequest: SENDER_REQUEST,
+    registry: obj("objects.account.registry"), senderRequest: SENDER_REQUEST,
     accountId: "accountId",
     amount: "collateralRaw",
     // A real argument, not something the contract derives. An earlier table
@@ -663,11 +665,11 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     extraData: { producedBy: "withdrawal_queue::route_native" },
   },
   "account::create_account": {
-    registry: obj("waterx_account.account_registry"), senderRequest: SENDER_REQUEST,
+    registry: obj("objects.account.registry"), senderRequest: SENDER_REQUEST,
     alias: "alias",
   },
   "account::add_delegate": {
-    registry: obj("waterx_account.account_registry"), senderRequest: SENDER_REQUEST,
+    registry: obj("objects.account.registry"), senderRequest: SENDER_REQUEST,
     accountId: "accountId",
     delegateAddress: "delegateAddress",
     alias: { free: "a label on the grant, carrying no authority" },
@@ -683,7 +685,7 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     expiresAtMs: "delegateExpiresAtMs",
   },
   "account::remove_delegate": {
-    registry: obj("waterx_account.account_registry"), senderRequest: SENDER_REQUEST,
+    registry: obj("objects.account.registry"), senderRequest: SENDER_REQUEST,
     accountId: "accountId",
     delegateAddress: "delegateAddress",
   },
@@ -708,8 +710,8 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     evmToken: { free: "unreachable: this agent only ever withdraws natively on Sui" },
   },
   "withdrawal_queue::enqueue": {
-    queue: obj("withdrawal_queue.queue"),
-    registry: obj("waterx_account.account_registry"),
+    queue: obj("objects.withdrawal_queue.queue"),
+    registry: obj("objects.account.registry"),
     // The withdrawal this queues must be the one this action authorized, not
     // another request that happens to be in the transaction.
     req: { producedBy: "account::request_withdraw" },
@@ -727,7 +729,7 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
    * are already held to the deployment's own packages.
    */
   "account::set_delegate_protocol_permission": {
-    registry: obj("waterx_account.account_registry"), senderRequest: SENDER_REQUEST,
+    registry: obj("objects.account.registry"), senderRequest: SENDER_REQUEST,
     accountId: "accountId",
     delegateAddress: "delegateAddress",
     permissions: { protocolMask: true },

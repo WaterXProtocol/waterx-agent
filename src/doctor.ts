@@ -21,6 +21,7 @@ import { createSigner, signerReadiness } from "./chain/create-signer.ts";
 import type { SignerProvider } from "./chain/signer.ts";
 import {
   type Deployment,
+  assertSchemaV2,
   exceptionCovers,
   loadDeployment,
   manifestAgeMs,
@@ -786,14 +787,22 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
 }
 
 interface DeploymentConfig {
+  schema_version?: number;
   network?: string;
+  /** Package identity only in v2 — `published_at`, `original_id`, `version`. */
   packages: Record<string, { version?: number; published_at?: string } | undefined>;
 }
 
 async function fetchDeploymentConfig(url: string): Promise<DeploymentConfig> {
   const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
-  return (await response.json()) as DeploymentConfig;
+  const document = (await response.json()) as DeploymentConfig;
+  // The same refusal `loadDeployment` makes: a pre-v2 document would still
+  // report package versions here and then fail the manifest check below, and a
+  // preflight that says "deployment config ok" one line above "manifest failed"
+  // is asking the reader to work out which of the two to believe.
+  assertSchemaV2(document, url);
+  return document;
 }
 
 /**

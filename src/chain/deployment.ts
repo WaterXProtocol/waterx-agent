@@ -57,7 +57,13 @@ export interface Deployment {
    * document this module already fetches.
    */
   objects: ReadonlySet<string>;
-  /** Role name (`waterx_perp.global_config`) → object id, for per-argument pinning. */
+  /**
+   * Role name → object id, for per-argument pinning.
+   *
+   * A role is the object's path in the v2 document, root included:
+   * `objects.perp.global_config`, `objects.account.registry`,
+   * `oracle_rules.waterx.rule_config_object`.
+   */
   objectFor: (role: string) => string | undefined;
 }
 
@@ -68,17 +74,65 @@ interface PackageEntry {
   [field: string]: unknown;
 }
 
+/**
+ * The consolidated waterx-config document (`schema_version: 2`).
+ *
+ * `packages.*` is package IDENTITY only — `published_at`, `original_id`,
+ * `version`, `upgrade_capability`, `mvr`. Every shared object id lives under
+ * `objects.<domain>.*`, and each oracle rule's wiring under
+ * `oracle_rules.<rule>.*`. The pre-v2 shape nested object ids inside each
+ * package entry; a document in that shape is refused, see {@link assertSchemaV2}.
+ */
 interface DeploymentDocument {
+  schema_version?: unknown;
+  network?: unknown;
   packages?: Record<string, PackageEntry | undefined>;
-  coin_registry?: unknown;
+  objects?: unknown;
+  oracle_rules?: unknown;
 }
 
 /**
- * Every object id anywhere under an entry.
+ * The document schema this module reads, and the only one it accepts.
+ *
+ * Pre-v2 documents (no `schema_version`, ids nested under `packages.*`) are
+ * still served from the legacy hosts (`config.waterx.app`,
+ * `staging.waterx-config.pages.dev`) while they are retired. Walking one with
+ * the v2 reader would find every package and NO objects — so every shared-object
+ * argument would be refused, with a message blaming the transaction rather than
+ * the endpoint. Refusing at the parse is the version of that failure a person
+ * can act on.
+ */
+export const SUPPORTED_SCHEMA_VERSION = 2;
+
+/**
+ * Refuse a document that is not the consolidated `schema_version: 2` shape.
+ *
+ * Exported so every reader of the document in this package (`doctor` fetches
+ * its own copy to report package versions) refuses the same way.
+ */
+export function assertSchemaV2(document: unknown, configUrl: string): void {
+  const version = (document as { schema_version?: unknown } | null)?.schema_version;
+  if (version === SUPPORTED_SCHEMA_VERSION) return;
+  const legacy =
+    version === undefined &&
+    typeof (document as { packages?: unknown } | null)?.packages === "object";
+  throw new Error(
+    `${configUrl} is not a schema_version ${String(SUPPORTED_SCHEMA_VERSION)} waterx-config ` +
+      `document (found ${legacy ? "a pre-v2 per-package document with no schema_version" : `schema_version ${JSON.stringify(version)}`}). ` +
+      `This agent reads object ids from \`objects.*\` and rule wiring from \`oracle_rules.*\`, ` +
+      `which that shape does not carry, so nothing could be checked against it. Point ` +
+      `WATERX_CONFIG_URL at a v2 endpoint — https://main-v2.waterx-config.pages.dev/<network>.json ` +
+      `(production) or https://staging-v2.waterx-config.pages.dev/<network>.json (staging).`,
+  );
+}
+
+/**
+ * Every object id anywhere under a node.
  *
  * Walked rather than named field by field: the document nests markets under
- * packages and coins under the registry, and a check that had to be taught each
- * new shape would quietly stop covering the ones it had not learned.
+ * `objects.perp.markets`, credit stacks under `objects.credit.registries`, the
+ * enclave under `oracle_rules.waterx.enclave`, and a check that had to be
+ * taught each new shape would quietly stop covering the ones it had not learned.
  */
 function collectObjects(
   node: unknown,
@@ -110,8 +164,8 @@ const STRUCT_TAG = /^0x([0-9a-fA-F]{1,64})::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-
  * The packages of the coin types the document declares, as TYPE identities only.
  *
  * The document says which coins the deployment custodies
- * (`native_custody.assets[].type`) and pays rewards in
- * (`waterx_staking.rewarders.<pool>.<coin>.coin_type`). A deposit, a withdrawal
+ * (`objects.custody.assets[].type`) and pays rewards in
+ * (`objects.staking.rewarders.<pool>.<coin>.coin_type`). A deposit, a withdrawal
  * and a WLP mint name those coins as type arguments — so reading package ids
  * only from the `packages` entries made USDC and the reward coin look like
  * strangers, this package had to ship them as standing exceptions, and `doctor`
@@ -249,9 +303,15 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
   const response = await fetch(configUrl, { signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error(`${configUrl} returned HTTP ${String(response.status)}`);
   const document = (await response.json()) as DeploymentDocument;
+  assertSchemaV2(document, configUrl);
   const entries = Object.entries(document.packages ?? {});
   if (entries.length === 0) {
     throw new Error(`${configUrl} lists no packages, so no transaction could be checked against it`);
+  }
+  if (document.objects === null || typeof document.objects !== "object") {
+    throw new Error(
+      `${configUrl} carries no \`objects\` block, so no shared object could be held to a role`,
+    );
   }
 
   const callable = new Set(FRAMEWORK.map(normalizePackage));
@@ -277,10 +337,15 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
       typeable.add(normalizePackage(entry.original_id));
       ids.push(normalizePackage(entry.original_id));
     }
-    collectObjects(entry, objects, byRole, `${name}.`);
   }
-  collectObjects(document.coin_registry, objects, byRole, "coin_registry.");
-  collectCoinTypes(document.packages, typeable);
+  // v2 keeps `packages.*` to identity, so the objects are read from where the
+  // schema puts them: `objects.<domain>.*` for the protocol's shared objects and
+  // `oracle_rules.<rule>.*` for each rule's config and enclave objects, which
+  // the oracle-refresh legs of every order touch. Roles keep the root so that
+  // `objects.perp.global_config` reads as the document path it is.
+  collectObjects(document.objects, objects, byRole, "objects.");
+  collectObjects(document.oracle_rules, objects, byRole, "oracle_rules.");
+  collectCoinTypes(document.objects, typeable);
   return {
     callable,
     typeable,

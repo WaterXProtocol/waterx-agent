@@ -12,6 +12,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  assertSchemaV2,
   exceptionCovers,
   forgetDeployments,
   loadDeployment,
@@ -23,8 +24,14 @@ import {
 
 const URL = "https://example.invalid/testnet.json";
 
-const document = (perp: string) =>
-  JSON.stringify({ packages: { waterx_perp: { published_at: perp, original_id: perp, version: 1 } } });
+/** The smallest `schema_version: 2` document these tests need. */
+const document = (perp: string, objects: Record<string, unknown> = {}) =>
+  JSON.stringify({
+    schema_version: 2,
+    network: "testnet",
+    packages: { waterx_perp: { published_at: perp, original_id: perp, version: 1 } },
+    objects,
+  });
 
 let served: () => Promise<Response>;
 
@@ -120,6 +127,108 @@ describe("the deployment manifest", () => {
 });
 
 /**
+ * The document is the consolidated `schema_version: 2` shape, and only that.
+ *
+ * The legacy hosts keep serving the pre-v2 per-package shape while they are
+ * retired. Read with the v2 walker that document yields every package and NO
+ * objects, so every shared-object argument would be refused with a message
+ * blaming the transaction — the endpoint is the thing that is wrong, and the
+ * refusal has to say so.
+ */
+describe("the document schema", () => {
+  const PERP = `0x${"1".repeat(64)}`;
+
+  it("refuses a pre-v2 per-package document and names the v2 endpoints", async () => {
+    // Shaped like the legacy config.waterx.app document: no schema_version, ids
+    // nested under each package entry.
+    served = ok(
+      JSON.stringify({
+        network: "testnet",
+        packages: {
+          waterx_perp: { published_at: PERP, original_id: PERP, version: 1, global_config: `0x${"a".repeat(64)}` },
+        },
+        coin_registry: "0xc",
+      }),
+    );
+    await expect(loadDeployment(URL)).rejects.toThrow(/not a schema_version 2 waterx-config document/);
+    await expect(loadDeployment(URL)).rejects.toThrow(/pre-v2 per-package document/);
+    await expect(loadDeployment(URL)).rejects.toThrow(/main-v2\.waterx-config\.pages\.dev/);
+  });
+
+  it("refuses any other schema_version", async () => {
+    served = ok(JSON.stringify({ schema_version: 3, packages: { waterx_perp: { published_at: PERP } }, objects: {} }));
+    await expect(loadDeployment(URL)).rejects.toThrow(/found schema_version 3/);
+  });
+
+  it("refuses a v2 document with no objects block", async () => {
+    served = ok(JSON.stringify({ schema_version: 2, packages: { waterx_perp: { published_at: PERP } } }));
+    await expect(loadDeployment(URL)).rejects.toThrow(/no `objects` block/);
+  });
+
+  it("exposes the assertion for the other readers of the document", () => {
+    expect(() => assertSchemaV2({ schema_version: 2 }, URL)).not.toThrow();
+    expect(() => assertSchemaV2({ packages: {} }, URL)).toThrow(/pre-v2/);
+    expect(() => assertSchemaV2(null, URL)).toThrow(/not a schema_version 2/);
+  });
+});
+
+/**
+ * Shared objects are read from `objects.*` and `oracle_rules.*`, by document
+ * path, and package identity from `packages.*` alone.
+ */
+describe("object roles in the v2 document", () => {
+  const PERP = `0x${"1".repeat(64)}`;
+  const GLOBAL_CONFIG = `0x${"a".repeat(64)}`;
+  const REGISTRY = `0x${"b".repeat(64)}`;
+  const POOL = `0x${"c".repeat(64)}`;
+  const RULE_CONFIG = `0x${"d".repeat(64)}`;
+  const ENCLAVE = `0x${"e".repeat(64)}`;
+  const MARKET = `0x${"f".repeat(64)}`;
+
+  it("pins each role to the object at its document path", async () => {
+    served = ok(
+      JSON.stringify({
+        schema_version: 2,
+        network: "testnet",
+        packages: {
+          waterx_perp: { published_at: PERP, original_id: PERP, version: 1 },
+          waterx_rule: { published_at: `0x${"2".repeat(64)}`, original_id: `0x${"2".repeat(64)}`, version: 1 },
+        },
+        objects: {
+          perp: { global_config: GLOBAL_CONFIG, markets: { BTCUSD: MARKET } },
+          account: { registry: REGISTRY },
+          wlp: { pool: POOL },
+        },
+        oracle_rules: {
+          waterx: { package: "waterx_rule", rule_config_object: RULE_CONFIG, enclave: { object: ENCLAVE } },
+        },
+      }),
+    );
+
+    const deployment = await loadDeployment(URL);
+
+    expect(deployment.objectFor("objects.perp.global_config")).toBe(normalizePackage(GLOBAL_CONFIG));
+    expect(deployment.objectFor("objects.account.registry")).toBe(normalizePackage(REGISTRY));
+    expect(deployment.objectFor("objects.wlp.pool")).toBe(normalizePackage(POOL));
+    expect(deployment.objectFor("objects.perp.markets.BTCUSD")).toBe(normalizePackage(MARKET));
+    expect(deployment.objectFor("oracle_rules.waterx.rule_config_object")).toBe(normalizePackage(RULE_CONFIG));
+    expect(deployment.objectFor("oracle_rules.waterx.enclave.object")).toBe(normalizePackage(ENCLAVE));
+    // The pre-v2 role names find nothing — a binding still spelling one is a
+    // refusal, not a silent match.
+    expect(deployment.objectFor("waterx_perp.global_config")).toBeUndefined();
+    expect(deployment.objectFor("waterx_account.account_registry")).toBeUndefined();
+
+    for (const id of [GLOBAL_CONFIG, REGISTRY, POOL, MARKET, RULE_CONFIG, ENCLAVE]) {
+      expect(deployment.objects.has(normalizePackage(id)), id).toBe(true);
+    }
+    // Package ids are call targets, never shared objects.
+    expect(deployment.objects.has(normalizePackage(PERP))).toBe(false);
+    expect(deployment.byName.get("waterx_perp")).toBe(normalizePackage(PERP));
+    expect(deployment.byName.get("waterx_rule")).toBe("2".repeat(64));
+  });
+});
+
+/**
  * Standing package exceptions, and the three things they can say.
  *
  * `WATERX_EXTRA_PACKAGES` is how an operator accepts a package the deployment
@@ -134,18 +243,21 @@ describe("coin types the document declares", () => {
 
   it("lets a declared coin be named as a type argument, and never called", async () => {
     // Shaped like mainnet's document: custody assets and staking rewarders
-    // declare their coins by full type, outside the `packages` ids.
+    // declare their coins by full type under `objects.*`, outside the
+    // `packages` ids.
     served = ok(
       JSON.stringify({
+        schema_version: 2,
+        network: "mainnet",
         packages: {
           waterx_perp: { published_at: PERP, original_id: PERP, version: 1 },
-          native_custody: {
-            published_at: `0x${"2".repeat(64)}`,
-            assets: [{ type: `${USDC}::usdc::USDC`, decimal: 6 }],
-          },
-          waterx_staking: {
-            published_at: `0x${"3".repeat(64)}`,
-            rewarders: { WLP: { DEEP: { coin_type: `${DEEP}::deep::DEEP`, rewarder: `0x${"4".repeat(64)}` } } },
+          native_custody: { published_at: `0x${"2".repeat(64)}` },
+          waterx_staking: { published_at: `0x${"3".repeat(64)}` },
+        },
+        objects: {
+          custody: { assets: [{ type: `${USDC}::usdc::USDC`, decimal: 6 }] },
+          staking: {
+            rewarders: { WLP: { DEEP: { coin_type: `${DEEP}::deep::DEEP`, rewarder_id: `0x${"4".repeat(64)}` } } },
           },
         },
       }),
@@ -162,11 +274,11 @@ describe("coin types the document declares", () => {
   it("reads only struct tags under coin keys, not every string that mentions an address", async () => {
     served = ok(
       JSON.stringify({
-        packages: {
-          waterx_perp: {
-            published_at: PERP,
-            original_id: PERP,
-            version: 1,
+        schema_version: 2,
+        network: "mainnet",
+        packages: { waterx_perp: { published_at: PERP, original_id: PERP, version: 1 } },
+        objects: {
+          perp: {
             note: `${USDC}::usdc::USDC`,
             type: "shared",
             coin_type: `${DEEP}::deep::DEEP<${USDC}::usdc::USDC>`,
