@@ -24,6 +24,7 @@
  */
 import { initAgent, note, parseArgs, run, setOutcome, show, demand, asNumber } from "../lib/cli.ts";
 import { previewOf, type TradePlan } from "../../src/agent/plan.ts";
+import { checkFeasibility, type FeasibilityFacts } from "../../src/agent/feasibility.ts";
 import { requestApproval } from "../../src/agent/approvals.ts";
 import { UsageError } from "../../src/errors.ts";
 import type { WaterXAgent } from "../../src/agent/agent.ts";
@@ -81,6 +82,25 @@ await run(async () => {
   const action = (args.action ?? "").trim();
   const plan = await planFor(agent, action);
   const preview = previewOf(plan);
+
+  // Checked before anything is written to the approval ledger. A request that
+  // exists is a request somebody can approve, and the whole point is not to
+  // spend a person's approval on an order the chain was always going to refuse.
+  const feasibility = checkFeasibility(preview, await feasibilityFacts(agent, preview));
+  if (feasibility.blocking.length > 0) {
+    for (const finding of feasibility.findings) note(`  ${finding.blocking ? "✗" : "!"} ${finding.code} — ${finding.detail}`);
+    show({ feasibility, preview, approvalId: null });
+    setOutcome({
+      status: "rejected",
+      message: `This order cannot be placed as described, so nothing was written for anyone to approve: ${feasibility.blocking.join(", ")}.`,
+      submitted: false,
+      retryable: false,
+      reconcileRequired: false,
+      awaitingApproval: false,
+    });
+    return;
+  }
+  for (const finding of feasibility.findings) note(`  ! ${finding.code} — ${finding.detail}`);
 
   const request = requestApproval({
     action: plan.action,
@@ -351,4 +371,37 @@ async function withBackingAsset(
   }
   note(`Using backing asset ${first.symbol} (${first.coinType})`);
   return make(first.coinType);
+}
+
+/**
+ * The market and account facts the feasibility check reads, or `undefined`.
+ *
+ * Undefined is a real answer and not an empty one: a market this could not ask
+ * about is a market nothing was checked against, and `checkFeasibility` reports
+ * that rather than treating silence as approval. Nothing here is required for a
+ * preview to be produced — this command still runs on a machine with no key —
+ * so a read that fails costs the caller a check, never the preview.
+ */
+async function feasibilityFacts(
+  agent: WaterXAgent,
+  preview: { ticker?: string },
+): Promise<FeasibilityFacts | undefined> {
+  if (preview.ticker === undefined) return undefined;
+  try {
+    const [params, overview] = await Promise.all([
+      agent.read.marketParams(preview.ticker),
+      agent.config.accountId === undefined
+        ? Promise.resolve(undefined)
+        : agent.read.overview(agent.config.accountId).catch(() => undefined),
+    ]);
+    const market = params as { maxLeverage?: number; minCollateral?: number };
+    const account = overview as { freeMargin?: number } | undefined;
+    return {
+      ...(typeof market.maxLeverage === "number" ? { maxLeverage: market.maxLeverage } : {}),
+      ...(typeof market.minCollateral === "number" ? { minCollateral: market.minCollateral } : {}),
+      ...(typeof account?.freeMargin === "number" ? { freeMargin: account.freeMargin } : {}),
+    };
+  } catch {
+    return undefined;
+  }
 }
