@@ -408,3 +408,37 @@ describe("a scope that is already over", () => {
     expect(existsSync(at), "an expired scope was written anyway").toBe(false);
   }, 30_000);
 });
+
+describe("the one JSON document --json promises", () => {
+  // The flag promises stdout carries exactly one document, and this shim was
+  // exempting itself: an unknown command, `--help` and a maintainer tool all
+  // wrote prose to stderr and left stdout EMPTY. A caller that parses stdout —
+  // which is what the flag is for — met its first mistake as a parse error
+  // rather than as an answer, so the most likely first interaction with this
+  // binary was also the one that broke the contract.
+  const shim = (argv: readonly string[]) =>
+    spawnSync(process.execPath, ["bin/waterx.mjs", ...argv], { encoding: "utf8" });
+
+  for (const [label, argv] of [
+    ["an unknown command", ["zzz-not-a-command", "--json"]],
+    ["help", ["--help", "--json"]],
+    ["a maintainer tool", ["capture-corpus", "--json"]],
+  ] as const) {
+    it(`answers ${label} with one parseable document`, () => {
+      const run = shim(argv);
+      expect(run.stdout, `${label}: stdout was empty`).not.toBe("");
+      const parsed = JSON.parse(run.stdout) as { ok: boolean; status: string; message: string };
+      expect(typeof parsed.ok).toBe("boolean");
+      expect(parsed.status.length).toBeGreaterThan(0);
+      expect(parsed.message.length).toBeGreaterThan(0);
+    });
+  }
+
+  it("leaves the human output alone when nobody asked for JSON", () => {
+    // The prose is still prose, and stdout is still clean for a caller that
+    // pipes it without the flag.
+    const run = shim(["zzz-not-a-command"]);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toMatch(/unknown command/u);
+  });
+});

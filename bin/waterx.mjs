@@ -38,18 +38,59 @@ const [command, ...args] = process.argv.slice(2);
  * one-entry capture from an unconfigured run. A destructive maintainer tool
  * should not be one typo away from a consumer.
  */
+/**
+ * One JSON document on stdout, for the refusals this shim makes itself.
+ *
+ * `--json` promises stdout carries exactly one document, and this layer was
+ * exempting itself: an unknown command, `--help`, and a maintainer tool all
+ * wrote prose to stderr and left stdout EMPTY. A caller that parses stdout —
+ * which is what the flag is for — met its first mistake as a parse error rather
+ * than as an answer, so the most likely first interaction with this binary was
+ * also the one that broke the contract.
+ *
+ * The same shape the unbuilt-install branch below already uses, for the same
+ * reason it uses it: the promise is about stdout, and it is one this can keep.
+ */
+const refuse = (status, code, message, extra = {}) => {
+  if (args.includes("--json")) {
+    process.stdout.write(`${JSON.stringify({ ok: false, status, command: command ?? null, message, ...extra }, null, 2)}\n`);
+  } else {
+    process.stderr.write(`${message}\n`);
+  }
+  process.exit(code);
+};
+
 const INTERNAL = new Set(["typecheck", "test", "build", "prepack", "prepare", "generate-abi", "capture-corpus", "check-corpus", "smoke", "pack:check"]);
 
 if (command === undefined || command === "--help" || command === "-h") {
-  // Usage goes to stderr. Even the help text must not put anything on stdout,
-  // or a caller that pipes stdout gets a surprise on its first mistake.
+  const commands = Object.keys(scripts).filter((name) => !INTERNAL.has(name));
+  // Prose to stderr, as before — but a caller that asked for JSON gets the same
+  // answer as a document rather than an empty stdout. Help is the most likely
+  // first thing anybody runs; it must not be the thing that breaks the promise.
+  if (args.includes("--json")) {
+    process.stdout.write(
+      `${JSON.stringify(
+        {
+          ok: command !== undefined,
+          status: command === undefined ? "usage" : "ok",
+          command: command ?? null,
+          message:
+            command === undefined
+              ? "No command was given."
+              : "Help was requested. Every command takes --json and --help.",
+          commands,
+          see: "SKILL.md for the read -> preview -> approve -> execute loop.",
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    process.exit(command === undefined ? 2 : 0);
+  }
   process.stderr.write(
     `\nwaterx <command> [options]\n\n` +
       `Commands:\n` +
-      Object.keys(scripts)
-        .filter((name) => !INTERNAL.has(name))
-        .map((name) => `  ${name}`)
-        .join("\n") +
+      commands.map((name) => `  ${name}`).join("\n") +
       `\n\nEvery command takes --json (one JSON document on stdout) and --help.\n` +
       `See SKILL.md for the read -> preview -> approve -> execute loop.\n\n`,
   );
@@ -57,19 +98,19 @@ if (command === undefined || command === "--help" || command === "-h") {
 }
 
 if (INTERNAL.has(command)) {
-  process.stderr.write(
+  refuse(
+    "usage",
+    2,
     `waterx: "${command}" is a maintainer tool, not an agent command. It is run from a checkout ` +
-      `of the repository with \`pnpm run ${command}\`.\n`,
+      `of the repository with \`pnpm run ${command}\`.`,
   );
-  process.exit(2);
 }
 
 const script = scripts[command];
 if (typeof script !== "string") {
-  process.stderr.write(
-    `waterx: unknown command "${command}". Run \`waterx --help\` for the list.\n`,
-  );
-  process.exit(2);
+  refuse("usage", 2, `waterx: unknown command "${command}". Run \`waterx --help\` for the list.`, {
+    commands: Object.keys(scripts).filter((name) => !INTERNAL.has(name)),
+  });
 }
 
 // Every script is `tsx <path>`; anything else is plumbing this should not run.

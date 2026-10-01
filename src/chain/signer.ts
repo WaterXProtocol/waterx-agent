@@ -100,6 +100,20 @@ export class ExternalCommandSigner implements SignerProvider {
   readonly describe: string;
 
   private readonly command: string[];
+  /**
+   * The program this would spawn, for a preflight that must not spawn it.
+   *
+   * Constructing this signer checks nothing — it stores an argv — so `doctor`
+   * reported `ok` for `WATERX_SIGNER_COMMAND=/nonexistent/signer` and the
+   * mistake surfaced at the first signature, which is the worst moment: an
+   * order is already priced and a person is already waiting.
+   *
+   * Exposed rather than probed in here, because "does this path exist" is a
+   * question about a machine and this class is about a protocol.
+   */
+  get executable(): string {
+    return this.command[0] ?? "";
+  }
   private readonly timeoutMs: number;
 
   constructor(options: ExternalSignerOptions) {
