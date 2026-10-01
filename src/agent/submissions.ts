@@ -19,11 +19,12 @@
  * external-beta path is one-shot commands.
  */
 import { randomBytes } from "node:crypto";
+import { inStateRoot } from "../state-root.ts";
 
 import { append, historyOf, read, type LedgerRecord } from "./ledger.ts";
 
 export const SUBMISSIONS_FILE =
-  process.env.WATERX_SUBMISSIONS_FILE?.trim() ?? ".waterx/submissions.jsonl";
+  process.env.WATERX_SUBMISSIONS_FILE?.trim() ?? inStateRoot(".waterx", "submissions.jsonl");
 
 export interface Submission {
   id: string;

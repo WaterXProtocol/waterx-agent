@@ -1,5 +1,8 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
+import { join } from "node:path";
+
+import { stateRoot } from "../state-root.ts";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 
 /**
@@ -18,7 +21,7 @@ import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
  * elsewhere.
  */
 export const envPath = (): string =>
-  process.env.WATERX_ENV_FILE?.trim() || path.resolve(process.cwd(), ".env");
+  process.env.WATERX_ENV_FILE?.trim() || join(stateRoot(), ".env");
 
 export interface WalletInfo {
   keypair: Ed25519Keypair;

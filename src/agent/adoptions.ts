@@ -10,10 +10,11 @@
  * and an adoption is not one.
  */
 import { randomBytes } from "node:crypto";
+import { inStateRoot } from "../state-root.ts";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
-export const ADOPTIONS_FILE = process.env.WATERX_ADOPTIONS_FILE?.trim() || ".waterx/adoptions.jsonl";
+export const ADOPTIONS_FILE = process.env.WATERX_ADOPTIONS_FILE?.trim() || inStateRoot(".waterx", "adoptions.jsonl");
 
 export interface AdoptionRecord {
   v: 2;

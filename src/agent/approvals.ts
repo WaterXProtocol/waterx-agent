@@ -25,6 +25,8 @@
  */
 import { randomBytes } from "node:crypto";
 
+import { inStateRoot } from "../state-root.ts";
+
 import { ExecutionPolicyError } from "../errors.ts";
 
 import { fingerprintIntent } from "../policy.ts";
@@ -32,7 +34,7 @@ import type { Preview, TradePlan } from "./plan.ts";
 import { append, historyOf, read, type LedgerRecord } from "./ledger.ts";
 
 /** Where approvals live. `.waterx/` is gitignored and already the runner's home. */
-export const APPROVALS_FILE = process.env.WATERX_APPROVALS_FILE?.trim() ?? ".waterx/approvals.jsonl";
+export const APPROVALS_FILE = process.env.WATERX_APPROVALS_FILE?.trim() ?? inStateRoot(".waterx", "approvals.jsonl");
 
 /** How long a preview stays approvable. Long enough to read, short enough that the price still means something. */
 export const DEFAULT_TTL_SECONDS = 600;
