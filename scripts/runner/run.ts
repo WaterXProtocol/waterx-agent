@@ -34,6 +34,13 @@ await run(async () => {
   mkdirSync(dirname(storePath), { recursive: true });
 
   const agent = initAgent();
+  // Before anything touches the write plane. Building it asserts that the
+  // account's owner is settled — whether this process signs as a delegate must
+  // not be decided from a missing fact — and the runner reaches it on its first
+  // line of output, to name the signer. So an unattended runner configured with
+  // an account and no explicit owner died at start-up on an internal assertion,
+  // which took `delegated-auto` with it: it is the only path that runs here.
+  await agent.resolveIdentity();
   const store = new JobStore(storePath);
   store.open();
 
