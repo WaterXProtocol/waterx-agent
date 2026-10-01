@@ -15,6 +15,7 @@ import { closeSync, fsyncSync, mkdirSync, openSync, readdirSync, readFileSync, r
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 
+import { syncDirectory } from "../durability.ts";
 import type { Intent } from "./types.ts";
 
 /** One queued intent, as it sits on disk. */
@@ -53,12 +54,13 @@ export class Inbox {
     // The rename is atomic; the directory entry it creates is not durable until
     // the directory is synced. Without this a power loss can lose an intent the
     // caller was already told was queued.
-    const dirFd = openSync(this.dir, "r");
-    try {
-      fsyncSync(dirFd);
-    } finally {
-      closeSync(dirFd);
-    }
+    //
+    // Best effort, and it has to be: by this line the entry is already in the
+    // inbox and the runner will pick it up. Throwing here reported a failure
+    // for an intent that was in fact queued — and on Windows, where a directory
+    // cannot be synced at all, that was every call. A caller who responded to
+    // the error the obvious way got two orders from one intent.
+    syncDirectory(this.dir);
     return id;
   }
 
@@ -113,13 +115,10 @@ export class Inbox {
             }
             // A rename made the entry durable; an unlink has to be made durable
             // the same way, or a crash resurrects a file whose job is already in
-            // the ledger.
-            const dirFd = openSync(this.dir, "r");
-            try {
-              fsyncSync(dirFd);
-            } finally {
-              closeSync(dirFd);
-            }
+            // the ledger. Best effort for the same reason as the one in
+            // `submit`: the unlink has happened, and a resurrected entry is
+            // recognised on the next pass rather than traded twice.
+            syncDirectory(this.dir);
           },
         });
       } catch {

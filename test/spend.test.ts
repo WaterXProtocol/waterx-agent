@@ -6,7 +6,7 @@
  * so a write happens at most once across crashes — and then handed a restarted
  * runner a fresh budget. "$200 cumulative" meant "$200 per process".
  */
-import { mkdtempSync, writeFileSync, chmodSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync, chmodSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -87,6 +87,23 @@ describe("the spend ledger", () => {
   it("says it cannot read rather than saying nothing was spent", () => {
     // The difference decides whether an unattended process refuses or starts
     // over from a fresh budget.
+    //
+    // A directory where the ledger should be, because it is the one way to make
+    // a path unreadable that every platform agrees on: `EISDIR` on POSIX,
+    // `EISDIR` on Windows. The permission version of this is below, and it only
+    // means anything where permissions do.
+    const path = ledger();
+    mkdirSync(path, { recursive: true });
+
+    expect(spentTotal(path)).toBeUndefined();
+  });
+
+  // Permission bits are the realistic way this happens — a ledger left owned by
+  // another user — but Windows honours almost none of them, so `chmod 0o000`
+  // there leaves the file perfectly readable and the assertion would be
+  // testing nothing. Root is skipped for the same reason: it can read anything.
+  const enforcesModes = process.platform !== "win32" && process.getuid?.() !== 0;
+  (enforcesModes ? it : it.skip)("says the same when the file is there but unreadable", () => {
     const path = ledger();
     recordSpend({ action: "openLong", accountId: "0xa", collateral: 10 }, 1, path);
     chmodSync(path, 0o000);
@@ -94,10 +111,7 @@ describe("the spend ledger", () => {
     const total = spentTotal(path);
     chmodSync(path, 0o600);
 
-    // Root can read anything; skip the assertion rather than fail as root.
-    if (process.getuid?.() !== 0) {
-      expect(total).toBeUndefined();
-    }
+    expect(total).toBeUndefined();
   });
 });
 

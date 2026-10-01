@@ -159,6 +159,12 @@ await run(async () => {
     ];
   }
 
+  // Hoisted because the envelope carries them too. They used to exist only as
+  // an argument to `decide`, which meant a caller reading `--json` could not
+  // see them at all unless the state `decide` chose happened to be the one that
+  // spells them into its headline.
+  const blockers = report.checks.filter((c) => c.status === "fail").map((c) => c.name);
+
   const guidance = decide({
     open: open.length,
     firstUnsettled: open[0]?.submission.id,
@@ -192,7 +198,7 @@ await run(async () => {
     freeMargin,
     positions,
     orders,
-    blockers: report.checks.filter((c) => c.status === "fail").map((c) => c.name),
+    blockers,
     warnings,
   });
   const { state, headline, detail, link, suggestions } = guidance;
@@ -250,6 +256,11 @@ await run(async () => {
       pendingApprovals: pending.length,
       readReady: report.readReady,
       writeReady: report.writeReady,
+      // Named, not just folded into `writeReady`. A caller that sees `false`
+      // learns only that something is wrong; these say which checks, and they
+      // are the difference between a step the operator takes and one only a
+      // maintainer can.
+      blockers,
     },
     { rendered: true },
   );

@@ -41,14 +41,26 @@ export interface LedgerRecord {
  * crash, and a record that is still in the page cache when the power goes is a
  * transaction nobody can reconcile — which is the failure the file exists to
  * prevent, reintroduced by the write that was supposed to prevent it.
+ *
+ * One descriptor does both halves, and it is opened `a` rather than `r`. The
+ * sync used to run on a read-only handle reopened after the append, which works
+ * on Linux and macOS and does not on Windows: `fsync` there is
+ * `FlushFileBuffers`, which needs a writable handle and answers `EPERM`. Since
+ * `recordSubmission` runs inside `onSubmitting`, where a throw aborts the
+ * submission, that made every `execute` on Windows abort — after this function
+ * had already appended the line, leaving a record of a transaction that was
+ * never sent. Tolerating the error was not the fix: an unsynced submission
+ * ledger is the one thing this module may not quietly become. Holding a
+ * writable handle makes the sync work everywhere instead.
  */
 export function append(path: string, record: LedgerRecord): void {
   mkdirSync(dirname(path), { recursive: true });
-  // One write, one line: a record split across two calls is a record another
-  // process can interleave into.
-  appendFileSync(path, `${JSON.stringify(record)}\n`, { encoding: "utf8" });
-  const fd = openSync(path, "r");
+  const fd = openSync(path, "a");
   try {
+    // One write, one line: a record split across two calls is a record another
+    // process can interleave into. Through the descriptor, which was opened
+    // `O_APPEND`, so concurrent writers still interleave by whole records.
+    appendFileSync(fd, `${JSON.stringify(record)}\n`, { encoding: "utf8" });
     fsyncSync(fd);
   } finally {
     closeSync(fd);

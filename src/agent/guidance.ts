@@ -191,10 +191,42 @@ export function decide(s: Situation): Guidance {
   const guidance = choose(s);
   // Attached here so no branch can forget: a warning that only some states
   // carry is one nobody can rely on hearing.
-  return s.warnings === undefined || s.warnings.length === 0
-    ? guidance
-    : { ...guidance, warnings: [...s.warnings] };
+  //
+  // A failing signing-path check is the case that proved it. `choose` names
+  // those in one branch, and three branches return before it ever runs --
+  // `awaiting-grant` among them. So an install whose recorded layouts had gone
+  // stale was told the one thing left was to get the account owner to grant it
+  // permission. The owner signed, and only then did the state advance far
+  // enough to say that no write could have been signed either way. An act we
+  // can only ask of someone once was spent on nothing.
+  //
+  // Filtered against the headline rather than against the state, because the
+  // state is shared: three branches return `not-set-up` and only one of them
+  // names a blocker. Matching on the text keeps the names appearing exactly
+  // once, and keeps a branch added later from quietly dropping them.
+  const unstated = s.blockers.filter((blocker) => !guidance.headline.includes(blocker));
+  const warnings = [
+    // Ahead of the account warnings: a thin margin is a fact about money that
+    // could still be traded. This is the one that says nothing can.
+    ...(unstated.length === 0 ? [] : [blockedWriteWarning(unstated)]),
+    ...(s.warnings ?? []),
+  ];
+  return warnings.length === 0 ? guidance : { ...guidance, warnings };
 }
+
+/**
+ * Said whatever the state is: these refuse the write itself.
+ *
+ * It points at `doctor` rather than carrying each fix, because the fixes are
+ * not alike -- some are the operator's and at least one (`abi corpus`) is a
+ * maintainer step no installed copy can perform. `doctor` already states which
+ * is which, and stating it in a second place is how the two drift apart.
+ */
+const blockedWriteWarning = (blockers: readonly string[]): string =>
+  `No write can be signed on this install: ${blockers.join(", ")}. These are checks the ` +
+  `signing path makes for itself, so every order refuses until they pass — whatever this ` +
+  `says to do next. Not all of them are yours to fix: ${invoke("doctor", "--json")} names ` +
+  `each one and whose step it is.`;
 
 /** The state, decided. First one that applies wins. */
 function choose(s: Situation): Guidance {
