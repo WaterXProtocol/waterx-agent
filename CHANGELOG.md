@@ -28,8 +28,8 @@
 
 ### Added
 
-- `configDocumentUrl(config)`, `resolveConfigRoot(raw, network)`, `assertNoRetiredConfigAliases()`
-  and `DEFAULT_CONFIG_ROOT`, exported from the package entry — the single place the document URL
-  is resolved (`loadConfig`, `doctor`, every `loadDeployment` caller and the corpus capture script,
-  which goes through `loadConfig`). `configDocumentUrl` composes with the SDK's
-  `waterxConfigUrlFromRoot`; the default roots and the retired-alias check are this package's.
+- `configDocumentUrl(config)` (and its `ConfigSource` argument type), exported from the package
+  entry: the document URL a config reads, composed by the SDK's `waterxConfigUrlFromRoot`. The
+  deployment loader takes the config and composes through it, so `loadConfig`, `doctor`, every
+  deployment reader and the corpus capture script resolve the URL one way. The default roots and
+  the retired-alias check stay this package's.

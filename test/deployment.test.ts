@@ -9,10 +9,11 @@
  * defeated by the cache for exactly the long-running process it was written to
  * protect.
  */
+import { readFileSync } from "node:fs";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  assertSchemaV2,
   exceptionCovers,
   forgetDeployments,
   loadDeployment,
@@ -22,15 +23,27 @@ import {
   parseExceptions,
 } from "../src/chain/deployment.ts";
 
-const URL = "https://example.invalid/testnet.json";
+const SOURCE = { configUrl: "https://example.invalid", network: "testnet" } as const;
 
-/** The smallest `schema_version: 2` document these tests need. */
-const document = (perp: string, objects: Record<string, unknown> = {}) =>
-  JSON.stringify({
-    schema_version: 2,
-    network: "testnet",
-    packages: { waterx_perp: { published_at: perp, original_id: perp, version: 1 } },
-    objects,
+/**
+ * A real testnet `schema_version: 2` document (the SDK's own fixture), so it
+ * passes the SDK's `parseConfigDocument`, which validates every document read.
+ */
+const FIXTURE = readFileSync(new URL("./fixtures/waterx-config-v2-testnet.json", import.meta.url), "utf8");
+
+type Doc = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+/** The fixture, edited. */
+const v2Document = (edit: (doc: Doc) => void = () => {}): string => {
+  const doc = JSON.parse(FIXTURE) as Doc;
+  edit(doc);
+  return JSON.stringify(doc);
+};
+
+/** The fixture with `waterx_perp` at `perp`. */
+const document = (perp: string) =>
+  v2Document((doc) => {
+    doc.packages.waterx_perp = { published_at: perp, original_id: perp, version: 1 };
   });
 
 let served: () => Promise<Response>;
@@ -54,15 +67,15 @@ const dead = () => Promise.reject(new Error("network down"));
 describe("the deployment manifest", () => {
   it("re-reads it once the copy in hand is old enough to have missed an upgrade", async () => {
     served = ok(document(`0x${"1".repeat(64)}`));
-    const first = await loadDeployment(URL);
+    const first = await loadDeployment(SOURCE);
     expect(first.byName.get("waterx_perp")).toBe("1".repeat(64));
 
     // The deployment upgrades while the process keeps running.
     served = ok(document(`0x${"2".repeat(64)}`));
-    expect((await loadDeployment(URL)).byName.get("waterx_perp")).toBe("1".repeat(64));
+    expect((await loadDeployment(SOURCE)).byName.get("waterx_perp")).toBe("1".repeat(64));
 
     vi.advanceTimersByTime(6 * 60_000);
-    expect((await loadDeployment(URL)).byName.get("waterx_perp")).toBe("2".repeat(64));
+    expect((await loadDeployment(SOURCE)).byName.get("waterx_perp")).toBe("2".repeat(64));
   });
 
   it("refuses rather than trade on a copy it cannot confirm", async () => {
@@ -70,23 +83,23 @@ describe("the deployment manifest", () => {
     // and exactly when it cannot be corrected, so the default does not trade
     // through one.
     served = ok(document(`0x${"1".repeat(64)}`));
-    await loadDeployment(URL);
+    await loadDeployment(SOURCE);
     served = dead;
     vi.advanceTimersByTime(6 * 60_000);
-    await expect(loadDeployment(URL)).rejects.toThrow(/could not be re-read/);
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/could not be re-read/);
   });
 
   it("keeps serving the copy it has only for an allowance the operator set", async () => {
     vi.stubEnv("WATERX_MANIFEST_GRACE_MINUTES", "30");
     served = ok(document(`0x${"1".repeat(64)}`));
-    await loadDeployment(URL);
+    await loadDeployment(SOURCE);
     served = dead;
     vi.advanceTimersByTime(6 * 60_000);
-    expect((await loadDeployment(URL)).byName.get("waterx_perp")).toBe("1".repeat(64));
+    expect((await loadDeployment(SOURCE)).byName.get("waterx_perp")).toBe("1".repeat(64));
 
     // And not past it.
     vi.advanceTimersByTime(40 * 60_000);
-    await expect(loadDeployment(URL)).rejects.toThrow(/could not be re-read/);
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/could not be re-read/);
   });
 
   it("opens one request for concurrent cold starts", async () => {
@@ -101,9 +114,9 @@ describe("the deployment manifest", () => {
       return Promise.resolve(new Response(document(`0x${"1".repeat(64)}`), { status: 200 }));
     };
     const [a, b, c] = await Promise.all([
-      loadDeployment(URL),
-      loadDeployment(URL),
-      loadDeployment(URL),
+      loadDeployment(SOURCE),
+      loadDeployment(SOURCE),
+      loadDeployment(SOURCE),
     ]);
     expect(opened).toBe(1);
     expect(a).toBe(b);
@@ -114,15 +127,15 @@ describe("the deployment manifest", () => {
     // The shared request has to be released on failure, or one unlucky start
     // would poison every attempt for the life of the process.
     served = dead;
-    await expect(loadDeployment(URL)).rejects.toThrow(/network down/);
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/network down/);
     served = ok(document(`0x${"3".repeat(64)}`));
-    expect((await loadDeployment(URL)).byName.get("waterx_perp")).toBe("3".repeat(64));
+    expect((await loadDeployment(SOURCE)).byName.get("waterx_perp")).toBe("3".repeat(64));
   });
 
   it("propagates the failure when there is no copy to fall back on", async () => {
     served = dead;
-    await expect(loadDeployment(URL)).rejects.toThrow(/network down/);
-    expect(manifestAgeMs(URL)).toBeUndefined();
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/network down/);
+    expect(manifestAgeMs(SOURCE)).toBeUndefined();
   });
 });
 
@@ -150,25 +163,26 @@ describe("the document schema", () => {
         coin_registry: "0xc",
       }),
     );
-    await expect(loadDeployment(URL)).rejects.toThrow(/not a schema_version 2 waterx-config document/);
-    await expect(loadDeployment(URL)).rejects.toThrow(/pre-v2 per-package document/);
-    await expect(loadDeployment(URL)).rejects.toThrow(/main-v2\.waterx-config\.pages\.dev/);
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/not a usable waterx-config v2 document/);
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/pre-v2/);
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/main-v2\.waterx-config\.pages\.dev/);
   });
 
   it("refuses any other schema_version", async () => {
-    served = ok(JSON.stringify({ schema_version: 3, packages: { waterx_perp: { published_at: PERP } }, objects: {} }));
-    await expect(loadDeployment(URL)).rejects.toThrow(/found schema_version 3/);
+    served = ok(v2Document((doc) => (doc.schema_version = 3)));
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/schema_version/);
   });
 
   it("refuses a v2 document with no objects block", async () => {
-    served = ok(JSON.stringify({ schema_version: 2, packages: { waterx_perp: { published_at: PERP } } }));
-    await expect(loadDeployment(URL)).rejects.toThrow(/no `objects` block/);
+    served = ok(v2Document((doc) => delete doc.objects));
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/objects: Required/);
   });
 
-  it("exposes the assertion for the other readers of the document", () => {
-    expect(() => assertSchemaV2({ schema_version: 2 }, URL)).not.toThrow();
-    expect(() => assertSchemaV2({ packages: {} }, URL)).toThrow(/pre-v2/);
-    expect(() => assertSchemaV2(null, URL)).toThrow(/not a schema_version 2/);
+  it("refuses the other network's document", async () => {
+    served = ok(v2Document());
+    await expect(loadDeployment({ ...SOURCE, network: "mainnet" })).rejects.toThrow(
+      /network mismatch/,
+    );
   });
 });
 
@@ -187,30 +201,24 @@ describe("object roles in the v2 document", () => {
 
   it("pins each role to the object at its document path", async () => {
     served = ok(
-      JSON.stringify({
-        schema_version: 2,
-        network: "testnet",
-        packages: {
-          waterx_perp: { published_at: PERP, original_id: PERP, version: 1 },
-          waterx_rule: { published_at: `0x${"2".repeat(64)}`, original_id: `0x${"2".repeat(64)}`, version: 1 },
-        },
-        objects: {
-          perp: { global_config: GLOBAL_CONFIG, markets: { BTCUSD: MARKET } },
-          account: { registry: REGISTRY },
-          wlp: { pool: POOL },
-        },
-        oracle_rules: {
-          waterx: { package: "waterx_rule", rule_config_object: RULE_CONFIG, enclave: { object: ENCLAVE } },
-        },
+      v2Document((doc) => {
+        doc.packages.waterx_perp = { published_at: PERP, original_id: PERP, version: 1 };
+        doc.packages.waterx_rule = { published_at: `0x${"2".repeat(64)}`, original_id: `0x${"2".repeat(64)}`, version: 1 };
+        doc.objects.perp.global_config = GLOBAL_CONFIG;
+        doc.objects.perp.markets.BTCUSD.market = MARKET;
+        doc.objects.account.registry = REGISTRY;
+        doc.objects.wlp.pool = POOL;
+        doc.oracle_rules.waterx.rule_config_object = RULE_CONFIG;
+        doc.oracle_rules.waterx.enclave.object = ENCLAVE;
       }),
     );
 
-    const deployment = await loadDeployment(URL);
+    const deployment = await loadDeployment(SOURCE);
 
     expect(deployment.objectFor("objects.perp.global_config")).toBe(normalizePackage(GLOBAL_CONFIG));
     expect(deployment.objectFor("objects.account.registry")).toBe(normalizePackage(REGISTRY));
     expect(deployment.objectFor("objects.wlp.pool")).toBe(normalizePackage(POOL));
-    expect(deployment.objectFor("objects.perp.markets.BTCUSD")).toBe(normalizePackage(MARKET));
+    expect(deployment.objectFor("objects.perp.markets.BTCUSD.market")).toBe(normalizePackage(MARKET));
     expect(deployment.objectFor("oracle_rules.waterx.rule_config_object")).toBe(normalizePackage(RULE_CONFIG));
     expect(deployment.objectFor("oracle_rules.waterx.enclave.object")).toBe(normalizePackage(ENCLAVE));
     // The pre-v2 role names find nothing — a binding still spelling one is a
@@ -225,6 +233,8 @@ describe("object roles in the v2 document", () => {
     expect(deployment.objects.has(normalizePackage(PERP))).toBe(false);
     expect(deployment.byName.get("waterx_perp")).toBe(normalizePackage(PERP));
     expect(deployment.byName.get("waterx_rule")).toBe("2".repeat(64));
+    expect(deployment.versionOf("waterx_perp")).toBe(1);
+    expect(deployment.versionOf("not_a_package")).toBeUndefined();
   });
 });
 
@@ -237,7 +247,6 @@ describe("object roles in the v2 document", () => {
  * mainnet needs.
  */
 describe("coin types the document declares", () => {
-  const PERP = `0x${"1".repeat(64)}`;
   const USDC = `0x${"d".repeat(64)}`;
   const DEEP = `0x${"e".repeat(64)}`;
 
@@ -246,24 +255,13 @@ describe("coin types the document declares", () => {
     // declare their coins by full type under `objects.*`, outside the
     // `packages` ids.
     served = ok(
-      JSON.stringify({
-        schema_version: 2,
-        network: "mainnet",
-        packages: {
-          waterx_perp: { published_at: PERP, original_id: PERP, version: 1 },
-          native_custody: { published_at: `0x${"2".repeat(64)}` },
-          waterx_staking: { published_at: `0x${"3".repeat(64)}` },
-        },
-        objects: {
-          custody: { assets: [{ type: `${USDC}::usdc::USDC`, decimal: 6 }] },
-          staking: {
-            rewarders: { WLP: { DEEP: { coin_type: `${DEEP}::deep::DEEP`, rewarder_id: `0x${"4".repeat(64)}` } } },
-          },
-        },
+      v2Document((doc) => {
+        doc.objects.custody.assets[0].type = `${USDC}::usdc::USDC`;
+        doc.objects.staking.rewarders.WLP.MOCK_DEEP.coin_type = `${DEEP}::deep::DEEP`;
       }),
     );
 
-    const deployment = await loadDeployment(URL);
+    const deployment = await loadDeployment(SOURCE);
 
     for (const coin of [USDC, DEEP]) {
       expect(deployment.typeable.has(normalizePackage(coin)), coin).toBe(true);
@@ -273,21 +271,16 @@ describe("coin types the document declares", () => {
 
   it("reads only struct tags under coin keys, not every string that mentions an address", async () => {
     served = ok(
-      JSON.stringify({
-        schema_version: 2,
-        network: "mainnet",
-        packages: { waterx_perp: { published_at: PERP, original_id: PERP, version: 1 } },
-        objects: {
-          perp: {
-            note: `${USDC}::usdc::USDC`,
-            type: "shared",
-            coin_type: `${DEEP}::deep::DEEP<${USDC}::usdc::USDC>`,
-          },
-        },
+      v2Document((doc) => {
+        Object.assign(doc.objects.perp, {
+          note: `${USDC}::usdc::USDC`,
+          type: "shared",
+          coin_type: `${DEEP}::deep::DEEP<${USDC}::usdc::USDC>`,
+        });
       }),
     );
 
-    const deployment = await loadDeployment(URL);
+    const deployment = await loadDeployment(SOURCE);
 
     expect(deployment.typeable.has(normalizePackage(USDC))).toBe(false);
     expect(deployment.typeable.has(normalizePackage(DEEP))).toBe(false);

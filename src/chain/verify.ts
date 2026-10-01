@@ -513,6 +513,14 @@ function isDeploymentType(
     .some((id) => actual === `0x${id}::${role.type}`);
 }
 
+/** The leading arguments every `trading::*_request` entrypoint shares. */
+const TRADING_REQUEST: Readonly<Record<string, Binding>> = {
+  globalConfig: obj("objects.perp.global_config"),
+  wxaRegistry: obj("objects.account.registry"),
+  marketRegistry: obj("objects.perp.market_registry_wlp"),
+  senderRequest: SENDER_REQUEST,
+};
+
 /**
  * What constrains each argument of each defining entrypoint, keyed by the
  * parameter's NAME.
@@ -529,7 +537,7 @@ function isDeploymentType(
  */
 export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>>> = {
   "trading::place_order_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     // The order itself, and the reduce-only legs attached to it. Both are
@@ -540,14 +548,14 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     preOrder: { vectorOf: ORDER_ARG_CONSTRUCTOR },
   },
   "trading::close_position_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
     acceptablePrice: "acceptablePriceRaw",
   },
   "trading::decrease_position_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
@@ -555,7 +563,7 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     acceptablePrice: "acceptablePriceRaw",
   },
   "trading::increase_position_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     // An `Option<u64>`, absent when increasing a position directly. A hand
@@ -568,21 +576,21 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     acceptablePrice: "acceptablePriceRaw",
   },
   "trading::deposit_collateral_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
     collateralAmount: "collateralRaw",
   },
   "trading::withdraw_collateral_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     positionId: "positionId",
     amount: "collateralRaw",
   },
   "trading::cancel_order_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     orderId: "orderId",
@@ -590,7 +598,7 @@ export const BINDINGS: Readonly<Record<string, Readonly<Record<string, Binding>>
     orderTypeTag: LOCATOR,
   },
   "trading::update_order_request": {
-    globalConfig: obj("objects.perp.global_config"), wxaRegistry: obj("objects.account.registry"), marketRegistry: obj("objects.perp.market_registry_wlp"), senderRequest: SENDER_REQUEST,
+    ...TRADING_REQUEST,
     ticker: "ticker",
     accountId: "accountId",
     orderId: "orderId",

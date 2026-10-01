@@ -55,8 +55,7 @@ import { fromBase64 } from "@mysten/sui/utils";
 
 import { ABI, SDK_VERSION } from "../../src/chain/abi.generated.ts";
 import { loadDeployment, normalizePackage } from "../../src/chain/deployment.ts";
-import { loadConfig } from "../../src/config.ts";
-import { configDocumentUrl } from "../../src/configUrl.ts";
+import { isNetwork, loadConfig } from "../../src/config.ts";
 import { HttpClient } from "../../src/api/http.ts";
 import { ReadApi } from "../../src/api/read.ts";
 import { TxApi } from "../../src/api/tx.ts";
@@ -196,13 +195,13 @@ const info = await read.info();
 // The network the backend serves decides which config document describes it —
 // the same `{root}/{network}.json` the agent itself reads.
 const network = info.network.replace(/^sui_/, "");
-if (network !== "testnet" && network !== "mainnet") {
+if (!isNetwork(network)) {
   throw new Error(`the backend reports network ${info.network}, which has no waterx-config document`);
 }
 // Resolved through `loadConfig`, the path the agent and `doctor` take
 // (WATERX_CONFIG_URL is a ROOT, unset means the per-network v2 root, a retired
 // alias refuses) — and before any capture, so a bad value costs nothing.
-const configDocument = configDocumentUrl(loadConfig({ network }));
+const configSource = loadConfig({ network });
 const asset = info.backingAssets[0]?.coinType ?? "";
 const spot = (await read.ticker("SUIUSD")).spotPrice;
 
@@ -555,7 +554,7 @@ for (const entrypoint of Object.keys(ABI)) {
 // fixture is a photograph with no date on it: the contract can be upgraded, the
 // arguments can move, and every test still passes against a corpus that
 // describes the old one.
-const deployment = await loadDeployment(configDocument);
+const deployment = await loadDeployment(configSource);
 const packages = Object.fromEntries(
   [...deployment.byName.entries()].sort(([a], [b]) => a.localeCompare(b)),
 );

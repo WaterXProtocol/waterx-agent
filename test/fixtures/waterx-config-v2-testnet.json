@@ -1,0 +1,737 @@
+{
+  "schema_version": 2,
+  "network": "testnet",
+  "chain_id": "4c78adac",
+  "symbols": {
+    "BTCUSD": {
+      "kind": "perp"
+    },
+    "ETHUSD": {
+      "kind": "perp"
+    },
+    "SOLUSD": {
+      "kind": "perp"
+    },
+    "SUIUSD": {
+      "kind": "perp"
+    },
+    "BNBUSD": {
+      "kind": "perp"
+    },
+    "DOGEUSD": {
+      "kind": "perp"
+    },
+    "XRPUSD": {
+      "kind": "perp"
+    },
+    "HYPEUSD": {
+      "kind": "perp"
+    },
+    "DEEPUSD": {
+      "kind": "perp"
+    },
+    "LITUSD": {
+      "kind": "perp"
+    },
+    "WALUSD": {
+      "kind": "perp"
+    },
+    "ZECUSD": {
+      "kind": "perp"
+    },
+    "EURUSD": {
+      "kind": "fx"
+    },
+    "USDJPY": {
+      "kind": "fx"
+    },
+    "AAPLXUSD": {
+      "kind": "xstock"
+    },
+    "TSLAXUSD": {
+      "kind": "xstock"
+    },
+    "COINXUSD": {
+      "kind": "xstock"
+    },
+    "CRCLXUSD": {
+      "kind": "xstock"
+    },
+    "GOOGLXUSD": {
+      "kind": "xstock"
+    },
+    "HOODXUSD": {
+      "kind": "xstock"
+    },
+    "METAXUSD": {
+      "kind": "xstock"
+    },
+    "NVDAXUSD": {
+      "kind": "xstock"
+    },
+    "MSTRXUSD": {
+      "kind": "xstock"
+    },
+    "NFLXXUSD": {
+      "kind": "xstock"
+    },
+    "QQQXUSD": {
+      "kind": "xstock"
+    },
+    "SPYXUSD": {
+      "kind": "xstock"
+    },
+    "XAUTUSD": {
+      "kind": "spot"
+    },
+    "XAGUSD": {
+      "kind": "commodity"
+    },
+    "XAUUSD": {
+      "kind": "commodity"
+    },
+    "WTIUSD": {
+      "kind": "commodity"
+    },
+    "BRENTUSD": {
+      "kind": "commodity"
+    }
+  },
+  "packages": {
+    "enclave": {
+      "published_at": "0x28221bbe0ba9351b563d9911e828926e01783fc105870d57a02d73da79a874ae",
+      "original_id": "0x28221bbe0ba9351b563d9911e828926e01783fc105870d57a02d73da79a874ae",
+      "version": 1,
+      "upgrade_capability": "0xf797307f6c211e4b95187a36704e52625245359db9ed35dfd22775744c44ec01"
+    },
+    "bucket_framework": {
+      "published_at": "0x63dc0d88e834716e564a6aaa1a893b6745f6cb1cb00d9d86a72208e02268873d",
+      "original_id": "0x0cdfc09284014fd36bbb19da8ab1c60056ca207d4c866e78dc01ca8e51dac790",
+      "version": 3,
+      "upgrade_capability": "0x5dd72d8c231b1c51d07cd9c8bd42fb9c50581e621f744d8df92adc8416ab53f7"
+    },
+    "waterx_referral": {
+      "published_at": "0x0ab918a0dd576e44b84f14ed4a2329030c6c07e09f44e82c544b23f3ddbf6b7f",
+      "original_id": "0x5d6d935e8a73c2df1c60135a798e404cc8545c3912236b8f82fe5554c539007a",
+      "version": 7,
+      "upgrade_capability": "0x5a6f659428336b6dcaebcf3dc267d8c3bb07a8d9172f9b45061b91bf486141c2"
+    },
+    "mock_sui": {
+      "published_at": "0x896e53015216c5034825c056bcde37a694263601df2534ae5c91b8a3d9150c78",
+      "original_id": "0x896e53015216c5034825c056bcde37a694263601df2534ae5c91b8a3d9150c78",
+      "version": 1,
+      "upgrade_capability": "0x3aef5756c226419197c905af4562970881335475a825aab2e13ec7e3fe36a526"
+    },
+    "mock_usdc": {
+      "published_at": "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a",
+      "original_id": "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a",
+      "version": 1
+    },
+    "mock_usdsui": {
+      "published_at": "0xc0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016",
+      "original_id": "0xc0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016",
+      "version": 1,
+      "upgrade_capability": "0x445e8bd44129686b74e45f82616da79c093827dada5bd91b0014281d1f4bdc73"
+    },
+    "waterx_account": {
+      "published_at": "0xf5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
+      "original_id": "0xff4afb7305886992843b700a363ebe4ae0dc6a727c4941043b565d0a3a7eb61d",
+      "version": 2,
+      "upgrade_capability": "0x35ccdc0a91ff1314baba67e9e80fed262794e6f2b42593cb5302e8d21b260ce4"
+    },
+    "waterx_oracle": {
+      "published_at": "0x3833ad543033a3efe82e88a252f6845f22944af42990591a143c1ae7faae7a67",
+      "original_id": "0x08e79bd54ffe2117d7efebf2a9d78604b6a17cbb79597141e92627c5da675e42",
+      "version": 1,
+      "upgrade_capability": "0xe76949d5cf3a377ccdee61b24cd107fc5b249ad68a2fb304bcca2d16330c6ba7"
+    },
+    "waterx_perp": {
+      "published_at": "0x069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
+      "original_id": "0x505622c7f91372446d9bb5e0b874f3a0746e4abaafdaf8209962bcdb44af2b35",
+      "version": 3,
+      "upgrade_capability": "0x8faf7b3b3af5e53d940ea2f9efb6a8aa843a0bf43bb68fd61e4a424356c27872"
+    },
+    "waterx_prediction": {
+      "published_at": "0x0274cc0502d43d177d9422c0dc4bfa510da83789bfe10e86e73ae1bd04277290",
+      "original_id": "0x99be07b27dbbd846eec72213f0ec221b3e7d38c8bfdee3cbf578b9bfa5df3481",
+      "version": 4,
+      "upgrade_capability": "0x4455efe909425bf55247b18c8ca744f2c84d79a1e36b82cdf3cd5d20c96702b9"
+    },
+    "waterx_prediction_gift": {
+      "published_at": "0xa3fec380a480fefcda38c125af0e57b06e775f49568c88ecec960e263ec1f5d8",
+      "original_id": "0x2cf6f6b047b4e0b97f33a77a75d6fa39175600894fe8615ef45caec2e59f023f",
+      "version": 2,
+      "upgrade_capability": "0x067fc22608d0fb12a703beb955f1b7ef3dec771a361ef907e40bb3322ef9b3c6"
+    },
+    "waterx_perp_view": {
+      "published_at": "0xd01bf55e2c29abdc26caa377976f9e7cdc19964453db6e96ee3f6ac9ba99d37c",
+      "original_id": "0x82c988477579606d9ccf609e85296a2c521a024ca4699bfa32596be2391028a5",
+      "version": 2,
+      "upgrade_capability": "0x6dde87344688df59a7639c65b5c1e1b5bee5c449fcee9baa0fbe840a91505313"
+    },
+    "waterx_rule": {
+      "published_at": "0x9572f18cb21403340d21fce437a70411636b47015beda0f54f54dceb9a1d186d",
+      "original_id": "0xa74191aad31907bbbd870626dd251b797a12a3841b0fdaf2af1e1cb5952572fb",
+      "version": 4,
+      "upgrade_capability": "0x1449637a6505cae414bd405e0f2023a3f0f327d8ef0ca5063a7151595c9160c5"
+    },
+    "waterx_staking": {
+      "published_at": "0x60518e116d6b824a834a8ad4735f360095ea729fd88680a12670ef95db227aa2",
+      "original_id": "0xc82109e3e1fefff821c5637e857de66c95508c607277be84ee50f4067f1ec445",
+      "version": 2,
+      "upgrade_capability": "0xfb965f4e24681fa6ecccca3f87c8b8f15bf2f37e7e13a19c37e05168cc5c11c8"
+    },
+    "wlp": {
+      "published_at": "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9",
+      "original_id": "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9",
+      "version": 1,
+      "upgrade_capability": "0x13e166b4140d4f129f9bf0a0d8f92420dd45bf0bf1677c5d52be79fa7d551c50"
+    },
+    "waterx_credit": {
+      "published_at": "0xda82a19a2225291b5f25d29d58e4b1c943ca50901940e6eb528545f45da61c13",
+      "original_id": "0x91af19476674ed012289cb1a40933a8e04679b1a7239b2d16919b2a10ff8ed97",
+      "version": 2,
+      "upgrade_capability": "0x2b0e403e7467025998509b0c23b6a5052e20bf8944bf50d2821fdd80fe9d50d0"
+    },
+    "native_custody": {
+      "published_at": "0x4edb6e43f1366e12e71ba18a68e547b8515638b64c07e9e79b384b32c61c1afe",
+      "original_id": "0x562e3c8071095e3df61c6a1841f9383eeb6439e55e6e5f5b5392aecb526b5f96",
+      "version": 4,
+      "upgrade_capability": "0x0607a4eba626ddc758f3db924ecdabbd3d9b701c89c8aa6531fde13c81085798"
+    },
+    "wormhole_bridge": {
+      "published_at": "0x5982b3b04d91160abe83aebe9b78e960a80c846dd0de72e5a44a88b339e434c5",
+      "original_id": "0x1ae0f64895ff7b158fb79f94a97c4f15f1a4d4972a03cde3a15febebbf640f79",
+      "version": 2,
+      "upgrade_capability": "0xfa32c809f14d331df2838c27feccf60b7bc49b64bb4991b708e9e01330d687b3"
+    },
+    "withdrawal_queue": {
+      "published_at": "0xb31e967139ea09a373cc546e9371f7ae5a26a5e4aecacb6ef290879b895cd78f",
+      "original_id": "0xd9698d972226c1c4f8180a059403fe808b4d92b5f88c878334d0efea830d0886",
+      "version": 6,
+      "upgrade_capability": "0x49337f0f96bb4850ad21ed3bd56e7ff6e1373ad71e51518bd181e82c74b386ac"
+    },
+    "testnet_faucet": {
+      "published_at": "0x26ae20135e44ac79d75fa34f0425812fc148417225d5f4c451060fc7cc9b36dd",
+      "original_id": "0x26ae20135e44ac79d75fa34f0425812fc148417225d5f4c451060fc7cc9b36dd",
+      "version": 1,
+      "upgrade_capability": "0x4e76d649d94152393b4e326ee1a3bd561a6de3e43f335c70f3076621d450356b"
+    },
+    "constant_rule": {
+      "published_at": "0xb623f1243a990d892f6f5c9b3e336d86f27b3d6c1491e93a0e6cc4a55976caed",
+      "original_id": "0xb623f1243a990d892f6f5c9b3e336d86f27b3d6c1491e93a0e6cc4a55976caed",
+      "version": 1,
+      "upgrade_capability": "0xdab514c940b738287d045ed2975a2fdf6e84d7f20206dc24619033eaf0dabb32"
+    },
+    "supra_rule": {
+      "published_at": "0x30fbd5dfd842202829fae2a9a2d0a3dcab0f0b81183dff1543967c45d2a33578",
+      "original_id": "0x30fbd5dfd842202829fae2a9a2d0a3dcab0f0b81183dff1543967c45d2a33578",
+      "version": 1,
+      "upgrade_capability": "0xe070e8746bb0e4dfad8204a0496abe7aa6bb3e717cd785be49ab578efc2dbe6f"
+    },
+    "usd_credit": {
+      "published_at": "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7",
+      "original_id": "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7",
+      "version": 1,
+      "upgrade_capability": "0xc62f0ec95f6fe8da033abe683f1abd1c5480652de2062fa861f4565f173df658"
+    },
+    "sui_credit": {
+      "published_at": "0x0298bfd43fbb86f7b990190aa513e09764320d0dcac66b55aca575caa7cdb314",
+      "original_id": "0x0298bfd43fbb86f7b990190aa513e09764320d0dcac66b55aca575caa7cdb314",
+      "version": 1,
+      "upgrade_capability": "0x96e682fa1dad00d990fa75fcc8eb4ba46b088b2792ce3078feb305a2f9296e88"
+    },
+    "deep_credit": {
+      "published_at": "0xf6cd7dfe0f1838a58676991f25e3d76768437f68fe31b0fba628f1a4e381b1f1",
+      "original_id": "0xf6cd7dfe0f1838a58676991f25e3d76768437f68fe31b0fba628f1a4e381b1f1",
+      "version": 1,
+      "upgrade_capability": "0xc4166f3c9567e95e4be640f11b8ea782ec61cc6977dd90d2e4a13638abeef4e6"
+    },
+    "wal_credit": {
+      "published_at": "0x7e8e28d8f3951984b7bb109961216a5b0e156ab6309f6b3a9a4d78b565726576",
+      "original_id": "0x7e8e28d8f3951984b7bb109961216a5b0e156ab6309f6b3a9a4d78b565726576",
+      "version": 1,
+      "upgrade_capability": "0x259bc966b4fa3fbe49d23bcdd4feaf796d218215ed112e8272121f5772a5e951"
+    }
+  },
+  "objects": {
+    "oracle": {
+      "oracle": "0xee05061d8d990ca91eab65cd94498adac654a8eed31af7ef8a95b6664c844f43",
+      "listing_cap": "0xcb9bddae4c0e228fb1f63ec89904c4d471f6adb47e3e1158e550d4b067ac8ca4",
+      "aggregators": {
+        "SUIUSD": "0xa97bc774cc3d9f5e66ef799f96dc660d636e91f6391f8993a2f23e07fe41026f",
+        "BTCUSD": "0x5bbc030f51b8028e12292d593b53b1edbf1fa86b38362b308fdf09713562844d",
+        "ETHUSD": "0x0349719f876b00b43b8df1180436abdf4d16bb0664486b4e907c94f21494c5a7",
+        "SOLUSD": "0xad80fa78daa55d939fb69d6d7f41334a3869f3a32295db1bfc35d1f0ab0831bb",
+        "DEEPUSD": "0x592a82b06b4296443b66d05fcd91fe8962e0581444fd4123aafab34d55137fcd",
+        "WALUSD": "0xa40aa713d200bd2ee891b2b03f6fc6ae6dc10d72b312f7a57f7d7b4ab64686a3",
+        "HYPEUSD": "0x154d2e8a1597c2992c6e2895cb38d9ec47703466ad9b7b28241d4891fb3ce652",
+        "XRPUSD": "0xb23f83f4a225bbfd5fa59e806dd5464496e0597301012276c981e9503017719d",
+        "BNBUSD": "0x4d4ba647d17f6d8cab1023464d34b6608a6e0c9d390d880a33072af0f9e2b989",
+        "ZECUSD": "0xb2b6766f2e4cda5b28501cdb7f16f514a774eadba738dc350dc4fb2229d3a71f",
+        "QQQXUSD": "0xe23bae0e3c9f80b0af19119f027478118c7b80fefbb39be8870c33b62a7a597d",
+        "SPYXUSD": "0xf3f1b1d5ebaa7e97a32f8ef4d61c5cdcab36350127accad235979757734869e4",
+        "NVDAXUSD": "0xfba17239e4010a22e46d4c77e11b97c28f5a01d399572f07d7e130c8bb41e747",
+        "TSLAXUSD": "0xfd50b7918bd7dc75f1e949a79a77805482cf24c6a82374aa96824a4ce134aaab",
+        "AAPLXUSD": "0x4939fb4d329eff218cf0068d54cd414e5c798a81266070db9ac6330496b33887",
+        "GOOGLXUSD": "0xf50b70fbb40d4490dd1c91ec4786398be596b8d7f7889cfd420a1091f633bf6c",
+        "METAXUSD": "0x58c4085f0e6a00ff3ca68a77b92aa462e0be24f08ec1276ec4ca6bd985de6c66",
+        "MSTRXUSD": "0xc61716a876efbe156c681454bab837b891daaa0724e48324b1c7737e82b61fd1",
+        "COINXUSD": "0xf30de5e1e99152441c2a00cec293a2863bc18ecfb40792375438b1e8cbe483ea",
+        "HOODXUSD": "0xb25b38248f9d055c94b35c98d6dd9021496bd00b15405b335083bb9385386104",
+        "CRCLXUSD": "0x60fdb58c1782c4d15865ddd30df79832d71ff28211a44a63caa11ce3425e7015",
+        "NFLXXUSD": "0xf600d5a41a84c2b12da4b17e79dd0fe0d628384019fd525b578710e283115803",
+        "XAUTUSD": "0xbcfeeaf8ca0ffd231faacc28e58eb524fec2fdb376896acb8333128882d8f1ce",
+        "XAGUSD": "0x8afcbc760b4078c01ff97705215505833f9640508e5310be3e4421ac43f8706d",
+        "XAUUSD": "0x040a6b106e43aec815b4176a7d09cecc358254ab929432c4263b843757b0bee6",
+        "WTIUSD": "0x1c4e5bf9e3282b0320431ca53124389febe1bd847fa7a3f5013bdc79bc4a9ab5",
+        "BRENTUSD": "0xb22cceb5672ba28a25199ee68b378da53d6213c982957adca844d1c8ae4909a5",
+        "EURUSD": "0x766a270b9605c6841b7b5499de7fe032047d321c5737e55e7933a3bd02d21f59",
+        "USDJPY": "0xbf00ae3880788943cb03892a88938bac34daab238df73668449ab04565964e6e",
+        "USDCUSD": "0x4df568b626407d7808622fbd1384792bfcf772b8f205403823e52ab0efbfb787",
+        "DOGEUSD": "0xcedcfdfd54e3ee5fad07ed90456667a0c0a3b36d8fe0df1008643729afdddb9c",
+        "LITUSD": "0x9603b436956ff0fb81b0f25ac7b6d8c4982d1f4e0862b74dd059698294029a88"
+      }
+    },
+    "perp": {
+      "global_config": "0xdba1d57604df612460b5252d7ba6c7b5388cc400809778d7150583b9fc34cd32",
+      "admin_cap": "0x6085c9f59548ee08b6d83915ea2db5efce8ad3803b697ec70473946816b8d931",
+      "market_registry_wlp": "0xb7545561564995e99a840bff1c2bbffdd41b3826a1c60a7264ee49cac9916e85",
+      "markets": {
+        "SUIUSD": {
+          "market": "0x11fd3d89e46ed96782bd016568b396cd78326c6c382db152e1ba3b7f6115c47b",
+          "config": "0xe6c7b04f78eaa4d2e512a1f76dff4740b1e65936592dd2454fbbbd25e7340a64"
+        },
+        "BTCUSD": {
+          "market": "0xdd50d1c7fa1c779a4dd0a62d3ffc89f98fd293e6175990cc15e7cae5ec1ee987",
+          "config": "0x4ec4aea8fe84135d26f1c9bfb90aecc75bcc7929037de2b28565551fa1bded90"
+        },
+        "ETHUSD": {
+          "market": "0x60038f7c06e2401f1eba1ba86089aeaa74f4bd8e120328903e718c65f9e226c9",
+          "config": "0x8aa6f5d0f4ee73c32090964aab3248a1fe58413a5916d3432360d8276a082228"
+        },
+        "SOLUSD": {
+          "market": "0xa01cd73edd1baadcbfe842a55507656a40757dc69d246b8fbbdcdf02850ac3da",
+          "config": "0xcb03bd53a492b01e80d1ba17c8439a8d2333f17cc14185fdc068d028b4dff776"
+        },
+        "DEEPUSD": {
+          "market": "0x1943972b54a4c7d2f134a2dfd88a33600de1aabfd98ac084887cbcb74f4d9ff6",
+          "config": "0x21d08a83c5b5935cd0adf2def376f46771a38ee326a663f6b1dc147473843ca5"
+        },
+        "WALUSD": {
+          "market": "0x51b92a654bf09359c5a09c6337608dc264847f9a15b45d2a91c7362dbcdfb711",
+          "config": "0x0472f9ebd8429577d1438a9361234f52f211c2114352f2b7753798e5c8df94e5"
+        },
+        "HYPEUSD": {
+          "market": "0xcb13c0e40f98b1ebb581d99a2ad0261e8adc1bacbb770947d8ac447916986a9f",
+          "config": "0x2a71da7dcd0c8de70815375b0eb25dc05329beda2c46d6dbdb144d7ae578ebc1"
+        },
+        "XRPUSD": {
+          "market": "0xaacf4caff02c71ac243c839882b6ae8b335be5ec10671bd690518b1af5549db3",
+          "config": "0x29408fa43b08a6a497ca871bf15c7f2959ddf58c5f77f75a28a0e5cb5562d29d"
+        },
+        "BNBUSD": {
+          "market": "0xd483760230e2c098230229c18cdee83fda41b22fa8ed307fa88bcdcaf1fe85e8",
+          "config": "0x1a109dcfad69a2353ee0f8b782be6b013f415dc62908164dc4fc11fade025581"
+        },
+        "ZECUSD": {
+          "market": "0x18b12a4bc1d9266ab76269a63c21b0e298355e477846830de017ce29c1c04432",
+          "config": "0x8b76032c148c278f619ad3da5c959e845627d1a4ca2fe84582f9a8180d08cb8e"
+        },
+        "QQQXUSD": {
+          "market": "0x92b566079fac6f50c7b96280ee5d559b28bc2bcf2c1d50b494407ac8be879fe0",
+          "config": "0x7af9709689393ae269002661f9de7d488b3f66a4599c2ed1304f9ff880b90801"
+        },
+        "SPYXUSD": {
+          "market": "0x24e2c7a5ed1ebaecd22ef11e08062230ce69d6c9a39fa56ce86b5cf4a9ff5757",
+          "config": "0x9c8851cfdc0232e01199e4f4b563a5359219ff243dff2d13040563c17efc6ae7"
+        },
+        "NVDAXUSD": {
+          "market": "0xa9a48025ef3c82066dcfb69b3df54f1b9a6af94c283f64f41da4c926e93159d5",
+          "config": "0x509efa185c3e4c062bf2227fca0ea6aede28b594708b3a8a3a48af0bf636a692"
+        },
+        "TSLAXUSD": {
+          "market": "0xa87e150728fb07d834181301721c0ae2956e3848a3d5bff2e48d51c3e6efd63e",
+          "config": "0xde0272b60bcc448bda7ed5f6d2d7845906f601e9ff5815b05c6c7d9771dc7461"
+        },
+        "AAPLXUSD": {
+          "market": "0xa4347066e868efa9593db2be179f968d13ae8fb138b50ef02d09b18ce244f256",
+          "config": "0x9293bf8d8a66ce3d1f465a40aa6c2d9d2d9d6282aed6ff90ec492a9f1bfb8c14"
+        },
+        "GOOGLXUSD": {
+          "market": "0x3dbfc1baf76d998de2c6c05f8b1cfa4b391f9d196ac34a5d0e8eb649d28f2da4",
+          "config": "0x092fe4410bbc4a12c474f1bdb61e68f9800d21648b1e950948d34035fa2c66d5"
+        },
+        "METAXUSD": {
+          "market": "0x616e5ab771deaab8a82448daffe2e2d0fa1a689aaac32d27b97150826ca46ccc",
+          "config": "0x58425ae0a3433dc22456b5911e74a6808ae1ede7f0f8d64b3ad9a7378e8f77ce"
+        },
+        "MSTRXUSD": {
+          "market": "0x50ac53f6ba79d0ac36b3c69173b728fb67586986ae7d6e45b2126b5b0df6c07d",
+          "config": "0x27686127b11044a08725103b32c4cdb3716897905267d6c0dcc53ac140ebb164"
+        },
+        "COINXUSD": {
+          "market": "0x4150d2bc75974e519a70aabb74a824e567a16b6e0b49e21a2ffd90daf5239260",
+          "config": "0x4835bc9165ab1c1f6ef5392d23a8406cf7c0bf6894097d2e16bbd78f861c2d10"
+        },
+        "HOODXUSD": {
+          "market": "0x6acdc51d1f8ef79cb6c0a076e91ca4c9d45aa450e9925cd9f0ae67e37a77f905",
+          "config": "0x8bec687251668cd66c05302e1dd6d2a74ade29a47e87233b0cb8c499b15b96dd"
+        },
+        "CRCLXUSD": {
+          "market": "0xab2bb2cede107c82b13f3fe7e24df9a173cd338cf594466bed6fd599ee0fd815",
+          "config": "0x30d59e3844b881070e42e1c48411bf1b5a00dac51d6f8d91356558576cbf1e94"
+        },
+        "NFLXXUSD": {
+          "market": "0x0cd474c946f83965df1aeff733d3342d294d799cf0106c18e50a805bc6d1736e",
+          "config": "0x205b18b3a4007e10e3d87f9b96167b590622e1302cd088b251e6d2c8d02f090e"
+        },
+        "XAUTUSD": {
+          "market": "0x967c46874bcfd6ad84a3ea3f8edaf7d7e0ba3ef6370de5ed2d1963dbe6173361",
+          "config": "0x94f736867df1b571ef900a2a9910104518b62159e1f1be1f785ffaf11b79261f"
+        },
+        "XAGUSD": {
+          "market": "0xd97f85d015ab4ee5a240682f0f94ec0b9b914dcbb7143cc0fd24c9cbabc24bc3",
+          "config": "0x7e2c11645b87cc1baa3a667da628a5b5e9c4e669884d34de47fdabc3ee75a33d"
+        },
+        "WTIUSD": {
+          "market": "0x3e496a21282f9e86961c8b305d2804b27aac5d821b7b119468aee145371601a6",
+          "config": "0xc830a34f5d6502c25210bb05d2077c4af4e22f037c4d3957ef7e520fe4f4d9ef"
+        },
+        "BRENTUSD": {
+          "market": "0x4bcd7f61b1f05e2e8bf59ffb9b3c7b88e6698497c71ede4e6fe88e96fffe62a1",
+          "config": "0xc03e06480ac50e3fff3daca59082d64fe4b4ee7c3c01d2cfb6d1ad3f147e4e70"
+        },
+        "EURUSD": {
+          "market": "0xf7272d22f981433c126c81ce24157bbf2f78536d2fa80ee34964e896a1967040",
+          "config": "0x4828ff7abe0e58b11a085085d6fc2742602b199cd3e7d2f18fb39f40e1c8cbea"
+        },
+        "USDJPY": {
+          "market": "0xe94149eaedba2e36cb283ca4584fdf68706ca091c2cf727b445f9c423bd76c9d",
+          "config": "0x4440fb5beedc9c5fc8698e259414a9bebb049775097baa9a5492a529be689956"
+        },
+        "DOGEUSD": {
+          "market": "0xcc5e3648c4a65b959b008c42feb46c521315960087565204be4148e990544434",
+          "config": "0xf148fbc2e3e4ca485898718ef48e497d339be2d869a90aef589e6181c528db75"
+        },
+        "LITUSD": {
+          "market": "0x052532f8d7186ba884a3b0d2c42ccc3eab96a9fb6fc01e7b77af832d828749f8",
+          "config": "0xb3afcf946efc8a921661ab7810a1f039dca8c325a897a90f9c0f04f9581c4530"
+        }
+      }
+    },
+    "wlp": {
+      "pool": "0xf9b3a8e104c175abcf96973b4002c3e0010585b9408562dcbc6b496e9c627dc1",
+      "aum": "0x1b12095a921593d623acaa2be1697d42af7c9f38791aa43e1365b81944650f50",
+      "currency_type": "0x6f31226b10fc1cede286962d208303adf1d6aed77a68d7f2379ee2c10faf41ef",
+      "metadata_cap": "0xf6b294e7fbd4f0808c1754669bd5bbf26363cf2c26bce14d3b12e9bbc1ad3fa0",
+      "pool_tokens": {
+        "USDCUSD": "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
+      }
+    },
+    "staking": {
+      "admin_cap": "0xa1424de003a6f76e6f9d1ab76915258439df4607e42c82f41aea28dbd48b1197",
+      "pools": {
+        "WLP": "0xbb2f127857e9e59cc09126aa0a2ef2ed48f505632c486d67d81e4009bac2c9c2"
+      },
+      "rewarders": {
+        "WLP": {
+          "MOCK_DEEP": {
+            "rewarder_id": "0x04fa44e41433cdf0a6b253036ffdf0715510809a5c132c6288ee68b581d5c4ad",
+            "coin_type": "0x8a14c090204331e3cf8d999d8a2653929869e3e406d2a8a8f46852e247a38d18::mock_deep::MOCK_DEEP",
+            "decimals": 6
+          }
+        }
+      }
+    },
+    "account": {
+      "registry": "0xf21bc5a813637998a1ff40c6d412a795faeb94cfad25b3370d518b55b0e5ec41",
+      "admin_cap": "0xad7493ea56fe66c18b2c7f41123603968352eb54d0dda8da67c8fd78d7c575f6"
+    },
+    "referral": {
+      "table": "0xb008a69a277ed7a62318566fd1bba6bc213cdd642232cf62ed3bf58fe437515f"
+    },
+    "credit": {
+      "registry": "0x374506daf2db182d515f66699cde5005f3ce5bb0ff1fc26e7624deb95eab382d",
+      "credit_type": "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+      "registries": {
+        "USD": {
+          "registry": "0x374506daf2db182d515f66699cde5005f3ce5bb0ff1fc26e7624deb95eab382d",
+          "credit_type": "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+          "decimals": 6,
+          "metadata_cap": "0xb650df8765c5735e478df589961494d90aef70eca805b4591e0483d513d82c69"
+        },
+        "SUI": {
+          "registry": "0xdfc31c153310ccabbe97fb5e647f79caac4c0a8840cf79c7fa70aee1afeae996",
+          "credit_type": "0x0298bfd43fbb86f7b990190aa513e09764320d0dcac66b55aca575caa7cdb314::sui::SUI",
+          "decimals": 6,
+          "metadata_cap": "0x6af293ffcf19668617be24357f76767240510743074c2707e186a84f2c51390c"
+        },
+        "DEEP": {
+          "registry": "0x1a2f43dd914f62ba0f7f95457a71456a1d73f04698e9ea51306061b3b11a135a",
+          "credit_type": "0xf6cd7dfe0f1838a58676991f25e3d76768437f68fe31b0fba628f1a4e381b1f1::deep::DEEP",
+          "decimals": 6,
+          "metadata_cap": "0xf06ba473229b9c9f07c0bad05e192972613ed3a481135bd1e68e2c69d4e8d19c"
+        },
+        "WAL": {
+          "registry": "0xb0b08ec13aa0f0cc682b38b8d434fee351d53b05facabf467997742f197d4bad",
+          "credit_type": "0x7e8e28d8f3951984b7bb109961216a5b0e156ab6309f6b3a9a4d78b565726576::wal::WAL",
+          "decimals": 6,
+          "metadata_cap": "0x2dc2ab2454e5cf6796610118bc1abe7c905e6a283c601a3f7f92c61a5c609dc5"
+        }
+      }
+    },
+    "custody": {
+      "vault": "0xdb3410c1d0b720d836b737397e2d373661ebb848e575aeff723c6926de76e051",
+      "assets": [
+        {
+          "name": "MOCK_USDC",
+          "type": "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a::mock_usdc::MOCK_USDC",
+          "decimal": 6,
+          "mint_fee_scaled": "0",
+          "burn_fee_scaled": "0",
+          "min_burn_amount": "0"
+        },
+        {
+          "name": "MOCK_USDSUI",
+          "type": "0xc0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016::mock_usdsui::MOCK_USDSUI",
+          "decimal": 6,
+          "mint_fee_scaled": "0",
+          "burn_fee_scaled": "0",
+          "min_burn_amount": "0"
+        }
+      ],
+      "vaults": {
+        "USD": {
+          "vault": "0xdb3410c1d0b720d836b737397e2d373661ebb848e575aeff723c6926de76e051",
+          "assets": [
+            {
+              "name": "MOCK_USDC",
+              "type": "0x7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a::mock_usdc::MOCK_USDC",
+              "decimal": 6,
+              "mint_fee_scaled": "0",
+              "burn_fee_scaled": "0",
+              "min_burn_amount": "0"
+            },
+            {
+              "name": "MOCK_USDSUI",
+              "type": "0xc0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016::mock_usdsui::MOCK_USDSUI",
+              "decimal": 6,
+              "mint_fee_scaled": "0",
+              "burn_fee_scaled": "0",
+              "min_burn_amount": "0"
+            }
+          ]
+        },
+        "SUI": {
+          "vault": "0xf36e11137591c5b2b5c058a9ff09b8fe0aaf04c7ca8e3f4cfe214b807e7210e6",
+          "assets": [
+            {
+              "name": "SUI",
+              "type": "0x2::sui::SUI",
+              "decimal": 9,
+              "mint_fee_scaled": "0",
+              "burn_fee_scaled": "0",
+              "min_burn_amount": "0"
+            }
+          ]
+        },
+        "DEEP": {
+          "vault": "0x44aaed346dbe33974e5b7a579b222161bc34d743739bd5a00593a09b81d89c0f",
+          "assets": [
+            {
+              "name": "DEEP",
+              "type": "0x36dbef866a1d62bf7328989a10fb2f07d769f4ee587c0de4a0a256e57e0a58a8::deep::DEEP",
+              "decimal": 6,
+              "mint_fee_scaled": "0",
+              "burn_fee_scaled": "0",
+              "min_burn_amount": "0"
+            }
+          ]
+        },
+        "WAL": {
+          "vault": "0xb3fd591b128fb097d7b496a7a616066e99458480c3b82c0c9ef0431fa4300c1b",
+          "assets": [
+            {
+              "name": "WAL",
+              "type": "0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL",
+              "decimal": 9,
+              "mint_fee_scaled": "0",
+              "burn_fee_scaled": "0",
+              "min_burn_amount": "0"
+            }
+          ]
+        }
+      }
+    },
+    "bridge": {
+      "state": "0xe428e17a935f76a3aefe2356bb8b4a5724d6bce3751bf8ef0f1a199016aca2d7",
+      "emitter_cap": "0x1ce28520f68edc209b9144cf812e5a8fbe549b820852ffe23300a1d0f3d04d1a",
+      "wormhole_state": "0x31358d198147da50db32eda2562951d53973a0c0ad5ed738e9b17d88b213d790",
+      "limits": {
+        "max_mint_per_tx": "100000000000",
+        "max_burn_per_tx": "100000000000",
+        "daily_mint": "1000000000000",
+        "daily_burn": "1000000000000",
+        "personal_burn": {
+          "cap_amount": "1000000000",
+          "window_ms": "86400000"
+        }
+      }
+    },
+    "withdrawal_queue": {
+      "queue": "0x1ffa684735e601fb6454ef6dc3196d6c0bb945ee1b527094789f59027924e366",
+      "executors": [
+        "0xeaadff7edd13268918f649adbe9de20984646645e750b44bac929f35a12e0abe",
+        "0x26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4"
+      ],
+      "queues": {
+        "USD": {
+          "queue": "0x1ffa684735e601fb6454ef6dc3196d6c0bb945ee1b527094789f59027924e366",
+          "executors": [
+            "0xeaadff7edd13268918f649adbe9de20984646645e750b44bac929f35a12e0abe",
+            "0x26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4"
+          ]
+        },
+        "SUI": {
+          "queue": "0x624af156dab81efa46cd8b67760acc10eaa7c610ca9d32d8822bc5fc1fb0f2ad",
+          "executors": [
+            "0xeaadff7edd13268918f649adbe9de20984646645e750b44bac929f35a12e0abe",
+            "0x26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4"
+          ]
+        },
+        "DEEP": {
+          "queue": "0xaea2a4b03683054b6f2954522d122d67cff46446c89bb79a490a88962da6011d",
+          "executors": [
+            "0xeaadff7edd13268918f649adbe9de20984646645e750b44bac929f35a12e0abe",
+            "0x26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4"
+          ]
+        },
+        "WAL": {
+          "queue": "0x07f9bbbb069da87e93a1772e30ef583920d1d433a8597ac5668f93e0dfb60834",
+          "executors": [
+            "0xeaadff7edd13268918f649adbe9de20984646645e750b44bac929f35a12e0abe",
+            "0x26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4"
+          ]
+        }
+      }
+    },
+    "prediction": {
+      "global_config": "0x3e2d7bfce29e077f13f9feaf68af62410872817be476b2708540a0d5b23c5936",
+      "admin_cap": "0x31acc29c6f6171a86ad5583e4610d75bdd9bcc71e16b46b1b994770743cdc782",
+      "market_registries": {
+        "USD": "0x6571c67131ea645bd3fd747c2b4c387f23ac80d83317f82f495cabfeadc512e0",
+        "SUI": "0x41c0daf309850eb88fd56d37d94bb98d4318d2ccdaaf031e4295385ea402398b",
+        "DEEP": "0xe7813d2dacc115471d99daf3a5c289df0b4fb41bc61e94ef40316904d00edca5",
+        "WAL": "0x3c812e467f5c52c538bfff11e55d7a8bc15cbfc8fb7080a5aa318fedc3589c6a"
+      },
+      "settlement_coin_types": {
+        "USD": "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
+        "SUI": "0x0298bfd43fbb86f7b990190aa513e09764320d0dcac66b55aca575caa7cdb314::sui::SUI",
+        "DEEP": "0xf6cd7dfe0f1838a58676991f25e3d76768437f68fe31b0fba628f1a4e381b1f1::deep::DEEP",
+        "WAL": "0x7e8e28d8f3951984b7bb109961216a5b0e156ab6309f6b3a9a4d78b565726576::wal::WAL"
+      },
+      "claimable_link_config": "0x39e9b1fa73e5a544acbe94409f6784c737ff5f64aab9094bbfa1043abc848eb2",
+      "gift_admin_cap": "0xaf093dcf28e2f09efdc821d7f9837a0c0fa5e01943d88d116d899c65afbd4baa"
+    },
+    "usd": {
+      "metadata_cap": "0xb650df8765c5735e478df589961494d90aef70eca805b4591e0483d513d82c69"
+    },
+    "faucet": {
+      "faucet": "0xa6b694d68a1807277bf2f7f304284442311c8cd4d2fe0b52b93f26abb95c290f",
+      "whitelist": [
+        "0x26266b1381bcf03ab3acc37c1e87beffb52d49f345248bc3efb9114176990ae4"
+      ]
+    },
+    "mock_usdsui": {
+      "currency_type": "0x0177241143d5b41bc8676ed3f59e3fae8f6aefd555f5e4fc255d2aff71093493",
+      "metadata_cap": "0x7cfe3cc8a003a384aa3c1f92ca5d0bac9cfffcba959d254a76cc14375685a95a",
+      "treasury_cap": "0x25bf4ad713da4f63cc53ee57e0523ffa713079ae3bca5026dab7dd4999b1833e"
+    }
+  },
+  "oracle_rules": {
+    "waterx": {
+      "package": "waterx_rule",
+      "rule_config_object": "0x9589a1f56c631dc8b2b86b8c186e95baa2c1a85b433373a8266fa377137e6e38",
+      "enclave": {
+        "object": "0xebe972b114a5d7abd51addddb9c36d64d35f2c5b4338e7416afcd4e38d8bd315",
+        "cap": "0x46b8905816a91bc443ecbe07777ae60805df044cbc850b5364ec372cd0a0c82f",
+        "config": "0xa4ea6c16cd136056e6a77d71185126da6187e7435b91ddf255d8462c95cd501d",
+        "pubkey": "03baaa84a2a1d05b3a3563223b114ea62cfd6141b86ab71f1d54de3f88cf90a6"
+      },
+      "feeds": {
+        "BTCUSD": {},
+        "ETHUSD": {},
+        "SOLUSD": {},
+        "SUIUSD": {},
+        "BNBUSD": {},
+        "DOGEUSD": {},
+        "XRPUSD": {},
+        "HYPEUSD": {},
+        "DEEPUSD": {},
+        "LITUSD": {},
+        "WALUSD": {},
+        "ZECUSD": {}
+      }
+    },
+    "constant": {
+      "package": "constant_rule",
+      "rule_config_object": "0xaa498ceed92217ae2b46d3166f1a1645b56a2954fe884a0bf422e0ce55d10dfd",
+      "constant_prices": {
+        "USDCUSD": {
+          "price": "1000000000"
+        }
+      }
+    },
+    "supra": {
+      "package": "supra_rule",
+      "rule_config_object": "0x33387310c9ecebc465234d3a805e5e50f0aa2f88935a2cb0882b72f5e584989f",
+      "pair_ids": {
+        "SUIUSD": 90,
+        "BTCUSD": 18,
+        "ETHUSD": 19,
+        "SOLUSD": 10,
+        "DEEPUSD": 491,
+        "WALUSD": 534,
+        "HYPEUSD": 551,
+        "XRPUSD": 14,
+        "BNBUSD": 49,
+        "ZECUSD": 60,
+        "XAGUSD": 5501,
+        "WTIUSD": 5503,
+        "EURUSD": 5000,
+        "USDJPY": 5001
+      }
+    }
+  },
+  "evm": {
+    "bridge": {
+      "chains": {
+        "ethereum_sepolia": {
+          "chain_id": 11155111,
+          "wormhole_chain_id": 10002,
+          "wormhole_core": "0x4a8bc80Ed5a4067f1CCf107057b8270E0cC11A78",
+          "wormhole_executor": "0xD0fb39f5a3361F21457653cB70F9D0C9bD86B66B",
+          "block_explorer": "https://sepolia.etherscan.io",
+          "deposit_vault": "0xbe7f974d1f9e4F97Ed0ecc3D4C392C44Dd39beB8",
+          "tokens": {
+            "tUSDC": "0x423A0663A39FB81300c3D94E23D3D9335F9809ce",
+            "tUSDT": "0xCd8Cd99294cA8B66600C4fd7D4059AD09963a2f8"
+          }
+        },
+        "arbitrum_sepolia": {
+          "chain_id": 421614,
+          "wormhole_chain_id": 10003,
+          "wormhole_core": "0x6b9C8671cdDC8dEab9c719bB87cBd3e782bA6a35",
+          "wormhole_executor": "0xBF161de6B819c8af8f2230Bcd99a9B3592f6F87b",
+          "block_explorer": "https://sepolia.arbiscan.io",
+          "deposit_vault": "0x3911B175F7E27bFfEf2bf66F89C0694CdADd55aD",
+          "tokens": {
+            "tUSDC": "0x54b35340E0544aa0E3542dbe137F6C7a18AA9f6c",
+            "tUSDT": "0xfFE7d293e6Df872B78A2D835c9179B8920A88866"
+          }
+        }
+      }
+    }
+  }
+}

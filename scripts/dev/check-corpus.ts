@@ -38,7 +38,7 @@ if (!hasCorpusFor(config.network)) {
 const configDocument = configDocumentUrl(config);
 let deployment;
 try {
-  deployment = await loadDeployment(configDocument);
+  deployment = await loadDeployment(config);
 } catch (error) {
   process.stderr.write(
     `unavailable: ${configDocument} could not be read — ` +

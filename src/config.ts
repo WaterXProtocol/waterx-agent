@@ -251,9 +251,12 @@ function isRefusableEntrypoint(name: string, network: Network): boolean {
  */
 const DEFAULT_NETWORK: Network = "mainnet";
 
+export const isNetwork = (value: string): value is Network =>
+  value === "testnet" || value === "mainnet";
+
 function parseNetwork(raw: string | undefined): Network {
   const value = (raw ?? DEFAULT_NETWORK).trim().toLowerCase();
-  if (value === "testnet" || value === "mainnet") return value;
+  if (isNetwork(value)) return value;
   throw new Error(
     `Invalid network "${raw}". Expected "testnet" or "mainnet" (WATERX_NETWORK / SUI_NETWORK).`,
   );

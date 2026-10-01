@@ -9,12 +9,14 @@
  *
  * `.env` is deliberately not loaded either. Tests state their own configuration.
  */
+import { RETIRED_CONFIG_URL_ALIASES } from "../src/configUrl.ts";
+
+const OWNED = /^(WATERX_|SUI_PRIVATE_KEY$|SUI_NETWORK$|SUI_GRPC_URL$)/;
 // The retired WATERX_CONFIG_URL aliases too: `loadConfig` refuses any one set.
-const OWNED =
-  /^(WATERX_|SUI_PRIVATE_KEY$|SUI_NETWORK$|SUI_GRPC_URL$|E2E_CONFIG_URL$|PREDICT_CONFIG_URL$|CONFIG_URL$)/;
+const RETIRED: ReadonlySet<string> = new Set(RETIRED_CONFIG_URL_ALIASES);
 
 for (const name of Object.keys(process.env)) {
-  if (OWNED.test(name)) delete process.env[name];
+  if (OWNED.test(name) || RETIRED.has(name)) delete process.env[name];
 }
 
 /**

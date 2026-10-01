@@ -22,7 +22,6 @@ import { createSigner, signerReadiness } from "./chain/create-signer.ts";
 import type { SignerProvider } from "./chain/signer.ts";
 import {
   type Deployment,
-  assertSchemaV2,
   exceptionCovers,
   loadDeployment,
   manifestAgeMs,
@@ -109,9 +108,6 @@ const fail = (name: string, detail: string): DoctorCheck => ({ name, status: "fa
 
 export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<DoctorReport> {
   const config = loadConfig(overrides);
-  // The one document URL every check below reads — resolved by the same helper
-  // `execute()` uses, so the preflight cannot vouch for a different document.
-  const configDocument = configDocumentUrl(config);
   const read = new ReadApi(new HttpClient({ baseUrl: config.apiUrl }));
   const checks: DoctorCheck[] = [];
 
@@ -251,23 +247,6 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     checks.push(fail("backend", `${config.apiUrl} unreachable — ${describe(error)}`));
   }
 
-  // ── Deployment config ─────────────────────────────────────────────────
-  // Read only to report what the deployment is running. The agent builds no
-  // PTB from these ids; the point is that a version bump is visible here rather
-  // than surfacing later as an on-chain version-gate abort.
-  try {
-    const deployment = await fetchDeploymentConfig(configDocument);
-    const summary = ["waterx_perp", "waterx_account", "waterx_oracle", "waterx_rule"]
-      .map((name) => {
-        const pkg = deployment.packages[name];
-        return pkg === undefined ? `${name}=absent` : `${name}=v${String(pkg.version)}`;
-      })
-      .join(" ");
-    checks.push(ok("deployment config", summary));
-  } catch (error) {
-    checks.push(warn("deployment config", `${configDocument} unreadable — ${describe(error)}`));
-  }
-
   // ── The deployment manifest ───────────────────────────────────────────
   // Loaded once, here, because everything below rests on it and because a
   // failure to load is not a caveat: `execute()` refuses under the same
@@ -275,8 +254,19 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // agent that cannot trade.
   let deployment: Deployment | undefined;
   try {
-    deployment = await loadDeployment(configDocument);
-    const age = manifestAgeMs(configDocument) ?? 0;
+    deployment = await loadDeployment(config);
+    const loaded = deployment;
+    // What the deployment is running. The agent builds no PTB from these; the
+    // point is that a version bump is visible here rather than surfacing later
+    // as an on-chain version-gate abort.
+    const summary = ["waterx_perp", "waterx_account", "waterx_oracle", "waterx_rule"]
+      .map((name) => {
+        const version = loaded.versionOf(name);
+        return version === undefined ? `${name}=absent` : `${name}=v${String(version)}`;
+      })
+      .join(" ");
+    checks.push(ok("deployment config", summary));
+    const age = manifestAgeMs(config) ?? 0;
     checks.push(
       ok(
         "manifest",
@@ -293,7 +283,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     checks.push(
       fail(
         "manifest",
-        `${configDocument} could not be read — ${describe(error)}. Every package pin, object ` +
+        `${configDocumentUrl(config)} could not be read — ${describe(error)}. Every package pin, object ` +
           `role and recorded layout is checked against it, so no write can be signed until it ` +
           `is readable.`,
       ),
@@ -788,25 +778,6 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     writeReady,
     signerReady: readiness.ready,
   };
-}
-
-interface DeploymentConfig {
-  schema_version?: number;
-  network?: string;
-  /** Package identity only in v2 — `published_at`, `original_id`, `version`. */
-  packages: Record<string, { version?: number; published_at?: string } | undefined>;
-}
-
-async function fetchDeploymentConfig(url: string): Promise<DeploymentConfig> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
-  const document = (await response.json()) as DeploymentConfig;
-  // The same refusal `loadDeployment` makes: a pre-v2 document would still
-  // report package versions here and then fail the manifest check below, and a
-  // preflight that says "deployment config ok" one line above "manifest failed"
-  // is asking the reader to work out which of the two to believe.
-  assertSchemaV2(document, url);
-  return document;
 }
 
 /**

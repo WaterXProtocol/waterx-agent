@@ -12,6 +12,9 @@
  * ability to sign because a CDN blipped, and a package set that was valid a
  * minute ago is still the right one to check against.
  */
+import { parseConfigDocument } from "@waterx/sdk/config";
+
+import { type ConfigSource, configDocumentUrl } from "../configUrl.ts";
 import { ExecutionPolicyError } from "../errors.ts";
 import { CAPTURING_LAYOUTS } from "./corpus.ts";
 
@@ -65,6 +68,8 @@ export interface Deployment {
    * `oracle_rules.waterx.rule_config_object`.
    */
   objectFor: (role: string) => string | undefined;
+  /** Name → the package's `version`, for reporting what the deployment runs. */
+  versionOf: (name: string) => number | undefined;
 }
 
 interface PackageEntry {
@@ -75,55 +80,20 @@ interface PackageEntry {
 }
 
 /**
- * The consolidated waterx-config document (`schema_version: 2`).
+ * The consolidated waterx-config document (`schema_version: 2`), as walked.
  *
  * `packages.*` is package IDENTITY only — `published_at`, `original_id`,
  * `version`, `upgrade_capability`, `mvr`. Every shared object id lives under
  * `objects.<domain>.*`, and each oracle rule's wiring under
- * `oracle_rules.<rule>.*`. The pre-v2 shape nested object ids inside each
- * package entry; a document in that shape is refused, see {@link assertSchemaV2}.
+ * `oracle_rules.<rule>.*`. The document is VALIDATED by the SDK's
+ * `parseConfigDocument` (schema v2 only, network match, required packages),
+ * but WALKED raw: the parse drops fields its schema does not name, and the
+ * object walk must see every id the document carries.
  */
 interface DeploymentDocument {
-  schema_version?: unknown;
-  network?: unknown;
   packages?: Record<string, PackageEntry | undefined>;
   objects?: unknown;
   oracle_rules?: unknown;
-}
-
-/**
- * The document schema this module reads, and the only one it accepts.
- *
- * Pre-v2 documents (no `schema_version`, ids nested under `packages.*`) are
- * still served from the legacy hosts (`config.waterx.app`,
- * `staging.waterx-config.pages.dev`) while they are retired. Walking one with
- * the v2 reader would find every package and NO objects — so every shared-object
- * argument would be refused, with a message blaming the transaction rather than
- * the endpoint. Refusing at the parse is the version of that failure a person
- * can act on.
- */
-export const SUPPORTED_SCHEMA_VERSION = 2;
-
-/**
- * Refuse a document that is not the consolidated `schema_version: 2` shape.
- *
- * Exported so every reader of the document in this package (`doctor` fetches
- * its own copy to report package versions) refuses the same way.
- */
-export function assertSchemaV2(document: unknown, configUrl: string): void {
-  const version = (document as { schema_version?: unknown } | null)?.schema_version;
-  if (version === SUPPORTED_SCHEMA_VERSION) return;
-  const legacy =
-    version === undefined &&
-    typeof (document as { packages?: unknown } | null)?.packages === "object";
-  throw new Error(
-    `${configUrl} is not a schema_version ${String(SUPPORTED_SCHEMA_VERSION)} waterx-config ` +
-      `document (found ${legacy ? "a pre-v2 per-package document with no schema_version" : `schema_version ${JSON.stringify(version)}`}). ` +
-      `This agent reads object ids from \`objects.*\` and rule wiring from \`oracle_rules.*\`, ` +
-      `which that shape does not carry, so nothing could be checked against it. Point ` +
-      `WATERX_CONFIG_URL at a v2 CDN root — https://main-v2.waterx-config.pages.dev (production) ` +
-      `or https://staging-v2.waterx-config.pages.dev (staging); <network>.json is appended.`,
-  );
 }
 
 /**
@@ -258,13 +228,20 @@ const cache = new Map<string, Cached>();
  */
 const inflight = new Map<string, Promise<Deployment>>();
 
-export async function loadDeployment(configUrl: string): Promise<Deployment> {
+/**
+ * The deployment for a config (`{ configUrl, network }`, which `AgentConfig`
+ * is). Taking the config rather than a URL means the root → document
+ * composition happens here, once, and a bare root can never be fetched as if
+ * it were the document.
+ */
+export async function loadDeployment(source: ConfigSource): Promise<Deployment> {
+  const configUrl = configDocumentUrl(source);
   const held = cache.get(configUrl);
   if (held !== undefined && Date.now() - held.fetchedAt < MANIFEST_TTL_MS) return held.deployment;
 
   let refresh = inflight.get(configUrl);
   if (refresh === undefined) {
-    refresh = fetchDeployment(configUrl)
+    refresh = fetchDeployment(configUrl, source.network)
       .then((deployment) => {
         cache.set(configUrl, { deployment, fetchedAt: Date.now() });
         return deployment;
@@ -294,25 +271,31 @@ export async function loadDeployment(configUrl: string): Promise<Deployment> {
 }
 
 /** Seconds since the held manifest was fetched, for diagnostics. */
-export function manifestAgeMs(configUrl: string): number | undefined {
-  const held = cache.get(configUrl);
+export function manifestAgeMs(source: ConfigSource): number | undefined {
+  const held = cache.get(configDocumentUrl(source));
   return held === undefined ? undefined : Date.now() - held.fetchedAt;
 }
 
-async function fetchDeployment(configUrl: string): Promise<Deployment> {
+async function fetchDeployment(configUrl: string, network: ConfigSource["network"]): Promise<Deployment> {
   const response = await fetch(configUrl, { signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error(`${configUrl} returned HTTP ${String(response.status)}`);
-  const document = (await response.json()) as DeploymentDocument;
-  assertSchemaV2(document, configUrl);
-  const entries = Object.entries(document.packages ?? {});
-  if (entries.length === 0) {
-    throw new Error(`${configUrl} lists no packages, so no transaction could be checked against it`);
-  }
-  if (document.objects === null || typeof document.objects !== "object") {
+  const document: unknown = await response.json();
+  // A pre-v2 document walked as v2 would yield every package and NO objects, so
+  // every shared-object argument would be refused with a message blaming the
+  // transaction. The SDK's parse refuses it here, naming the endpoint instead.
+  try {
+    parseConfigDocument(document, network === "mainnet" ? "MAINNET" : "TESTNET");
+  } catch (error) {
     throw new Error(
-      `${configUrl} carries no \`objects\` block, so no shared object could be held to a role`,
+      `${configUrl} is not a usable waterx-config v2 document for ${network}: ` +
+        `${(error as Error).message}. Point WATERX_CONFIG_URL at a v2 CDN root — ` +
+        `https://main-v2.waterx-config.pages.dev (production) or ` +
+        `https://staging-v2.waterx-config.pages.dev (staging); <network>.json is appended.`,
+      { cause: error },
     );
   }
+  const walked = document as DeploymentDocument;
+  const entries = Object.entries(walked.packages ?? {});
 
   const callable = new Set(FRAMEWORK.map(normalizePackage));
   const typeable = new Set(FRAMEWORK.map(normalizePackage));
@@ -322,7 +305,9 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
   // beacon. Every transaction may name them and the document does not.
   const objects = new Set(["0x5", "0x6", "0x8"].map(normalizePackage));
   const byRole = new Map<string, string>();
+  const versions = new Map<string, number>();
   for (const [name, entry] of entries) {
+    if (typeof entry?.version === "number") versions.set(name, entry.version);
     const ids: string[] = [];
     idsByName.set(name, ids);
     const current = entry?.published_at;
@@ -343,9 +328,9 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
   // `oracle_rules.<rule>.*` for each rule's config and enclave objects, which
   // the oracle-refresh legs of every order touch. Roles keep the root so that
   // `objects.perp.global_config` reads as the document path it is.
-  collectObjects(document.objects, objects, byRole, "objects.");
-  collectObjects(document.oracle_rules, objects, byRole, "oracle_rules.");
-  collectCoinTypes(document.objects, typeable);
+  collectObjects(walked.objects, objects, byRole, "objects.");
+  collectObjects(walked.oracle_rules, objects, byRole, "oracle_rules.");
+  collectCoinTypes(walked.objects, typeable);
   return {
     callable,
     typeable,
@@ -353,6 +338,7 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
     objects,
     objectFor: (role) => byRole.get(role),
     idsFor: (name) => idsByName.get(name) ?? [],
+    versionOf: (name) => versions.get(name),
   };
 }
 
@@ -491,6 +477,6 @@ export function forgetDeployments(): void {
  * Production always fetches, so the failure mode of an unreachable config stays
  * real rather than something the tests quietly opt out of.
  */
-export function seedDeployment(configUrl: string, deployment: Deployment): void {
-  cache.set(configUrl, { deployment, fetchedAt: Date.now() });
+export function seedDeployment(source: ConfigSource, deployment: Deployment): void {
+  cache.set(configDocumentUrl(source), { deployment, fetchedAt: Date.now() });
 }

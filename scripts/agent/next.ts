@@ -18,7 +18,6 @@ import { budgetWarnings, spentTotal } from "../../src/agent/spend.ts";
 import { decide, sentenceOf } from "../../src/agent/guidance.ts";
 import { accountObjectReader } from "../../src/chain/account-object.ts";
 import { loadDeployment } from "../../src/chain/deployment.ts";
-import { configDocumentUrl } from "../../src/configUrl.ts";
 import { grantEventCandidates } from "../../src/chain/grant-events.ts";
 import { gasBalance, MIN_GAS_SUI } from "../../src/chain/gas.ts";
 import { unsettled } from "../../src/agent/submissions.ts";
@@ -109,7 +108,7 @@ await run(async () => {
   let discovered: readonly DiscoveredGrant[] | undefined;
   if (report.signerReady && report.readReady && account === undefined) {
     try {
-      const deployment = await loadDeployment(configDocumentUrl(agent.config));
+      const deployment = await loadDeployment(agent.config);
       // The ORIGINAL package id names event types; `idsFor` lists it last.
       const accountPackage = deployment.idsFor("waterx_account").at(-1);
       discovered = (

@@ -24,6 +24,12 @@ import { ConfigError } from "./errors.ts";
 /** Kept local rather than imported from `config.ts`, which imports this module. */
 type Network = "testnet" | "mainnet";
 
+/** What names a deployment document: a root and a network. `AgentConfig` is one. */
+export interface ConfigSource {
+  configUrl: string;
+  network: Network;
+}
+
 /**
  * Default root per network: the consolidated `schema_version: 2` documents.
  * The legacy hosts — `config.waterx.app` and `staging.waterx-config.pages.dev`
@@ -69,7 +75,7 @@ export function assertNoRetiredConfigAliases(
  * call, so a hand-built `AgentConfig` that skipped `loadConfig` cannot slip a
  * document URL through.
  */
-export function configDocumentUrl(config: { configUrl: string; network: Network }): string {
+export function configDocumentUrl(config: ConfigSource): string {
   try {
     return waterxConfigUrlFromRoot(config.configUrl, config.network);
   } catch (error) {
