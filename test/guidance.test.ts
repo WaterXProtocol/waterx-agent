@@ -323,6 +323,122 @@ describe("what to do next", () => {
     expect(blocked.headline).toContain("abi corpus");
   });
 
+  describe("a delegate is never asked to fund itself", () => {
+    // The owner keeps the funds and the account, and the backend sponsors a
+    // delegate's transactions — so neither gas nor an account is ever a
+    // delegate's problem. The guard said so and was keyed on `undecided`, the
+    // state a wallet is in BEFORE it adopts. Adoption makes the mode
+    // `delegate`, the guard stopped applying, and the very next `next` told a
+    // wallet that had just completed the handshake to go and get some SUI.
+    const adopted: Situation = {
+      ...ok,
+      configured: false,
+      mode: "delegate",
+      address: "0xagent",
+      delegation: { state: "granted", headline: "granted" },
+      missing: { signer: false, gas: true, account: true },
+    };
+
+    it("does not send an adopted delegate looking for gas", () => {
+      const g = decide(adopted);
+      expect(g.headline).not.toMatch(/gas|SUI|fund/iu);
+      expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("fund-sui");
+    });
+
+    it("does not tell an adopted delegate to create an account the owner already has", () => {
+      const g = decide(adopted);
+      expect(g.headline).not.toMatch(/no WaterX account/iu);
+      expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("create-account");
+    });
+
+    it("reaches the state the operator has to act on instead", () => {
+      // The point of the fix: with nothing of its own missing, a read-only
+      // delegate lands on the policy choice — which is the step a person takes
+      // and the one the gas branch was standing in front of.
+      const g = decide({ ...adopted, configured: true, readOnly: true });
+      expect(g.state).toBe("read-only");
+    });
+
+    it("still asks an owner-path wallet for its own gas and account", () => {
+      // The guard is about the arrangement, not about skipping checks. A wallet
+      // that IS the account holder needs both, and is still told so.
+      const owner = decide({ ...adopted, mode: "owner", delegation: undefined });
+      expect(owner.state).toBe("not-set-up");
+      expect(owner.headline).toMatch(/gas|SUI|faucet/iu);
+    });
+  });
+
+  describe("a check that refuses the write itself", () => {
+    // The state these arrive in is not the state that names them. `choose`
+    // spells blockers into one branch, and `awaiting-grant` returns three
+    // branches earlier — so an install whose recorded layouts had gone stale
+    // was told the only thing left was to get the owner to grant permission.
+    // The owner signed. Only then did the state move far enough to mention
+    // that no write could have been signed either way, and an act we can ask
+    // of an owner once had been spent on nothing.
+    const stale: Situation = {
+      ...ok,
+      configured: false,
+      address: "0xagent",
+      mode: "undecided",
+      missing: { signer: false, gas: false, account: true },
+      blockers: ["abi corpus"],
+    };
+
+    it("is said while the owner's grant is still being waited for", () => {
+      const g = decide(stale);
+      expect(g.state).toBe("awaiting-grant");
+      const said = (g.warnings ?? []).join(" ");
+      expect(said).toContain("abi corpus");
+      expect(said, "and that it is not merely advice").toContain("No write can be signed");
+      expect(said, "pointed somewhere, because not every blocker is the operator's").toContain("doctor");
+    });
+
+    it("is said in every state, not only the ones that happen to reach it", () => {
+      // Written as a sweep on purpose. The defect was a branch returning early,
+      // so a test pinned to one state would pass again the next time a branch
+      // is added above it.
+      const states: [string, Situation][] = [
+        ["unsettled", { ...stale, open: 1, firstUnsettled: "sub_1" }],
+        ["awaiting-approval", { ...stale, pending: [{ id: "apr_1", action: "openLong" }] }],
+        ["awaiting-grant", stale],
+        ["not-set-up", { ...stale, missing: { signer: true, gas: false, account: true } }],
+        ["read-only", { ...stale, configured: true, readOnly: true }],
+        ["no-collateral", { ...stale, configured: true, freeMargin: 0 }],
+        ["ready", { ...stale, configured: true }],
+      ];
+      for (const [expected, situation] of states) {
+        const g = decide(situation);
+        expect(g.state, `${expected} was not the state reached`).toBe(expected);
+        expect(
+          [...(g.warnings ?? []), g.headline].join(" "),
+          `${expected} said nothing about the blocker`,
+        ).toContain("abi corpus");
+      }
+    });
+
+    it("says it once, not twice, in the state that already names it", () => {
+      // The filter is against the headline rather than against the state,
+      // because three branches return `not-set-up` and only one of them spells
+      // the blockers out.
+      const g = decide({ ...stale, mode: "owner", missing: { signer: false, gas: false, account: false } });
+      expect(g.headline).toContain("abi corpus");
+      expect(g.warnings ?? []).toHaveLength(0);
+    });
+
+    it("keeps the account's own warnings, and puts the refusal first", () => {
+      // A thin margin is a fact about money that could still be traded. This
+      // one says none of it can be, so it is read first.
+      const g = decide({ ...stale, warnings: ["Free margin is $1.20 against $312 of notional."] });
+      expect(g.warnings?.[0]).toContain("abi corpus");
+      expect(g.warnings?.[1]).toContain("Free margin");
+    });
+
+    it("adds nothing when every check passes", () => {
+      expect(decide(ok).warnings).toBeUndefined();
+    });
+  });
+
   it("does not offer a trade with no collateral, and says who can fix it", () => {
     const g = decide({ ...ok, freeMargin: 0 });
     expect(g.state).toBe("no-collateral");

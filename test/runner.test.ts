@@ -870,9 +870,22 @@ describe("the store", () => {
   });
 
   it("reports a broken lock as itself, not as a peer", () => {
-    const store = new JobStore(join("/proc-does-not-exist-here", "jobs.json"));
-    // Whatever goes wrong, it must not be dressed up as a lock conflict.
-    expect(() => store.open()).toThrow(/Cannot take the job-store lock|ENOENT|EACCES|EROFS/);
+    // A FILE where the store's directory has to go. Every platform refuses to
+    // create a directory over one, which is what makes this portable.
+    //
+    // It used to be an unwritable absolute path, and "unwritable" turned out to
+    // be a POSIX idea. On Windows `/proc-does-not-exist-here` is a path on the
+    // current drive that the runner was perfectly entitled to create, so
+    // `open()` made the directory, took the lock and returned — and the test
+    // asserting it fails was the thing that failed.
+    const wall = join(dir, "wall");
+    writeFileSync(wall, "not a directory\n");
+    const store = new JobStore(join(wall, "jobs.json"));
+
+    // Whatever goes wrong, it must say where, and it must not be dressed up as
+    // a lock conflict — an operator told "another runner holds this" goes
+    // looking for a process that was never started.
+    expect(() => store.open()).toThrow(/wall/);
     expect(() => store.open()).not.toThrow(StoreLockedError);
   });
 

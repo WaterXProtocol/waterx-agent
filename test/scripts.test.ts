@@ -356,3 +356,26 @@ describe("the documented scope-writing command", () => {
     }
   });
 });
+
+describe("a read command does not touch the write plane", () => {
+  // Building the executor asserts that the account's owner has been settled,
+  // because whether this process signs as a delegate must not be decided from a
+  // missing fact. Two query scripts reached for `executor.senderAddress` just to
+  // learn which wallet to ask about, so commands that sign nothing died on an
+  // assertion about signing — and `delegated-auto` went with them, since the
+  // runner reached the same getter on its first line of output.
+  //
+  // Checked as a property of the source rather than by running them: the
+  // hermetic suite has no server to read from, and this is the mistake that is
+  // easy to make again precisely because it looks harmless.
+  it("takes the wallet from `subjectWallet()`, not from the executor", () => {
+    const offenders = readdirSync("scripts/query")
+      .filter((name) => name.endsWith(".ts"))
+      .filter((name) => /\bagent\.executor\b/u.test(readFileSync(join("scripts/query", name), "utf8")));
+
+    expect(
+      offenders,
+      "a read command reached the write plane; `agent.subjectWallet()` answers the same question and resolves the owner first",
+    ).toEqual([]);
+  });
+});

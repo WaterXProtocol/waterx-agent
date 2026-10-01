@@ -362,6 +362,14 @@ const ORDER_ID = process.env.ORDER_ID;
 // Defaults to the main account, so the single-account invocation is unchanged.
 const orderAccount = process.env.ORDER_ACCT ?? accountId;
 const orderBody = { sender: process.env.ORDER_OWNER ?? sender, accountId: orderAccount };
+/** Everything that needs an open position to build. */
+const POSITION_SHAPES = [
+  "trading::close_position_request",
+  "trading::decrease_position_request",
+  "trading::increase_position_request",
+  "trading::deposit_collateral_request",
+  "trading::withdraw_collateral_request",
+];
 const ORDER_SHAPES = ["trading::cancel_order_request", "trading::update_order_request"];
 if (ORDER_ID !== undefined) {
   const order = (await read.orders({ account: orderAccount })).find((o) => String(o.id) === ORDER_ID);
@@ -424,18 +432,39 @@ const positionAccount = process.env.POSITION_ACCT ?? accountId;
 const positionBody = { sender: process.env.POSITION_OWNER ?? sender, accountId: positionAccount };
 if (POSITION_ID !== undefined) {
   const P = BigInt(POSITION_ID);
-  const T = str("SUIUSD");
+  // The position's OWN market, not SUIUSD.
+  //
+  // This hard-coded the ticker while the order shapes below look theirs up, and
+  // the difference only shows when `POSITION_ACCT` points somewhere else: a
+  // position on any other market was built with a mismatched ticker, the
+  // backend dry-ran it, and six entrypoints came back "Transaction would fail
+  // on-chain" — recorded as uncapturable for what was really an argument error.
+  // `POSITION_ACCT` exists precisely so the position can come from elsewhere,
+  // so it could not have been relied on until this read the market.
+  const held = (await read.positions(positionAccount)).find((entry) => String(entry.id) === POSITION_ID);
+  if (held === undefined) {
+    for (const entrypoint of POSITION_SHAPES) {
+      skipped.set(entrypoint, `POSITION_ID ${POSITION_ID} is not open on the account it was looked up on`);
+    }
+  }
+  const TICKER = held?.ticker ?? "SUIUSD";
+  // Exit bounds follow the position's own market: a bound derived from SUIUSD's
+  // spot is one a SOLUSD close can never satisfy.
+  const EXIT = held === undefined
+    ? ACCEPTABLE_EXIT
+    : BigInt(Math.floor((await read.ticker(TICKER)).spotPrice * 0.95 * 1e9));
+  const T = str(TICKER);
   const A = addr(positionAccount);
   await capture(
     {
       "trading::close_position_request": [
-        { ticker: T, accountId: A, positionId: u64(P), acceptablePrice: u64(ACCEPTABLE_EXIT) },
+        { ticker: T, accountId: A, positionId: u64(P), acceptablePrice: u64(EXIT) },
       ],
     },
     () =>
-      tx.closePosition("SUIUSD", Number(P), {
+      tx.closePosition(TICKER, Number(P), {
         ...positionBody,
-        acceptablePrice: String(ACCEPTABLE_EXIT),
+        acceptablePrice: String(EXIT),
       }),
   );
   await capture(
@@ -443,15 +472,15 @@ if (POSITION_ID !== undefined) {
       "trading::decrease_position_request": [
         {
           ticker: T, accountId: A, positionId: u64(P),
-          size: u128(SIZE), acceptablePrice: u64(ACCEPTABLE_EXIT),
+          size: u128(SIZE), acceptablePrice: u64(EXIT),
         },
       ],
     },
     () =>
-      tx.reducePosition("SUIUSD", Number(P), {
+      tx.reducePosition(TICKER, Number(P), {
         ...positionBody,
         size: String(SIZE),
-        acceptablePrice: String(ACCEPTABLE_EXIT),
+        acceptablePrice: String(EXIT),
       }),
   );
   await capture(
@@ -464,7 +493,7 @@ if (POSITION_ID !== undefined) {
       ],
     },
     () =>
-      tx.increasePosition("SUIUSD", Number(P), {
+      tx.increasePosition(TICKER, Number(P), {
         ...positionBody,
         collateralAmount: "1000009",
         size: String(SIZE),

@@ -25,6 +25,8 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
+import { syncDirectory } from "../durability.ts";
+
 import { type Job, TERMINAL_STATES } from "./types.ts";
 
 export class StoreLockedError extends Error {
@@ -211,12 +213,13 @@ export class JobStore {
     // until the directory itself is synced. Without this a power loss can leave
     // the store pointing at the pre-rename file — losing the digest we wrote
     // precisely so a crash would be recoverable.
-    const dir = openSync(dirname(this.path), "r");
-    try {
-      fsyncSync(dir);
-    } finally {
-      closeSync(dir);
-    }
+    //
+    // Best effort: the rename has landed, so the caller's update is applied
+    // whatever happens next. Throwing from here would abort a tick over an
+    // upgrade that was not available — and `update` is called from
+    // `onSubmitting`, where a throw aborts a submission whose digest is in fact
+    // already recorded.
+    syncDirectory(dirname(this.path));
   }
 }
 

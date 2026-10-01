@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 
@@ -61,6 +61,15 @@ export function loadWallet(): WalletInfo {
 
 /**
  * Update or append a key=value pair in the .env file.
+ *
+ * `0600`, because this file holds `SUI_PRIVATE_KEY`. It was written at the
+ * process umask — `0644` on a stock install — so every other account on the
+ * machine could read the agent's key. That is the whole protection this key
+ * has: there is no passphrase on it, and `bootstrap` generates it unattended.
+ *
+ * The mode is set on an EXISTING file too, not only at creation. A key written
+ * before this would otherwise keep the permissions it was born with, and the
+ * install that most needs tightening is the one that already happened.
  */
 export function saveToEnv(key: string, value: string): void {
   const target = envPath();
@@ -78,7 +87,16 @@ export function saveToEnv(key: string, value: string): void {
     content += `${key}=${value}\n`;
   }
 
-  writeFileSync(target, content, "utf8");
+  writeFileSync(target, content, { encoding: "utf8", mode: 0o600 });
+  // `writeFileSync`'s mode applies only when it CREATES the file, so an .env
+  // that already existed keeps whatever it had. Set it either way.
+  try {
+    chmodSync(target, 0o600);
+  } catch {
+    // A filesystem with no permission bits (a Windows volume, a mounted share)
+    // cannot be tightened and must not stop a wallet being saved. The key is
+    // written either way; what differs is whether this machine can protect it.
+  }
 }
 
 /**
