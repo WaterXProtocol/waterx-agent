@@ -17,8 +17,25 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Both platforms, because the package names neither and therefore claims both.
+  #
+  # It was claiming one it did not work on. The runner makes its writes durable
+  # by syncing the directory after a rename, and Windows cannot sync a directory
+  # at all: `fsync` there is `FlushFileBuffers`, which needs a writable handle.
+  # Every `queue` threw — AFTER the rename had landed — so the caller was told
+  # its intent had not been accepted while the runner was about to trade it, and
+  # running the command again turned one intent into two orders. Nothing in CI
+  # could notice, because nothing in CI had ever run on Windows.
+  #
+  # fail-fast is off so a failure on one platform still reports the other. The
+  # two diverge exactly where this kind of bug lives, and "ubuntu cancelled" is
+  # not an answer about Windows.
   check:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
