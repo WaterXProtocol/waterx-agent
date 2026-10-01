@@ -563,31 +563,34 @@
       }
     },
     "testnet": {
-      "capturedAt": "2026-09-10",
+      "capturedAt": "2026-10-01",
       "network": "sui_testnet",
-      "sdkVersion": "4.3.3",
+      "sdkVersion": "6.1.0",
       "packages": {
         "bucket_framework": "63dc0d88e834716e564a6aaa1a893b6745f6cb1cb00d9d86a72208e02268873d",
         "constant_rule": "b623f1243a990d892f6f5c9b3e336d86f27b3d6c1491e93a0e6cc4a55976caed",
+        "deep_credit": "f6cd7dfe0f1838a58676991f25e3d76768437f68fe31b0fba628f1a4e381b1f1",
         "enclave": "28221bbe0ba9351b563d9911e828926e01783fc105870d57a02d73da79a874ae",
         "mock_sui": "896e53015216c5034825c056bcde37a694263601df2534ae5c91b8a3d9150c78",
         "mock_usdc": "7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a",
         "mock_usdsui": "c0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016",
-        "native_custody": "45910f4c3ba9942c0e69bd81fba71d28a290950691a42baa96f82a8112ae44bd",
+        "native_custody": "4edb6e43f1366e12e71ba18a68e547b8515638b64c07e9e79b384b32c61c1afe",
+        "sui_credit": "0298bfd43fbb86f7b990190aa513e09764320d0dcac66b55aca575caa7cdb314",
         "supra_rule": "30fbd5dfd842202829fae2a9a2d0a3dcab0f0b81183dff1543967c45d2a33578",
         "testnet_faucet": "26ae20135e44ac79d75fa34f0425812fc148417225d5f4c451060fc7cc9b36dd",
         "usd_credit": "6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7",
+        "wal_credit": "7e8e28d8f3951984b7bb109961216a5b0e156ab6309f6b3a9a4d78b565726576",
         "waterx_account": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
         "waterx_credit": "da82a19a2225291b5f25d29d58e4b1c943ca50901940e6eb528545f45da61c13",
         "waterx_oracle": "3833ad543033a3efe82e88a252f6845f22944af42990591a143c1ae7faae7a67",
         "waterx_perp": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
         "waterx_perp_view": "d01bf55e2c29abdc26caa377976f9e7cdc19964453db6e96ee3f6ac9ba99d37c",
-        "waterx_prediction": "0274cc0502d43d177d9422c0dc4bfa510da83789bfe10e86e73ae1bd04277290",
-        "waterx_prediction_gift": "a3fec380a480fefcda38c125af0e57b06e775f49568c88ecec960e263ec1f5d8",
+        "waterx_prediction": "e47d2416e8e6584589963578acd7a042a4208c8eef5f3b826bbf3a85f37fe08f",
+        "waterx_prediction_gift": "53f8ed8b1e3013714dddf4e62f7c459b1e7b0fbc6b5e26270853338a56f1bd68",
         "waterx_referral": "0ab918a0dd576e44b84f14ed4a2329030c6c07e09f44e82c544b23f3ddbf6b7f",
-        "waterx_rule": "9572f18cb21403340d21fce437a70411636b47015beda0f54f54dceb9a1d186d",
+        "waterx_rule": "3ba062eb44c512bc36b0cc347e5d7df268879b6aa68c49d6c84581a6e311112d",
         "waterx_staking": "60518e116d6b824a834a8ad4735f360095ea729fd88680a12670ef95db227aa2",
-        "withdrawal_queue": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
+        "withdrawal_queue": "b31e967139ea09a373cc546e9371f7ae5a26a5e4aecacb6ef290879b895cd78f",
         "wlp": "da92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9",
         "wormhole_bridge": "5982b3b04d91160abe83aebe9b78e960a80c846dd0de72e5a44a88b339e434c5"
       },
@@ -597,14 +600,14 @@
             "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
             "sent": {
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "delegateAddress": "dededededededededededededededededededededededededededededededede",
               "permissions": "00000000"
             },
             "positions": [
               null,
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "9999999999999999999999999999999999999999999999999999999999999999",
+              "dededededededededededededededededededededededededededededededede",
               "00",
               "00000000",
               "00",
@@ -623,23 +626,6 @@
               null,
               null,
               "0570726f6265"
-            ],
-            "typeArguments": []
-          }
-        ],
-        "account::remove_delegate": [
-          {
-            "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
-            "sent": {
-              "accountId": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
-              "delegateAddress": "dededededededededededededededededededededededededededededededede"
-            },
-            "positions": [
-              null,
-              null,
-              "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
-              "dededededededededededededededededededededededededededededededede",
-              null
             ],
             "typeArguments": []
           }
@@ -679,14 +665,14 @@
             "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
             "sent": {
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "delegateAddress": "dededededededededededededededededededededededededededededededede",
               "permissions": "01000000"
             },
             "positions": [
               null,
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "9999999999999999999999999999999999999999999999999999999999999999",
+              "dededededededededededededededededededededededededededededededede",
               "01000000",
               null
             ],
@@ -698,14 +684,14 @@
             "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
             "sent": {
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "delegateAddress": "dededededededededededededededededededededededededededededededede",
               "permissions": "01000000"
             },
             "positions": [
               null,
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "9999999999999999999999999999999999999999999999999999999999999999",
+              "dededededededededededededededededededededededededededededededede",
               "01000000",
               null
             ],
@@ -717,33 +703,33 @@
             "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
             "sent": {
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "delegateAddress": "dededededededededededededededededededededededededededededededede",
               "permissions": "02000000"
             },
             "positions": [
               null,
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "9999999999999999999999999999999999999999999999999999999999999999",
+              "dededededededededededededededededededededededededededededededede",
               "02000000",
               null
             ],
             "typeArguments": [
-              "0x0274cc0502d43d177d9422c0dc4bfa510da83789bfe10e86e73ae1bd04277290::account_data::WaterXPrediction"
+              "0xe47d2416e8e6584589963578acd7a042a4208c8eef5f3b826bbf3a85f37fe08f::account_data::WaterXPrediction"
             ]
           },
           {
             "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
             "sent": {
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "delegateAddress": "9999999999999999999999999999999999999999999999999999999999999999",
+              "delegateAddress": "dededededededededededededededededededededededededededededededede",
               "permissions": "04000000"
             },
             "positions": [
               null,
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "9999999999999999999999999999999999999999999999999999999999999999",
+              "dededededededededededededededededededededededededededededededede",
               "04000000",
               null
             ],
@@ -754,7 +740,7 @@
         ],
         "custody_vault::mint": [
           {
-            "package": "45910f4c3ba9942c0e69bd81fba71d28a290950691a42baa96f82a8112ae44bd",
+            "package": "4edb6e43f1366e12e71ba18a68e547b8515638b64c07e9e79b384b32c61c1afe",
             "sent": {
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
             },
@@ -772,31 +758,6 @@
             ]
           }
         ],
-        "lp_pool::mint_wlp": [
-          {
-            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-            "sent": {
-              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "depositAmount": "47420f0000000000"
-            },
-            "positions": [
-              null,
-              null,
-              null,
-              null,
-              null,
-              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "47420f0000000000",
-              "0000000000000000",
-              null,
-              null
-            ],
-            "typeArguments": [
-              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP",
-              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD"
-            ]
-          }
-        ],
         "request::new_place_order_argument": [
           {
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
@@ -804,20 +765,20 @@
               "isLong": "01",
               "isStopOrder": "00",
               "reduceOnly": "00",
-              "size": "3ffc0c70020000000000000000000000",
+              "size": "fd171f9d010000000000000000000000",
               "triggerPrice": "00",
               "linkedPositionId": "00",
-              "acceptablePrice": "01e833d22f00000000",
+              "acceptablePrice": "013ec23c4800000000",
               "collateralAmount": "00093d0000000000"
             },
             "positions": [
               "01",
               "00",
               "00",
-              "3ffc0c70020000000000000000000000",
+              "fd171f9d010000000000000000000000",
               "00",
               "00",
-              "01e833d22f00000000",
+              "013ec23c4800000000",
               "00093d0000000000"
             ],
             "typeArguments": []
@@ -828,7 +789,7 @@
               "isLong": "00",
               "isStopOrder": "00",
               "reduceOnly": "01",
-              "size": "3ffc0c70020000000000000000000000",
+              "size": "fd171f9d010000000000000000000000",
               "triggerPrice": "0100105e5f000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -838,7 +799,7 @@
               "00",
               "00",
               "01",
-              "3ffc0c70020000000000000000000000",
+              "fd171f9d010000000000000000000000",
               "0100105e5f000000000000000000000000",
               "00",
               "00",
@@ -852,7 +813,7 @@
               "isLong": "00",
               "isStopOrder": "01",
               "reduceOnly": "01",
-              "size": "3ffc0c70020000000000000000000000",
+              "size": "fd171f9d010000000000000000000000",
               "triggerPrice": "010084d717000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -862,7 +823,7 @@
               "00",
               "01",
               "01",
-              "3ffc0c70020000000000000000000000",
+              "fd171f9d010000000000000000000000",
               "010084d717000000000000000000000000",
               "00",
               "00",
@@ -875,18 +836,18 @@
           {
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
-              "ticker": "06535549555344",
+              "ticker": "065a4543555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "orderId": "3e01000000000000"
+              "orderId": "0800000000000000"
             },
             "positions": [
               null,
               null,
               null,
-              "06535549555344",
+              "065a4543555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "3e01000000000000",
+              "0800000000000000",
               "00000000000000000000000000000000",
               "ff",
               null
@@ -903,8 +864,8 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "positionId": "3400000000000000",
-              "acceptablePrice": "5847442b00000000"
+              "positionId": "4b00000000000000",
+              "acceptablePrice": "2b8b5b4100000000"
             },
             "positions": [
               null,
@@ -913,8 +874,8 @@
               "06535549555344",
               null,
               "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "3400000000000000",
-              "5847442b00000000",
+              "4b00000000000000",
+              "2b8b5b4100000000",
               null
             ],
             "typeArguments": [
@@ -929,9 +890,9 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "positionId": "3400000000000000",
-              "size": "3ffc0c70020000000000000000000000",
-              "acceptablePrice": "5847442b00000000"
+              "positionId": "4b00000000000000",
+              "size": "fd171f9d010000000000000000000000",
+              "acceptablePrice": "2b8b5b4100000000"
             },
             "positions": [
               null,
@@ -940,9 +901,9 @@
               "06535549555344",
               null,
               "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "3400000000000000",
-              "3ffc0c70020000000000000000000000",
-              "5847442b00000000",
+              "4b00000000000000",
+              "fd171f9d010000000000000000000000",
+              "2b8b5b4100000000",
               null
             ],
             "typeArguments": [
@@ -957,7 +918,7 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "positionId": "3400000000000000",
+              "positionId": "4b00000000000000",
               "collateralAmount": "4b420f0000000000"
             },
             "positions": [
@@ -967,7 +928,7 @@
               "06535549555344",
               null,
               "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "3400000000000000",
+              "4b00000000000000",
               "4b420f0000000000",
               null
             ],
@@ -984,10 +945,10 @@
               "ticker": "06535549555344",
               "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
               "orderId": "00",
-              "positionId": "3400000000000000",
+              "positionId": "4b00000000000000",
               "collateralAmount": "49420f0000000000",
-              "size": "3ffc0c70020000000000000000000000",
-              "acceptablePrice": "e833d22f00000000"
+              "size": "fd171f9d010000000000000000000000",
+              "acceptablePrice": "3ec23c4800000000"
             },
             "positions": [
               null,
@@ -997,10 +958,10 @@
               null,
               "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
               "00",
-              "3400000000000000",
+              "4b00000000000000",
               "49420f0000000000",
-              "3ffc0c70020000000000000000000000",
-              "e833d22f00000000",
+              "fd171f9d010000000000000000000000",
+              "3ec23c4800000000",
               null
             ],
             "typeArguments": [
@@ -1037,51 +998,25 @@
           {
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
-              "ticker": "06535549555344",
+              "ticker": "065a4543555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "orderId": "3e01000000000000",
-              "currentTriggerPrice": "00000000000000000000000000000000",
-              "newSize": "03825484040000000000000000000000",
-              "newTriggerPrice": "07de391a000000000000000000000000"
+              "orderId": "0800000000000000",
+              "currentTriggerPrice": "48a759a14c0000000000000000000000",
+              "newSize": "6c160e09000000000000000000000000",
+              "newTriggerPrice": "fb7c9df7440000000000000000000000"
             },
             "positions": [
               null,
               null,
               null,
-              "06535549555344",
+              "065a4543555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "3e01000000000000",
-              "00000000000000000000000000000000",
+              "0800000000000000",
+              "48a759a14c0000000000000000000000",
               "00",
-              "03825484040000000000000000000000",
-              "07de391a000000000000000000000000",
-              null
-            ],
-            "typeArguments": [
-              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-            ]
-          }
-        ],
-        "trading::withdraw_collateral_request": [
-          {
-            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-            "sent": {
-              "ticker": "06535549555344",
-              "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "positionId": "3400000000000000",
-              "amount": "4d420f0000000000"
-            },
-            "positions": [
-              null,
-              null,
-              null,
-              "06535549555344",
-              null,
-              "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
-              "3400000000000000",
-              "4d420f0000000000",
+              "6c160e09000000000000000000000000",
+              "fb7c9df7440000000000000000000000",
               null
             ],
             "typeArguments": [
@@ -1092,7 +1027,7 @@
         ],
         "withdrawal_queue::enqueue": [
           {
-            "package": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
+            "package": "b31e967139ea09a373cc546e9371f7ae5a26a5e4aecacb6ef290879b895cd78f",
             "sent": {},
             "positions": [
               null,
@@ -1106,7 +1041,7 @@
         ],
         "withdrawal_queue::route_native": [
           {
-            "package": "4475962d06d4c21aa88276bb5de8d772aaace9fe54a350ad12e7f485f49c44ad",
+            "package": "b31e967139ea09a373cc546e9371f7ae5a26a5e4aecacb6ef290879b895cd78f",
             "sent": {},
             "positions": [
               "0000000000000000"
@@ -1118,8 +1053,11 @@
         ]
       },
       "uncaptured": {
+        "account::remove_delegate": "Transaction would fail on-chain",
         "lp_pool::cancel_redeem": "requires a pending redeem request",
+        "lp_pool::mint_wlp": "Transaction would fail on-chain",
         "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
+        "trading::withdraw_collateral_request": "Transaction would fail on-chain",
         "waterx_staking::claim": "requires claimable rewards",
         "withdrawal_queue::route_wormhole": "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes"
       }
