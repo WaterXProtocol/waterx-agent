@@ -168,14 +168,14 @@ function checkAllowUnconfirmed(named: readonly string[], network: Network): read
   // collapsing it would hide the mistake; this is a set, so say so.
   const repeated = named.filter((e, i) => named.indexOf(e) !== i);
   if (repeated.length > 0) {
-    throw new Error(
+    throw new ConfigError(
       `allowUnconfirmed names ${[...new Set(repeated)].join(", ")} more than once. It is a set ` +
         `of entrypoints; a repeat means something was pasted twice.`,
     );
   }
   const unusable = named.filter((e) => !isRefusableEntrypoint(e, network));
   if (unusable.length === 0) return named;
-  throw new Error(
+  throw new ConfigError(
     `allowUnconfirmed names ${unusable.join(", ")}, which no allowance can apply to — each is ` +
       `either misspelt, already confirmed against this deployment, or reached by no action.`,
   );
@@ -204,7 +204,7 @@ function parseAllowUnconfirmed(raw: string | undefined, network: Network): strin
   // it was opened for. Naming them keeps the exception the size of the problem,
   // and `pnpm run doctor` prints the list to paste.
   const unknown = named.filter((e) => !isRefusableEntrypoint(e, network));
-  throw new Error(
+  throw new ConfigError(
     `Invalid WATERX_ALLOW_UNCONFIRMED_ABI "${raw}". ` +
       (unknown.length > 0
         ? `${unknown.join(", ")} is not an entrypoint this allowance can apply to — it is ` +
@@ -257,7 +257,7 @@ export const isNetwork = (value: string): value is Network =>
 function parseNetwork(raw: string | undefined): Network {
   const value = (raw ?? DEFAULT_NETWORK).trim().toLowerCase();
   if (isNetwork(value)) return value;
-  throw new Error(
+  throw new ConfigError(
     `Invalid network "${raw}". Expected "testnet" or "mainnet" (WATERX_NETWORK / SUI_NETWORK).`,
   );
 }
@@ -271,7 +271,7 @@ function parsePolicy(raw: string | undefined, network: Network): ExecutionPolicy
   if (value === "read-only" || value === "interactive" || value === "delegated-auto") return value;
   const alias = POLICY_ALIASES[value];
   if (alias !== undefined) return alias;
-  throw new Error(
+  throw new ConfigError(
     `Invalid WATERX_EXECUTION_POLICY "${raw}". ` +
       `Expected "read-only", "interactive" or "delegated-auto".`,
   );
@@ -403,12 +403,12 @@ function parseSignerCommand(): string[] | undefined {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    throw new Error(
+    throw new ConfigError(
       `WATERX_SIGNER_COMMAND is not valid JSON. Expected an argv array, e.g. ["waterx-predict-keystore","sign"].`,
     );
   }
   if (!Array.isArray(parsed) || parsed.some((part) => typeof part !== "string") || parsed.length === 0) {
-    throw new Error(`WATERX_SIGNER_COMMAND must be a non-empty array of strings.`);
+    throw new ConfigError(`WATERX_SIGNER_COMMAND must be a non-empty array of strings.`);
   }
   return parsed as string[];
 }
@@ -417,7 +417,7 @@ function parsePositiveInt(raw: string | undefined): number | undefined {
   if (raw === undefined || raw.trim() === "") return undefined;
   const value = Number(raw);
   if (!Number.isInteger(value) || value <= 0) {
-    throw new Error(`Expected a positive integer, got "${raw}".`);
+    throw new ConfigError(`Expected a positive integer, got "${raw}".`);
   }
   return value;
 }
