@@ -10,7 +10,7 @@ const args = parseArgs({ limit: { desc: "Page size", default: "10" } }, "funds")
 
 await run(async () => {
   const agent = initAgent();
-  const wallet = agent.executor.senderAddress;
+  const wallet = await agent.subjectWallet();
   const limit = asNumber(args.limit) ?? 10;
   show({
     deposits: await agent.read.deposits(wallet, { limit }),

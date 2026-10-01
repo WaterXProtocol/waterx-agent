@@ -323,6 +323,51 @@ describe("what to do next", () => {
     expect(blocked.headline).toContain("abi corpus");
   });
 
+  describe("a delegate is never asked to fund itself", () => {
+    // The owner keeps the funds and the account, and the backend sponsors a
+    // delegate's transactions — so neither gas nor an account is ever a
+    // delegate's problem. The guard said so and was keyed on `undecided`, the
+    // state a wallet is in BEFORE it adopts. Adoption makes the mode
+    // `delegate`, the guard stopped applying, and the very next `next` told a
+    // wallet that had just completed the handshake to go and get some SUI.
+    const adopted: Situation = {
+      ...ok,
+      configured: false,
+      mode: "delegate",
+      address: "0xagent",
+      delegation: { state: "granted", headline: "granted" },
+      missing: { signer: false, gas: true, account: true },
+    };
+
+    it("does not send an adopted delegate looking for gas", () => {
+      const g = decide(adopted);
+      expect(g.headline).not.toMatch(/gas|SUI|fund/iu);
+      expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("fund-sui");
+    });
+
+    it("does not tell an adopted delegate to create an account the owner already has", () => {
+      const g = decide(adopted);
+      expect(g.headline).not.toMatch(/no WaterX account/iu);
+      expect(g.suggestions.map((s) => s.command).join(" ")).not.toContain("create-account");
+    });
+
+    it("reaches the state the operator has to act on instead", () => {
+      // The point of the fix: with nothing of its own missing, a read-only
+      // delegate lands on the policy choice — which is the step a person takes
+      // and the one the gas branch was standing in front of.
+      const g = decide({ ...adopted, configured: true, readOnly: true });
+      expect(g.state).toBe("read-only");
+    });
+
+    it("still asks an owner-path wallet for its own gas and account", () => {
+      // The guard is about the arrangement, not about skipping checks. A wallet
+      // that IS the account holder needs both, and is still told so.
+      const owner = decide({ ...adopted, mode: "owner", delegation: undefined });
+      expect(owner.state).toBe("not-set-up");
+      expect(owner.headline).toMatch(/gas|SUI|faucet/iu);
+    });
+  });
+
   describe("a check that refuses the write itself", () => {
     // The state these arrive in is not the state that names them. `choose`
     // spells blockers into one branch, and `awaiting-grant` returns three

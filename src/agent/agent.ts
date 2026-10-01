@@ -290,6 +290,29 @@ export class WaterXAgent {
     return this.#identity;
   }
 
+  /**
+   * Whose wallet a read is about: the account's owner, or this one when it IS
+   * the account holder.
+   *
+   * It exists because the read commands were taking the same address off
+   * `executor.senderAddress`, and the executor is the WRITE plane. Building it
+   * asserts that the owner has been settled — rightly, since whether this
+   * process signs as a delegate must not be decided from a missing fact — so
+   * `funds` and `referral`, which sign nothing, died on an assertion about
+   * signing: "the write plane was reached before resolveIdentity() settled the
+   * account's owner".
+   *
+   * Resolving first is not a way around that assertion, it is the answer to the
+   * question these commands are asking. Until the owner is known the fallback
+   * address is this agent's own, so a delegate would have been shown ITS
+   * deposits and referrals instead of the account's — the wrong wallet,
+   * reported as the right one.
+   */
+  async subjectWallet(): Promise<string> {
+    await this.resolveIdentity();
+    return this.config.ownerAddress ?? this.signer.address;
+  }
+
   async #deriveOwner(): Promise<void> {
     const accountId = this.config.accountId;
     if (accountId === undefined || this.config.ownerAddress !== undefined) return;

@@ -362,7 +362,21 @@ function choose(s: Situation): Guidance {
       };
     }
 
-    if (s.missing.gas) {
+    // Neither gas nor an account is ever needed on the delegate path: the owner
+    // keeps both, and the backend sponsors a delegate's transactions.
+    //
+    // The guard above says exactly this and only covers `undecided`, which is
+    // the state a wallet is in BEFORE it adopts. The moment adoption succeeds
+    // the mode becomes `delegate` and the guard stops applying, so the next
+    // `next` fell through to the two branches below and told a delegate with an
+    // owner, a granted delegation and zero SUI that it was `not-set-up` and
+    // somebody should send it money. SKILL.md tells an agent never to ask the
+    // user to fund the agent wallet, so the runtime was contradicting its own
+    // instructions at the one step where the handshake had just worked.
+    //
+    // Keyed on the arrangement rather than on how far through it we are.
+    const needsOwnGas = s.mode !== "delegate";
+    if (needsOwnGas && s.missing.gas) {
       // Before the account, because the account cannot be created without it.
       // Told "create the account" by a wallet with no SUI, an agent runs the
       // command, watches it fail on gas selection, asks what to do next, and
@@ -391,7 +405,7 @@ function choose(s: Situation): Guidance {
             ],
           };
     }
-    if (s.missing.account) {
+    if (needsOwnGas && s.missing.account) {
       return {
         state: "not-set-up",
         headline:

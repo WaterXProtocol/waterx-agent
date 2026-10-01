@@ -109,6 +109,52 @@ describe("resolveIdentity", () => {
 
     expect(agent.address).toBe(DELEGATE);
   });
+
+  describe("whose wallet a read is about", () => {
+    // `funds` and `referral` took this address off `executor.senderAddress`,
+    // and the executor is the WRITE plane — so two commands that sign nothing
+    // died on an assertion about signing. Resolving first is not a way around
+    // that assertion; it is the answer to the question they are asking.
+    it("answers the owner's wallet for a delegate, without being told it", async () => {
+      const agent = new WaterXAgent({
+        config: { accountId: ACCOUNT },
+        signer: signer(DELEGATE),
+        readAccount: readAccountOwnedBy(OWNER),
+      });
+
+      expect(await agent.subjectWallet()).toBe(OWNER);
+    });
+
+    it("would otherwise have reported the delegate's own wallet as the account's", async () => {
+      // The half that makes this a correctness fix rather than a crash fix.
+      // Until the owner is settled the fallback is this agent's own address, so
+      // a delegate was shown ITS deposits and referrals, labelled as the
+      // account's.
+      const agent = new WaterXAgent({
+        config: { accountId: ACCOUNT },
+        signer: signer(DELEGATE),
+        readAccount: readAccountOwnedBy(OWNER),
+      });
+
+      expect(agent.config.ownerAddress, "nothing has read the account yet").toBeUndefined();
+      expect(await agent.subjectWallet()).not.toBe(DELEGATE);
+    });
+
+    it("answers its own wallet when it is the account holder", async () => {
+      const agent = new WaterXAgent({
+        config: { accountId: ACCOUNT },
+        signer: signer(OWNER),
+        readAccount: readAccountOwnedBy(OWNER),
+      });
+
+      expect(await agent.subjectWallet()).toBe(OWNER);
+    });
+
+    it("answers without an account configured at all", async () => {
+      const agent = new WaterXAgent({ config: {}, signer: signer(DELEGATE), readAccount: readAccountOwnedBy(OWNER) });
+      expect(await agent.subjectWallet()).toBe(DELEGATE);
+    });
+  });
 });
 
 describe("what doctor calls the key", () => {
