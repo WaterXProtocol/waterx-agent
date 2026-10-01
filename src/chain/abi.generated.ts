@@ -1,7 +1,7 @@
 /**
  * GENERATED — do not edit. Run `pnpm run generate-abi`.
  *
- * Move signatures extracted from @waterx/sdk 6.0.0's generated bindings.
+ * Move signatures extracted from @waterx/sdk 6.1.0's generated bindings.
  * `params` names each argument in order; `types` is one longer when the
  * contract takes a `Clock` the SDK injects without naming.
  */
@@ -14,7 +14,7 @@ export interface AbiEntry {
   readonly types: readonly (string | null)[];
 }
 
-export const SDK_VERSION = "6.0.0";
+export const SDK_VERSION = "6.1.0";
 
 export const ABI: Readonly<Record<string, AbiEntry>> = {
   "account::add_delegate": {

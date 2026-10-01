@@ -912,9 +912,10 @@ a CDN origin with no filename; the network comes from `WATERX_NETWORK` (or the
 
 A full document URL (anything ending in `.json`), a non-https URL, a GitHub
 host (`github.com`, `*.githubusercontent.com`) or a root with a query or
-fragment is refused at `loadConfig`, never rewritten. `configDocumentUrl(config)`
-returns the URL actually read. The retired names `E2E_CONFIG_URL`,
-`PREDICT_CONFIG_URL`, `CONFIG_URL` and `WATERX_CONFIG_ROOT` refuse if set.
+fragment is refused at `loadConfig`, never rewritten — those rules are
+`@waterx/sdk`'s `waterxConfigUrlFromRoot`. `configDocumentUrl(config)` returns
+the URL actually read. The retired names `E2E_CONFIG_URL`, `PREDICT_CONFIG_URL`,
+`CONFIG_URL`, `WATERX_CONFIG_ROOT` and `WATERX_CONFIG_REF` refuse if set.
 
 Amounts are display units everywhere on this surface — USD for collateral and
 prices, base-asset units for size. The conversion to raw `u64`/`u128` strings

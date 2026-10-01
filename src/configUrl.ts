@@ -10,9 +10,14 @@
  * `loadDeployment` caller, `doctor` and the corpus capture script all resolve
  * it here, so a value is validated once, the same way, everywhere.
  *
- * A developer CLI, so an unset value defaults to the per-network v2 root rather
- * than failing. Pointing it anywhere else is a decision someone typed.
+ * The URL rules themselves — https only, no GitHub host, no `….json` document
+ * URL, no query or fragment, refused rather than rewritten — are the SDK's
+ * `waterxConfigUrlFromRoot`, the fleet's one implementation. What stays here is
+ * this repo's policy around it: a developer CLI, so an unset value defaults to
+ * the per-network v2 root rather than failing, and a retired alias refuses.
  */
+
+import { waterxConfigUrlFromRoot } from "@waterx/sdk/config";
 
 import { ConfigError } from "./errors.ts";
 
@@ -40,16 +45,10 @@ export const RETIRED_CONFIG_URL_ALIASES = [
   "PREDICT_CONFIG_URL",
   "CONFIG_URL",
   "WATERX_CONFIG_ROOT",
+  "WATERX_CONFIG_REF",
 ] as const;
 
 const EXAMPLE = DEFAULT_CONFIG_ROOT.mainnet;
-
-/**
- * GitHub host SUFFIXES the config repo forbids. Suffixes, not exact names:
- * GitHub serves raw bytes from several hosts (`raw.githubusercontent.com`,
- * `objects.githubusercontent.com`, `codeload.github.com`), all rate-limited.
- */
-const FORBIDDEN_HOST_SUFFIXES = ["github.com", "githubusercontent.com"];
 
 /** Refuse a retired alias for `WATERX_CONFIG_URL` that is still set. */
 export function assertNoRetiredConfigAliases(
@@ -65,63 +64,28 @@ export function assertNoRetiredConfigAliases(
 }
 
 /**
- * Validate a configured root and return it without trailing slashes. Unset or
- * blank falls back to the default root for `network`.
- *
- * Refuses, never rewrites: a document URL (`….json`, the old format), a
- * non-https scheme, a GitHub host, and a query or fragment (appending
- * `/<network>.json` to either would break it).
+ * The deployment document URL for a config: `{root}/{network}.json`, composed
+ * and validated by the SDK's `waterxConfigUrlFromRoot`. Validated on every
+ * call, so a hand-built `AgentConfig` that skipped `loadConfig` cannot slip a
+ * document URL through.
+ */
+export function configDocumentUrl(config: { configUrl: string; network: Network }): string {
+  try {
+    return waterxConfigUrlFromRoot(config.configUrl, config.network);
+  } catch (error) {
+    throw new ConfigError(`WATERX_CONFIG_URL: ${(error as Error).message}`, { cause: error });
+  }
+}
+
+/**
+ * The root to store in `AgentConfig.configUrl`: trimmed, without trailing
+ * slashes, and validated (see `configDocumentUrl`). Unset or blank falls back
+ * to the default root for `network`.
  */
 export function resolveConfigRoot(raw: string | undefined, network: Network): string {
   const value = raw?.trim() ?? "";
   if (value === "") return DEFAULT_CONFIG_ROOT[network];
-
-  // Normalised BEFORE the filename test: `…/mainnet.json/` does not end in
-  // `.json`, so a trailing slash would otherwise smuggle a document URL past it.
   const root = value.replace(/\/+$/, "");
-
-  let url: URL;
-  try {
-    url = new URL(root);
-  } catch {
-    throw new ConfigError(
-      `WATERX_CONFIG_URL is not a URL — got "${value}". Set it to a waterx-config CDN ROOT, ` +
-        `e.g. ${EXAMPLE}.`,
-    );
-  }
-  if (url.protocol !== "https:") {
-    throw new ConfigError(
-      `WATERX_CONFIG_URL must use https — got "${value}". Set it to a waterx-config CDN ROOT, ` +
-        `e.g. ${EXAMPLE}.`,
-    );
-  }
-  const host = url.hostname.toLowerCase();
-  if (FORBIDDEN_HOST_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) {
-    throw new ConfigError(
-      `WATERX_CONFIG_URL must not point at ${host} — got "${value}". GitHub is rate-limited ` +
-        `and forbidden by the config repo; use the waterx-config CDN, e.g. ${EXAMPLE}.`,
-    );
-  }
-  if (url.pathname.replace(/\/+$/, "").toLowerCase().endsWith(".json")) {
-    throw new ConfigError(
-      `WATERX_CONFIG_URL must be a CDN ROOT with no filename — got "${value}". Set it to ` +
-        `e.g. ${EXAMPLE}; <network>.json is appended.`,
-    );
-  }
-  if (url.search !== "" || url.hash !== "") {
-    throw new ConfigError(
-      `WATERX_CONFIG_URL must be a CDN ROOT with no query or fragment — got "${value}". ` +
-        `Set it to e.g. ${EXAMPLE}; <network>.json is appended.`,
-    );
-  }
+  configDocumentUrl({ configUrl: root, network });
   return root;
-}
-
-/**
- * The deployment document URL for a config: `{root}/{network}.json`. The root
- * is re-validated, so a hand-built `AgentConfig` that skipped `loadConfig`
- * cannot slip a document URL through.
- */
-export function configDocumentUrl(config: { configUrl: string; network: Network }): string {
-  return `${resolveConfigRoot(config.configUrl, config.network)}/${config.network}.json`;
 }

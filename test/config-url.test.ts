@@ -60,47 +60,30 @@ describe("WATERX_CONFIG_URL", () => {
     expect(configDocumentUrl(config)).toBe(`${MAIN}/testnet.json`);
   });
 
+  // The URL rules themselves (https, GitHub hosts, `.json`, query/fragment) are
+  // the SDK's `waterxConfigUrlFromRoot` and tested there. What is owned here:
+  // every refusal reaches the caller as a ConfigError naming the variable, on
+  // every path a value can arrive by.
   it.each([
     `${MAIN}/mainnet.json`,
     `${MAIN}/mainnet.json/`,
-    `${MAIN}/MAINNET.JSON`,
-  ])("refuses a document URL (%s) rather than rewriting it", (value) => {
+    "http://main-v2.waterx-config.pages.dev",
+    "https://raw.githubusercontent.com/WaterXProtocol/waterx-config/main-v2",
+    `${MAIN}?ref=main`,
+    "main-v2.waterx-config.pages.dev",
+  ])("refuses %s as a ConfigError naming WATERX_CONFIG_URL", (value) => {
     expect(() => resolveConfigRoot(value, "mainnet")).toThrow(ConfigError);
-    expect(() => resolveConfigRoot(value, "mainnet")).toThrow(/CDN ROOT with no filename/);
+    expect(() => resolveConfigRoot(value, "mainnet")).toThrow(/^WATERX_CONFIG_URL: /);
     vi.stubEnv("WATERX_CONFIG_URL", value);
-    expect(() => loadConfig({ network: "mainnet" })).toThrow(/<network>\.json is appended/);
+    expect(() => loadConfig({ network: "mainnet" })).toThrow(ConfigError);
+    vi.unstubAllEnvs();
+    expect(() => loadConfig({ network: "mainnet", configUrl: value })).toThrow(ConfigError);
   });
 
   it("refuses a document URL on a hand-built config that skipped loadConfig", () => {
     expect(() =>
       configDocumentUrl({ configUrl: `${STAGING}/testnet.json`, network: "testnet" }),
-    ).toThrow(/no filename/);
-  });
-
-  it.each([
-    "https://raw.githubusercontent.com/WaterXProtocol/waterx-config/main-v2",
-    "https://github.com/WaterXProtocol/waterx-config",
-    "https://codeload.github.com/WaterXProtocol/waterx-config",
-  ])("refuses a GitHub host (%s)", (value) => {
-    expect(() => resolveConfigRoot(value, "mainnet")).toThrow(/must not point at .*github/);
-  });
-
-  it("refuses a non-https scheme", () => {
-    expect(() => resolveConfigRoot("http://main-v2.waterx-config.pages.dev", "mainnet")).toThrow(
-      /must use https/,
-    );
-    expect(() => resolveConfigRoot("file:///tmp/config", "mainnet")).toThrow(/must use https/);
-  });
-
-  it("refuses something that is not a URL", () => {
-    expect(() => resolveConfigRoot("main-v2.waterx-config.pages.dev", "mainnet")).toThrow(
-      /WATERX_CONFIG_URL is not a URL/,
-    );
-  });
-
-  it("refuses a query or fragment, which appending would break", () => {
-    expect(() => resolveConfigRoot(`${MAIN}?ref=main`, "mainnet")).toThrow(/no query or fragment/);
-    expect(() => resolveConfigRoot(`${MAIN}#top`, "mainnet")).toThrow(/no query or fragment/);
+    ).toThrow(ConfigError);
   });
 });
 
