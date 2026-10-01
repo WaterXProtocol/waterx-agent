@@ -78,6 +78,40 @@ export class Inbox {
    * retrying would wedge the drain on every pass, and deleting would discard an
    * intent someone meant. It stays as `.rejected` for a person to look at.
    */
+  /**
+   * What is waiting, without taking it.
+   *
+   * `drain` is the runner's: it hands each entry over with an ack that deletes
+   * it. A person asking what is queued must not be able to consume the queue by
+   * asking, so this reads and returns.
+   *
+   * It exists because `jobs` reported only the STORE, and an intent lives in
+   * the inbox until a runner has a pass to spare for it. An inbox holding ten
+   * intents and a store holding none answered "no jobs" — and an operator who
+   * reads that queues them again, or stops a runner believing nothing is
+   * pending on it.
+   *
+   * A file that cannot be parsed is reported as unreadable rather than skipped.
+   * "Something is here and I cannot read it" is the fact an operator needs; a
+   * silent skip would restore the same wrong answer in a smaller place.
+   */
+  pending(): { id: string; entry?: InboxEntry; unreadable?: true }[] {
+    let names: string[];
+    try {
+      names = readdirSync(this.dir).filter((n) => n.endsWith(".json")).sort();
+    } catch {
+      return [];
+    }
+    return names.map((name) => {
+      const id = name.replace(/\.json$/u, "");
+      try {
+        return { id, entry: JSON.parse(readFileSync(join(this.dir, name), "utf8")) as InboxEntry };
+      } catch {
+        return { id, unreadable: true as const };
+      }
+    });
+  }
+
   drain(): { id: string; entry: InboxEntry; ack: () => void }[] {
     let names: string[];
     try {

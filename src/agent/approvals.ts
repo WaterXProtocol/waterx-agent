@@ -25,6 +25,8 @@
  */
 import { randomBytes } from "node:crypto";
 
+import { ExecutionPolicyError } from "../errors.ts";
+
 import { fingerprintIntent } from "../policy.ts";
 import type { Preview, TradePlan } from "./plan.ts";
 import { append, historyOf, read, type LedgerRecord } from "./ledger.ts";
@@ -161,13 +163,35 @@ export function statusOf(id: string, now = Date.now(), path = APPROVALS_FILE): A
   return { request, state: now > request.expiresAt ? "expired" : "pending" };
 }
 
-/** Record a person's approval. */
+/**
+ * Record a person's approval.
+ *
+ * Refused where the person is, on a plan that can no longer be spent. This
+ * appended the record unconditionally, so approving a plan that had expired
+ * four minutes earlier answered `ok` — and `execute` then refused it. The
+ * person had made a decision, been told it was taken, and watched it count for
+ * nothing; worse, they had spent their attention on a price that was already
+ * gone, which is the one thing a short expiry exists to prevent.
+ *
+ * Nothing about the expiry changes: `statusOf` still computes it from the clock
+ * (an approval is not made valid by being recorded), and `execute` still
+ * refuses. This stops the pointless round trip, and says which plan to preview
+ * again.
+ */
 export function approve(
   id: string,
   by: string,
   now = Date.now(),
   path = APPROVALS_FILE,
 ): void {
+  const status = statusOf(id, now, path);
+  if (status !== undefined && status.state !== "pending") {
+    throw new ExecutionPolicyError(
+      status.state === "expired"
+        ? `Plan ${id} expired at ${new Date(status.request.expiresAt).toISOString()} and cannot be approved: it was priced against a market that has moved. Preview the order again and approve that one.`
+        : `Plan ${id} is already ${status.state} and cannot be approved again.`,
+    );
+  }
   append(path, { v: 1, type: "approval", id, at: now, by } as unknown as LedgerRecord);
 }
 

@@ -954,3 +954,37 @@ describe("the store", () => {
     reopened.close();
   });
 });
+
+describe("what an operator sees of the queue", () => {
+  // `jobs` reported only the STORE, and an intent lives in the inbox until a
+  // runner has a pass to spare for it. An inbox holding ten and a store holding
+  // none answered "no jobs" — and an operator who reads that queues them again,
+  // or stops a runner believing nothing is pending on it.
+  it("lists what is queued without consuming it", () => {
+    const inbox = new Inbox(join(dir, "jobs.inbox"));
+    inbox.submit({ intent: INTENT });
+    inbox.submit({ intent: INTENT });
+
+    expect(inbox.pending()).toHaveLength(2);
+    // Asking must not be the same as taking: a second read sees the same two.
+    expect(inbox.pending()).toHaveLength(2);
+    expect(inbox.drain(), "and the runner can still take them").toHaveLength(2);
+  });
+
+  it("reports a file it cannot parse rather than skipping it", () => {
+    // "Something is here and I cannot read it" is the fact an operator needs; a
+    // silent skip restores the same wrong answer in a smaller place.
+    const inboxDir = join(dir, "jobs.inbox");
+    mkdirSync(inboxDir, { recursive: true });
+    writeFileSync(join(inboxDir, "broken.json"), "{not json");
+
+    const pending = new Inbox(inboxDir).pending();
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.unreadable).toBe(true);
+    expect(pending[0]?.entry).toBeUndefined();
+  });
+
+  it("says nothing is queued when nothing is", () => {
+    expect(new Inbox(join(dir, "jobs.inbox")).pending()).toEqual([]);
+  });
+});

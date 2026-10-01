@@ -185,3 +185,47 @@ describe("submissions", () => {
     expect(status?.settlement).toMatchObject({ landed: true, orderIds: [7], status: "filled" });
   });
 });
+
+describe("approving a plan that can no longer be spent", () => {
+  // It appended the record unconditionally, so approving a plan that had
+  // expired four minutes earlier answered `ok` — and `execute` then refused it.
+  // The person had made a decision, been told it was taken, and watched it
+  // count for nothing; worse, they had spent their attention on a price that
+  // was already gone, which is the one thing a short expiry exists to prevent.
+  it("refuses an expired plan where the person is, not at execute", () => {
+    const now = Date.UTC(2026, 0, 1);
+    const request = requestOn(approvals, now);
+    const later = request.expiresAt + 1;
+
+    expect(() => approve(request.id, "alice", later, approvals)).toThrow(/expired/u);
+    // And nothing was written: the ledger still says nobody decided.
+    expect(statusOf(request.id, later, approvals)?.state).toBe("expired");
+  });
+
+  it("names the instant it expired and what to do instead", () => {
+    const now = Date.UTC(2026, 0, 1);
+    const request = requestOn(approvals, now);
+    try {
+      approve(request.id, "alice", request.expiresAt + 1, approvals);
+      expect.unreachable("approve should have refused");
+    } catch (error) {
+      expect((error as Error).message).toContain(new Date(request.expiresAt).toISOString());
+      expect((error as Error).message).toMatch(/[Pp]review the order again/u);
+    }
+  });
+
+  it("refuses one that is already approved, rather than recording a second decision", () => {
+    const now = Date.UTC(2026, 0, 1);
+    const request = requestOn(approvals, now);
+    approve(request.id, "alice", now + 1, approvals);
+
+    expect(() => approve(request.id, "bob", now + 2, approvals)).toThrow(/already approved/u);
+  });
+
+  it("still approves a live plan", () => {
+    const now = Date.UTC(2026, 0, 1);
+    const request = requestOn(approvals, now);
+    approve(request.id, "alice", now + 1, approvals);
+    expect(statusOf(request.id, now + 2, approvals)?.state).toBe("approved");
+  });
+});
