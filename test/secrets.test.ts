@@ -7,7 +7,7 @@
  * first person who installed this: they noticed and wrote the `.gitignore`
  * themselves, which says something about them rather than about this package.
  */
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -95,5 +95,45 @@ describe("keeping the key out of git", () => {
   it("writes nothing outside a repository, because nothing can be committed", () => {
     expect(ensureEnvIgnored(dir).kind).toBe("not-a-repo");
     expect(existsSync(join(dir, ".gitignore"))).toBe(false);
+  });
+});
+
+describe("keeping the key off the rest of the machine", () => {
+  // The other half of the same problem. `.gitignore` stops the key being
+  // committed; it does nothing about the account sitting next to it. `.env` was
+  // written at the process umask — `0644` on a stock install — so every other
+  // user on the box could read it. That IS the key's protection: there is no
+  // passphrase on it and `bootstrap` generates it unattended.
+  const enforcesModes = process.platform !== "win32" && process.getuid?.() !== 0;
+  const whenEnforced = enforcesModes ? it : it.skip;
+
+  whenEnforced("writes a new .env only the owner can read", async () => {
+    const { saveToEnv } = await import("../src/chain/wallet.ts");
+    const cwd = process.cwd();
+    try {
+      process.chdir(dir);
+      saveToEnv("SUI_PRIVATE_KEY", "suiprivkey1-not-a-real-key");
+      expect(statSync(join(dir, ".env")).mode & 0o777).toBe(0o600);
+    } finally {
+      process.chdir(cwd);
+    }
+  });
+
+  whenEnforced("tightens an .env that was already written loosely", async () => {
+    // The install that most needs this is the one that already happened:
+    // `writeFileSync`'s mode applies only when it CREATES the file, so a key
+    // written before this would otherwise keep the permissions it was born
+    // with, for ever.
+    const { saveToEnv } = await import("../src/chain/wallet.ts");
+    const cwd = process.cwd();
+    try {
+      process.chdir(dir);
+      writeFileSync(join(dir, ".env"), "SUI_PRIVATE_KEY=older\n", { mode: 0o644 });
+      chmodSync(join(dir, ".env"), 0o644);
+      saveToEnv("WATERX_ACCOUNT_ID", "0xabc");
+      expect(statSync(join(dir, ".env")).mode & 0o777).toBe(0o600);
+    } finally {
+      process.chdir(cwd);
+    }
   });
 });
