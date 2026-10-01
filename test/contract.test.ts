@@ -228,3 +228,36 @@ describe("stepOwnerLabel", () => {
     expect(stepOwnerLabel("you", undefined)).toBe("you");
   });
 });
+
+describe("a refusal the owner has to lift", () => {
+  // `wlp --action mint` answered "delegateSender lacks required permission" and
+  // stopped there. The grant is chosen per action when the owner signs it, so a
+  // delegation made for perps does not cover WLP — and nobody at this terminal
+  // can widen it. A refusal naming no remedy leaves an agent to either give up
+  // or retry something that will never start working.
+  for (const [label, code] of [
+    ["an action the grant does not cover", ErrorCode.DelegateInsufficientPermission],
+    ["a wallet the account does not list", ErrorCode.DelegateNotAuthorized],
+  ] as const) {
+    it(`says who lifts ${label}, and that it is not this process`, () => {
+      const outcome = classify(
+        new WaterXApiError(code, "delegateSender lacks required permission", 403),
+      );
+      const hint = (outcome.details as { hint?: string }).hint ?? "";
+
+      expect(hint).toMatch(/owner/u);
+      expect(hint, "names where the act happens").toMatch(/authorize page|onboard/u);
+      // And it must not read as transient: retrying a permission nobody granted
+      // is a loop with no exit.
+      expect(outcome.retryable).toBe(false);
+      expect(outcome.status).toBe("rejected");
+    });
+  }
+
+  it("leaves an unrelated refusal without one", () => {
+    const outcome = classify(
+      new WaterXApiError(ErrorCode.InsufficientAccountBalance, "not enough balance", 400),
+    );
+    expect((outcome.details as { hint?: string }).hint).toBeUndefined();
+  });
+});

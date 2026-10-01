@@ -115,6 +115,22 @@ export function classify(error: unknown): Outcome {
         ...(error.code === ErrorCode.SponsorshipRequiredForDelegate
           ? { hint: "Enoki sponsorship is down and a delegate holds no gas — retry later." }
           : {}),
+        // A permission refusal said what was missing and nothing about how to
+        // get it, so the answer to `wlp --action mint` was "delegateSender
+        // lacks required permission" and a full stop. The grant is the owner's
+        // act, it is made on a page, and the agent cannot make it — which is
+        // exactly why the remedy has to be named here rather than inferred.
+        ...(error.code === ErrorCode.DelegateInsufficientPermission ||
+        error.code === ErrorCode.DelegateNotAuthorized
+          ? {
+              hint:
+                "The grant this account carries does not cover this action. Permissions are chosen per " +
+                "action when the owner signs the delegation, so a grant made for perps does not include " +
+                "WLP and vice versa. The owner widens it from the authorize page in their own wallet — " +
+                "`onboard` prints the link, and `delegates` shows what is granted now. Nobody at this " +
+                "terminal can do it, and nothing here should retry.",
+            }
+          : {}),
       },
     };
   }
