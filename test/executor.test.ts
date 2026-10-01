@@ -491,7 +491,7 @@ describe("the recorded layouts must describe the running deployment", () => {
     // nobody else — a runner signs for weeks without one. So it is asserted
     // where the signature is produced.
     const { executor: exec, gate } = executor("interactive");
-        const moved = new Map(
+    const moved = new Map(
       Object.keys(corpus.packages as Record<string, string>).map((name) => [
         name,
         normalizePackage(`0x${"9".repeat(64)}`),

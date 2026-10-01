@@ -31,7 +31,8 @@ const SOURCE = { configUrl: "https://example.invalid", network: "testnet" } as c
  */
 const FIXTURE = readFileSync(new URL("./fixtures/waterx-config-v2-testnet.json", import.meta.url), "utf8");
 
-type Doc = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+/** Loosely typed on purpose: each test edits one path of a real document. */
+type Doc = Record<string, any>;
 
 /** The fixture, edited. */
 const v2Document = (edit: (doc: Doc) => void = () => {}): string => {
@@ -165,7 +166,7 @@ describe("the document schema", () => {
     );
     await expect(loadDeployment(SOURCE)).rejects.toThrow(/not a usable waterx-config v2 document/);
     await expect(loadDeployment(SOURCE)).rejects.toThrow(/pre-v2/);
-    await expect(loadDeployment(SOURCE)).rejects.toThrow(/main-v2\.waterx-config\.pages\.dev/);
+    await expect(loadDeployment(SOURCE)).rejects.toThrow(/staging-v2\.waterx-config\.pages\.dev/);
   });
 
   it("refuses any other schema_version", async () => {

@@ -55,7 +55,8 @@ import { fromBase64 } from "@mysten/sui/utils";
 
 import { ABI, SDK_VERSION } from "../../src/chain/abi.generated.ts";
 import { loadDeployment, normalizePackage } from "../../src/chain/deployment.ts";
-import { isNetwork, loadConfig } from "../../src/config.ts";
+import { isNetwork } from "../../src/config.ts";
+import { configRootFromEnv } from "../../src/configUrl.ts";
 import { HttpClient } from "../../src/api/http.ts";
 import { ReadApi } from "../../src/api/read.ts";
 import { TxApi } from "../../src/api/tx.ts";
@@ -198,10 +199,10 @@ const network = info.network.replace(/^sui_/, "");
 if (!isNetwork(network)) {
   throw new Error(`the backend reports network ${info.network}, which has no waterx-config document`);
 }
-// Resolved through `loadConfig`, the path the agent and `doctor` take
-// (WATERX_CONFIG_URL is a ROOT, unset means the per-network v2 root, a retired
-// alias refuses) — and before any capture, so a bad value costs nothing.
-const configSource = loadConfig({ network });
+// Resolved as `loadConfig` resolves it (WATERX_CONFIG_URL is a ROOT, unset
+// means the per-network v2 root, a retired alias refuses), without the rest of
+// the agent's settings — and before any capture, so a bad value costs nothing.
+const configSource = { configUrl: configRootFromEnv(network), network };
 const asset = info.backingAssets[0]?.coinType ?? "";
 const spot = (await read.ticker("SUIUSD")).spotPrice;
 

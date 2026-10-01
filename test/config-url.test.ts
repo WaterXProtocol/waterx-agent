@@ -11,6 +11,7 @@ import { loadConfig } from "../src/config.ts";
 import {
   assertNoRetiredConfigAliases,
   configDocumentUrl,
+  configRootFromEnv,
   DEFAULT_CONFIG_ROOT,
   resolveConfigRoot,
   RETIRED_CONFIG_URL_ALIASES,
@@ -92,6 +93,12 @@ describe("retired WATERX_CONFIG_URL aliases", () => {
     vi.stubEnv(name, `${MAIN}/mainnet.json`);
     expect(() => assertNoRetiredConfigAliases()).toThrow(ConfigError);
     expect(() => loadConfig()).toThrow(new RegExp(`${name} is retired — set WATERX_CONFIG_URL`));
+  });
+
+  it("do not block a root passed in code, which overrides the environment anyway", () => {
+    vi.stubEnv("CONFIG_URL", "https://host-app.example/config");
+    expect(loadConfig({ network: "mainnet", configUrl: MAIN }).configUrl).toBe(MAIN);
+    expect(() => configRootFromEnv("mainnet")).toThrow(/CONFIG_URL is retired/);
   });
 
   it("are ignored when blank", () => {

@@ -18,7 +18,10 @@
     rules are `@waterx/sdk`'s `waterxConfigUrlFromRoot`, the fleet's one implementation, so the
     error text is the SDK's.
   - Retired aliases `E2E_CONFIG_URL`, `PREDICT_CONFIG_URL`, `CONFIG_URL`, `WATERX_CONFIG_ROOT`
-    and `WATERX_CONFIG_REF` refuse if set.
+    and `WATERX_CONFIG_REF` refuse if set, unless a `configUrl` is passed in code (which
+    overrides the environment anyway).
+  - The fetched document is validated with `@waterx/sdk`'s `parseConfigDocument`: schema v2
+    only, its `network` must match the agent's, and the SDK's required packages must be listed.
   - Migrate: `WATERX_CONFIG_URL=https://main-v2.waterx-config.pages.dev/mainnet.json` becomes
     `WATERX_CONFIG_URL=https://main-v2.waterx-config.pages.dev`.
 

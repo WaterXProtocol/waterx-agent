@@ -915,7 +915,9 @@ host (`github.com`, `*.githubusercontent.com`) or a root with a query or
 fragment is refused at `loadConfig`, never rewritten — those rules are
 `@waterx/sdk`'s `waterxConfigUrlFromRoot`. `configDocumentUrl(config)` returns
 the URL actually read. The retired names `E2E_CONFIG_URL`, `PREDICT_CONFIG_URL`,
-`CONFIG_URL`, `WATERX_CONFIG_ROOT` and `WATERX_CONFIG_REF` refuse if set.
+`CONFIG_URL`, `WATERX_CONFIG_ROOT` and `WATERX_CONFIG_REF` refuse if set,
+unless `configUrl` is passed in code. The document itself must pass `@waterx/sdk`'s
+`parseConfigDocument` for the agent's network.
 
 Amounts are display units everywhere on this surface — USD for collateral and
 prices, base-asset units for size. The conversion to raw `u64`/`u128` strings

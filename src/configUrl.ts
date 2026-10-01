@@ -70,6 +70,20 @@ export function assertNoRetiredConfigAliases(
 }
 
 /**
+ * The root `WATERX_CONFIG_URL` names for `network`, or the default root when
+ * it is unset. Refuses a retired alias that is still set: someone expected it
+ * to take effect, and reading the default instead would hide that it did not.
+ * Only consulted when no root was passed in code, which overrides all of these.
+ */
+export function configRootFromEnv(
+  network: Network,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  assertNoRetiredConfigAliases(env);
+  return resolveConfigRoot(env.WATERX_CONFIG_URL, network);
+}
+
+/**
  * The deployment document URL for a config: `{root}/{network}.json`, composed
  * and validated by the SDK's `waterxConfigUrlFromRoot`. Validated on every
  * call, so a hand-built `AgentConfig` that skipped `loadConfig` cannot slip a

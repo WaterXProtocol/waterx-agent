@@ -14,7 +14,7 @@
  */
 import { parseConfigDocument } from "@waterx/sdk/config";
 
-import { type ConfigSource, configDocumentUrl } from "../configUrl.ts";
+import { type ConfigSource, configDocumentUrl, DEFAULT_CONFIG_ROOT } from "../configUrl.ts";
 import { ExecutionPolicyError } from "../errors.ts";
 import { CAPTURING_LAYOUTS } from "./corpus.ts";
 
@@ -288,9 +288,8 @@ async function fetchDeployment(configUrl: string, network: ConfigSource["network
   } catch (error) {
     throw new Error(
       `${configUrl} is not a usable waterx-config v2 document for ${network}: ` +
-        `${(error as Error).message}. Point WATERX_CONFIG_URL at a v2 CDN root — ` +
-        `https://main-v2.waterx-config.pages.dev (production) or ` +
-        `https://staging-v2.waterx-config.pages.dev (staging); <network>.json is appended.`,
+        `${(error as Error).message}. WATERX_CONFIG_URL must be a v2 CDN root serving ` +
+        `${network}.json (the ${network} default is ${DEFAULT_CONFIG_ROOT[network]}).`,
       { cause: error },
     );
   }

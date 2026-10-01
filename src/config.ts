@@ -12,7 +12,7 @@ import { readFileSync } from "node:fs";
 import { corpusFor } from "./chain/corpus.ts";
 import { ACTION_RULES } from "./chain/verify.ts";
 import { manifestGraceMs } from "./chain/deployment.ts";
-import { assertNoRetiredConfigAliases, resolveConfigRoot } from "./configUrl.ts";
+import { configRootFromEnv, resolveConfigRoot } from "./configUrl.ts";
 import { ConfigError, ExecutionPolicyError } from "./errors.ts";
 import type { PolicyMode, PolicyScope } from "./policy.ts";
 
@@ -327,20 +327,16 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     overrides.network ??
     parseNetwork(stated(process.env.WATERX_NETWORK) ?? stated(process.env.SUI_NETWORK));
 
-  // Before anything else: a retired alias means someone expected an override
-  // to take effect, and reading the default instead would hide that it did not.
-  assertNoRetiredConfigAliases();
-
   const config: AgentConfig = {
     network,
     apiUrl: trimTrailingSlash(
       overrides.apiUrl ?? stated(process.env.WATERX_API_URL) ?? DEFAULT_API_URL[network],
     ),
     grpcUrl: overrides.grpcUrl ?? stated(process.env.SUI_GRPC_URL) ?? DEFAULT_GRPC_URL[network],
-    configUrl: resolveConfigRoot(
-      overrides.configUrl ?? stated(process.env.WATERX_CONFIG_URL),
-      network,
-    ),
+    configUrl:
+      overrides.configUrl === undefined
+        ? configRootFromEnv(network)
+        : resolveConfigRoot(overrides.configUrl, network),
     // Named exceptions REPLACE the shipped ones rather than adding to them: an
     // operator who writes the variable is stating the whole set deliberately,
     // and silently unioning would make it impossible to narrow a default.
