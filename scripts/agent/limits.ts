@@ -160,6 +160,17 @@ function writeScope(path: string): void {
   if (Number.isNaN(Date.parse(notAfter))) {
     throw new UsageError(`--not-after must be an ISO-8601 instant (got "${notAfter}").`);
   }
+  // A scope that expired before it was written authorizes nothing, and an
+  // operator who typed a past date meant a future one. It was accepted and
+  // reported `ok`, so the next unattended write refused for a reason the
+  // operator had already been told was fine — and the remedy, rewriting the
+  // scope, is the thing they had just done.
+  if (Date.parse(notAfter) <= Date.now()) {
+    throw new UsageError(
+      `--not-after is ${notAfter}, which has already passed. A scope that is already expired ` +
+        `authorizes nothing; nothing was written.`,
+    );
+  }
 
   const scope: PolicyScope = {
     accounts: accounts ?? [],

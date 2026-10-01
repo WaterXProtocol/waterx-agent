@@ -296,20 +296,18 @@ The agent should come back with a preview and stop at `needs-approval`. Say
 
 ## What one prompt cannot do for you
 
-Three links in the chain are not code, and no prompt gets past them:
+Two links in the chain are not code, and no prompt gets past them:
 
-1. **The repository is private.** The agent needs a GitHub account with access,
-   or a public repo.
-2. **Testnet collateral is whitelist-gated.** `bootstrap` gets gas from the
+1. **Testnet collateral is whitelist-gated.** `bootstrap` gets gas from the
    public faucet, and gas is not collateral. There is no self-service route to
    trading funds on testnet — an operator has to whitelist the address or send
    it mock USDC. `bootstrap` reports this as `who: "an operator"`, which is the
    signal to stop and ask rather than retry.
-3. **The testnet keeper may not be filling.** An order is a request; a keeper
+2. **The testnet keeper may not be filling.** An order is a request; a keeper
    turns it into a position. When the sweep is not running, a correct order
    rests forever and `positions` stays empty. Say "submitted", not "filled".
 
-Mainnet has none of those three, and its own list instead — a policy someone
+Mainnet has neither, and its own list instead — a policy someone
 typed, package exceptions `doctor` prints, and real money. See **Mainnet** in
 the README.
 
