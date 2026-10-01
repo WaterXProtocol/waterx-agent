@@ -80,6 +80,8 @@ export type { WalletInfo } from "./chain/wallet.ts";
 
 export { explorerTxUrl, isDefaultExtraPackage, loadConfig, requireAccountId } from "./config.ts";
 export type { AgentConfig, ExecutionPolicy, Network } from "./config.ts";
+export { configDocumentUrl } from "./configUrl.ts";
+export type { ConfigSource } from "./configUrl.ts";
 
 export {
   AmbiguousSubmissionError,

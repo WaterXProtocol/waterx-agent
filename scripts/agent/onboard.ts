@@ -106,7 +106,7 @@ const quiet = { submitted: false, reconcileRequired: false } as const;
  * before it reports anything, and the wait `--wait` runs afterwards.
  */
 async function discoveryDeps(agent: ReturnType<typeof initAgent>): Promise<DiscoveryDeps> {
-  const deployment = await loadDeployment(agent.config.configUrl);
+  const deployment = await loadDeployment(agent.config);
   // The ORIGINAL package id names event types; `idsFor` lists it last.
   const accountPackage = deployment.idsFor("waterx_account").at(-1);
   return {

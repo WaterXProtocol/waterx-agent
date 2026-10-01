@@ -16,6 +16,7 @@ import { ReadApi } from "./api/read.ts";
 import { TxApi } from "./api/tx.ts";
 import type { AppInfo, DelegateData } from "./api/types.ts";
 import { type AgentConfig, isDefaultExtraPackage, loadConfig, signsAsDelegate } from "./config.ts";
+import { configDocumentUrl } from "./configUrl.ts";
 import { ExecutionPolicyError } from "./errors.ts";
 import { createSigner, signerReadiness } from "./chain/create-signer.ts";
 import type { SignerProvider } from "./chain/signer.ts";
@@ -246,23 +247,6 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     checks.push(fail("backend", `${config.apiUrl} unreachable — ${describe(error)}`));
   }
 
-  // ── Deployment config ─────────────────────────────────────────────────
-  // Read only to report what the deployment is running. The agent builds no
-  // PTB from these ids; the point is that a version bump is visible here rather
-  // than surfacing later as an on-chain version-gate abort.
-  try {
-    const deployment = await fetchDeploymentConfig(config.configUrl);
-    const summary = ["waterx_perp", "waterx_account", "waterx_oracle", "waterx_rule"]
-      .map((name) => {
-        const pkg = deployment.packages[name];
-        return pkg === undefined ? `${name}=absent` : `${name}=v${String(pkg.version)}`;
-      })
-      .join(" ");
-    checks.push(ok("deployment config", summary));
-  } catch (error) {
-    checks.push(warn("deployment config", `${config.configUrl} unreadable — ${describe(error)}`));
-  }
-
   // ── The deployment manifest ───────────────────────────────────────────
   // Loaded once, here, because everything below rests on it and because a
   // failure to load is not a caveat: `execute()` refuses under the same
@@ -270,8 +254,19 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
   // agent that cannot trade.
   let deployment: Deployment | undefined;
   try {
-    deployment = await loadDeployment(config.configUrl);
-    const age = manifestAgeMs(config.configUrl) ?? 0;
+    deployment = await loadDeployment(config);
+    const loaded = deployment;
+    // What the deployment is running. The agent builds no PTB from these; the
+    // point is that a version bump is visible here rather than surfacing later
+    // as an on-chain version-gate abort.
+    const summary = ["waterx_perp", "waterx_account", "waterx_oracle", "waterx_rule"]
+      .map((name) => {
+        const version = loaded.versionOf(name);
+        return version === undefined ? `${name}=absent` : `${name}=v${String(version)}`;
+      })
+      .join(" ");
+    checks.push(ok("deployment config", summary));
+    const age = manifestAgeMs(config) ?? 0;
     checks.push(
       ok(
         "manifest",
@@ -288,7 +283,7 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     checks.push(
       fail(
         "manifest",
-        `${config.configUrl} could not be read — ${describe(error)}. Every package pin, object ` +
+        `${configDocumentUrl(config)} could not be read — ${describe(error)}. Every package pin, object ` +
           `role and recorded layout is checked against it, so no write can be signed until it ` +
           `is readable.`,
       ),
@@ -783,17 +778,6 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     writeReady,
     signerReady: readiness.ready,
   };
-}
-
-interface DeploymentConfig {
-  network?: string;
-  packages: Record<string, { version?: number; published_at?: string } | undefined>;
-}
-
-async function fetchDeploymentConfig(url: string): Promise<DeploymentConfig> {
-  const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) throw new Error(`HTTP ${String(response.status)}`);
-  return (await response.json()) as DeploymentConfig;
 }
 
 /**

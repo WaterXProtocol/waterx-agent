@@ -20,7 +20,7 @@ import { loadDeployment } from "../../src/chain/deployment.ts";
 import type { WriteIntent } from "../../src/policy.ts";
 
 const agent = initAgent();
-const deployment = await loadDeployment(agent.config.configUrl);
+const deployment = await loadDeployment(agent.config);
 
 /**
  * Whose account these shapes are built for.

@@ -100,7 +100,7 @@ function seedCurrentDeployment(): void {
     ]),
   );
   const pkgs = new Set([...byName.values(), normalizePackage("0x2")]);
-  seedDeployment(loadConfig().configUrl, {
+  seedDeployment(loadConfig(), {
     callable: pkgs,
     typeable: pkgs,
     byName,
@@ -113,6 +113,7 @@ function seedCurrentDeployment(): void {
       const id = byName.get(name);
       return id === undefined ? [] : [id];
     },
+    versionOf: () => undefined,
   });
 }
 
@@ -490,14 +491,13 @@ describe("the recorded layouts must describe the running deployment", () => {
     // nobody else — a runner signs for weeks without one. So it is asserted
     // where the signature is produced.
     const { executor: exec, gate } = executor("interactive");
-    const url = loadConfig().configUrl;
     const moved = new Map(
       Object.keys(corpus.packages as Record<string, string>).map((name) => [
         name,
         normalizePackage(`0x${"9".repeat(64)}`),
       ]),
     );
-    seedDeployment(url, {
+    seedDeployment(loadConfig(), {
       callable: new Set(moved.values()),
       typeable: new Set(moved.values()),
       byName: moved,
@@ -507,6 +507,7 @@ describe("the recorded layouts must describe the running deployment", () => {
         const id = moved.get(name);
         return id === undefined ? [] : [id];
       },
+      versionOf: () => undefined,
     });
     try {
       const permit = await permitFor(gate, "openLong", true);

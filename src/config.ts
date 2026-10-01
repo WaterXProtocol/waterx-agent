@@ -12,6 +12,7 @@ import { readFileSync } from "node:fs";
 import { corpusFor } from "./chain/corpus.ts";
 import { ACTION_RULES } from "./chain/verify.ts";
 import { manifestGraceMs } from "./chain/deployment.ts";
+import { configRootFromEnv, resolveConfigRoot } from "./configUrl.ts";
 import { ConfigError, ExecutionPolicyError } from "./errors.ts";
 import type { PolicyMode, PolicyScope } from "./policy.ts";
 
@@ -47,17 +48,6 @@ const DEFAULT_API_URL: Record<Network, string> = {
 const DEFAULT_GRPC_URL: Record<Network, string> = {
   testnet: "https://fullnode.testnet.sui.io:443",
   mainnet: "https://fullnode.mainnet.sui.io:443",
-};
-
-/**
- * waterx-config deployment document — the single source of truth for package
- * and object ids. The agent reads it only to *report* what it is pointed at
- * (`pnpm run doctor`); it never builds a PTB from it, because the backend owns
- * PTB composition. Override with `WATERX_CONFIG_URL`.
- */
-const DEFAULT_CONFIG_URL: Record<Network, string> = {
-  testnet: "https://staging.waterx-config.pages.dev/testnet.json",
-  mainnet: "https://config.waterx.app/mainnet.json",
 };
 
 /**
@@ -105,7 +95,13 @@ export interface AgentConfig {
   apiUrl: string;
   /** Sui fullnode gRPC endpoint used to submit unsponsored transactions. */
   grpcUrl: string;
-  /** waterx-config deployment document URL. */
+  /**
+   * waterx-config CDN ROOT, no filename and no trailing slash (e.g.
+   * `https://main-v2.waterx-config.pages.dev`). The document read is
+   * `{configUrl}/{network}.json` — see `configDocumentUrl`. Defaults to the
+   * per-network v2 root; override with `WATERX_CONFIG_URL`. A document URL
+   * (`….json`) is refused, not rewritten.
+   */
   configUrl: string;
   /**
    * Package ids to accept in a transaction on top of the ones the deployment
@@ -255,9 +251,12 @@ function isRefusableEntrypoint(name: string, network: Network): boolean {
  */
 const DEFAULT_NETWORK: Network = "mainnet";
 
+export const isNetwork = (value: string): value is Network =>
+  value === "testnet" || value === "mainnet";
+
 function parseNetwork(raw: string | undefined): Network {
   const value = (raw ?? DEFAULT_NETWORK).trim().toLowerCase();
-  if (value === "testnet" || value === "mainnet") return value;
+  if (isNetwork(value)) return value;
   throw new Error(
     `Invalid network "${raw}". Expected "testnet" or "mainnet" (WATERX_NETWORK / SUI_NETWORK).`,
   );
@@ -335,7 +334,9 @@ export function loadConfig(overrides: Partial<AgentConfig> = {}): AgentConfig {
     ),
     grpcUrl: overrides.grpcUrl ?? stated(process.env.SUI_GRPC_URL) ?? DEFAULT_GRPC_URL[network],
     configUrl:
-      overrides.configUrl ?? stated(process.env.WATERX_CONFIG_URL) ?? DEFAULT_CONFIG_URL[network],
+      overrides.configUrl === undefined
+        ? configRootFromEnv(network)
+        : resolveConfigRoot(overrides.configUrl, network),
     // Named exceptions REPLACE the shipped ones rather than adding to them: an
     // operator who writes the variable is stating the whole set deliberately,
     // and silently unioning would make it impossible to narrow a default.

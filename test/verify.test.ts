@@ -108,6 +108,7 @@ const DEPLOYMENT = {
       const id = ROLE_OBJECTS.get(role);
       return id === undefined ? undefined : normalizePackage(id);
     },
+    versionOf: () => undefined,
   },
   sponsored: false,
   // Fixtures whose entrypoint the corpus has captured need no allowance; the
@@ -1798,6 +1799,7 @@ describe("a real deposit, as the deployment built it", () => {
         // transaction: this fixture measures the deposit's VALUE bindings, and
         // the object roles have their own tests.
         objectFor: (role: string) => roleObjects.get(role),
+        versionOf: () => undefined,
         objects: new Set(
           data.inputs.flatMap((i) =>
             i.$kind === "Object" && (i.Object as { SharedObject?: { objectId: string } })?.SharedObject

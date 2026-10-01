@@ -205,6 +205,7 @@ describe("the corpus is per network", () => {
           objects: new Set<string>(),
           objectFor: () => undefined,
           idsFor: () => [],
+          versionOf: () => undefined,
         },
         corpusFor(unmeasured).packages,
         corpusFor(unmeasured).capturedAt,

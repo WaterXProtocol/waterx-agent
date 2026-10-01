@@ -368,7 +368,7 @@ async function grantsFor(
   wallet: string,
 ): Promise<DiscoveredGrant[] | undefined> {
   try {
-    const deployment = await loadDeployment(agent.config.configUrl);
+    const deployment = await loadDeployment(agent.config);
     // The ORIGINAL package id names event types; `idsFor` lists it last.
     const accountPackage = deployment.idsFor("waterx_account").at(-1);
     const discovery = await discoverGrants(wallet, {

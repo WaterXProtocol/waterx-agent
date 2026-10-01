@@ -4,7 +4,7 @@
     "mainnet": {
       "capturedAt": "2026-10-01",
       "network": "sui_mainnet",
-      "sdkVersion": "4.3.3",
+      "sdkVersion": "6.1.0",
       "packages": {
         "bucket_framework": "e2d49d67ff42dc500275f2d84841bf35632aa6c1abdb70af66a10e1de93a4400",
         "constant_rule": "685dcb32ce65e0eaab691596bab72c6ace4f227f81277f83cc5bd59c6e574d09",
@@ -12,9 +12,7 @@
         "enclave": "bce5b23dc3bca7b514adc36954cd01ac5227d17c2e7764c36e9b3808364c6693",
         "native_custody": "b92ce2e086cd12366255695228fdb148b9f5af5e72ac74126fe23a64dcacf831",
         "pyth_lazer_rule": "5435e3b146de4083ecd3de9fb4638a397d1ba44db8f1f77b89f256f05f80cd5f",
-        "pyth_rule": "00d486565f8bf241035df334322af9d23e8b6b81f21d7702c32f35947958f50a",
         "sui_credit": "ea6415244a1548816dec9762e2a169b2c7dc298e14a85a95d365057adcfa5b64",
-        "usd": "c70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4",
         "usd_credit": "c70a37eafe54712b520cb6566e5a2d2f60bc70f32eb9fb08cac40394b5a96bf4",
         "wal_credit": "9b4bad4ee9207945724b2531d24a4b7f2d33224430351e8d88ba2d70eafc1bca",
         "waterx_account": "6cb6f3be75d37cd2b7db0e9fdac11b72ff0669765382cc9e00441d178b58bdbe",
@@ -244,20 +242,20 @@
               "isLong": "01",
               "isStopOrder": "00",
               "reduceOnly": "00",
-              "size": "97de209c010000000000000000000000",
+              "size": "c747ea9f010000000000000000000000",
               "triggerPrice": "00",
               "linkedPositionId": "00",
-              "acceptablePrice": "01a051694800000000",
+              "acceptablePrice": "01078bc04700000000",
               "collateralAmount": "00093d0000000000"
             },
             "positions": [
               "01",
               "00",
               "00",
-              "97de209c010000000000000000000000",
+              "c747ea9f010000000000000000000000",
               "00",
               "00",
-              "01a051694800000000",
+              "01078bc04700000000",
               "00093d0000000000"
             ],
             "typeArguments": []
@@ -268,7 +266,7 @@
               "isLong": "00",
               "isStopOrder": "00",
               "reduceOnly": "01",
-              "size": "97de209c010000000000000000000000",
+              "size": "c747ea9f010000000000000000000000",
               "triggerPrice": "0100105e5f000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -278,7 +276,7 @@
               "00",
               "00",
               "01",
-              "97de209c010000000000000000000000",
+              "c747ea9f010000000000000000000000",
               "0100105e5f000000000000000000000000",
               "00",
               "00",
@@ -292,7 +290,7 @@
               "isLong": "00",
               "isStopOrder": "01",
               "reduceOnly": "01",
-              "size": "97de209c010000000000000000000000",
+              "size": "c747ea9f010000000000000000000000",
               "triggerPrice": "010084d717000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -302,7 +300,7 @@
               "00",
               "01",
               "01",
-              "97de209c010000000000000000000000",
+              "c747ea9f010000000000000000000000",
               "010084d717000000000000000000000000",
               "00",
               "00",
@@ -317,7 +315,7 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "orderId": "0621000000000000"
+              "orderId": "7b23000000000000"
             },
             "positions": [
               null,
@@ -326,7 +324,7 @@
               "06535549555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "0621000000000000",
+              "7b23000000000000",
               "00000000000000000000000000000000",
               "ff",
               null
@@ -343,8 +341,8 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "970c000000000000",
-              "acceptablePrice": "ade7854100000000"
+              "positionId": "350d000000000000",
+              "acceptablePrice": "7428eb4000000000"
             },
             "positions": [
               null,
@@ -353,8 +351,8 @@
               "06535549555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "970c000000000000",
-              "ade7854100000000",
+              "350d000000000000",
+              "7428eb4000000000",
               null
             ],
             "typeArguments": [
@@ -369,9 +367,9 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "970c000000000000",
-              "size": "97de209c010000000000000000000000",
-              "acceptablePrice": "ade7854100000000"
+              "positionId": "350d000000000000",
+              "size": "c747ea9f010000000000000000000000",
+              "acceptablePrice": "7428eb4000000000"
             },
             "positions": [
               null,
@@ -380,9 +378,9 @@
               "06535549555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "970c000000000000",
-              "97de209c010000000000000000000000",
-              "ade7854100000000",
+              "350d000000000000",
+              "c747ea9f010000000000000000000000",
+              "7428eb4000000000",
               null
             ],
             "typeArguments": [
@@ -397,7 +395,7 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "970c000000000000",
+              "positionId": "350d000000000000",
               "collateralAmount": "4b420f0000000000"
             },
             "positions": [
@@ -407,7 +405,7 @@
               "06535549555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "970c000000000000",
+              "350d000000000000",
               "4b420f0000000000",
               null
             ],
@@ -424,10 +422,10 @@
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "orderId": "00",
-              "positionId": "970c000000000000",
+              "positionId": "350d000000000000",
               "collateralAmount": "49420f0000000000",
-              "size": "97de209c010000000000000000000000",
-              "acceptablePrice": "a051694800000000"
+              "size": "c747ea9f010000000000000000000000",
+              "acceptablePrice": "078bc04700000000"
             },
             "positions": [
               null,
@@ -437,10 +435,10 @@
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "00",
-              "970c000000000000",
+              "350d000000000000",
               "49420f0000000000",
-              "97de209c010000000000000000000000",
-              "a051694800000000",
+              "c747ea9f010000000000000000000000",
+              "078bc04700000000",
               null
             ],
             "typeArguments": [
@@ -479,10 +477,10 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "orderId": "0621000000000000",
-              "currentTriggerPrice": "00f2052a010000000000000000000000",
-              "newSize": "b4a46238140000000000000000000000",
-              "newTriggerPrice": "0757d347010000000000000000000000"
+              "orderId": "7b23000000000000",
+              "currentTriggerPrice": "c0a6ff4d000000000000000000000000",
+              "newSize": "e2b3bfe1080000000000000000000000",
+              "newTriggerPrice": "a76acc55000000000000000000000000"
             },
             "positions": [
               null,
@@ -491,11 +489,11 @@
               "06535549555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "0621000000000000",
-              "00f2052a010000000000000000000000",
+              "7b23000000000000",
+              "c0a6ff4d000000000000000000000000",
               "01",
-              "b4a46238140000000000000000000000",
-              "0757d347010000000000000000000000",
+              "e2b3bfe1080000000000000000000000",
+              "a76acc55000000000000000000000000",
               null
             ],
             "typeArguments": [
@@ -510,7 +508,7 @@
             "sent": {
               "ticker": "06535549555344",
               "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "970c000000000000",
+              "positionId": "350d000000000000",
               "amount": "4d420f0000000000"
             },
             "positions": [
@@ -520,7 +518,7 @@
               "06535549555344",
               null,
               "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "970c000000000000",
+              "350d000000000000",
               "4d420f0000000000",
               null
             ],
@@ -567,7 +565,7 @@
     "testnet": {
       "capturedAt": "2026-10-01",
       "network": "sui_testnet",
-      "sdkVersion": "4.3.3",
+      "sdkVersion": "6.1.0",
       "packages": {
         "bucket_framework": "63dc0d88e834716e564a6aaa1a893b6745f6cb1cb00d9d86a72208e02268873d",
         "constant_rule": "b623f1243a990d892f6f5c9b3e336d86f27b3d6c1491e93a0e6cc4a55976caed",
@@ -577,11 +575,9 @@
         "mock_usdc": "7ccd477e884ec74f960b23a8b34b7d87999e4d7ee0dde738a0c25f46200f201a",
         "mock_usdsui": "c0fad30bc21babe3b8b51c6a4c380d27b61a47e34b26968daf20315da0e35016",
         "native_custody": "4edb6e43f1366e12e71ba18a68e547b8515638b64c07e9e79b384b32c61c1afe",
-        "pyth_rule": "907e3691cedbb44e2e5f823003446f4c8e3601bc47987f9e012e625353709e00",
         "sui_credit": "0298bfd43fbb86f7b990190aa513e09764320d0dcac66b55aca575caa7cdb314",
         "supra_rule": "30fbd5dfd842202829fae2a9a2d0a3dcab0f0b81183dff1543967c45d2a33578",
         "testnet_faucet": "26ae20135e44ac79d75fa34f0425812fc148417225d5f4c451060fc7cc9b36dd",
-        "usd": "6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7",
         "usd_credit": "6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7",
         "wal_credit": "7e8e28d8f3951984b7bb109961216a5b0e156ab6309f6b3a9a4d78b565726576",
         "waterx_account": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
@@ -638,13 +634,13 @@
           {
             "package": "f5489f5b31ce144749d27ef3293d32b21b24b5cc9be27abad3d2bb93256092a1",
             "sent": {
-              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "accountId": "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
               "delegateAddress": "dededededededededededededededededededededededededededededededede"
             },
             "positions": [
               null,
               null,
-              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3a3",
               "dededededededededededededededededededededededededededededededede",
               null
             ],
@@ -786,20 +782,20 @@
               "isLong": "01",
               "isStopOrder": "00",
               "reduceOnly": "00",
-              "size": "8f68fd9a010000000000000000000000",
+              "size": "e522ad9a010000000000000000000000",
               "triggerPrice": "00",
               "linkedPositionId": "00",
-              "acceptablePrice": "01b5ab9c4800000000",
+              "acceptablePrice": "011cddaa4800000000",
               "collateralAmount": "00093d0000000000"
             },
             "positions": [
               "01",
               "00",
               "00",
-              "8f68fd9a010000000000000000000000",
+              "e522ad9a010000000000000000000000",
               "00",
               "00",
-              "01b5ab9c4800000000",
+              "011cddaa4800000000",
               "00093d0000000000"
             ],
             "typeArguments": []
@@ -810,7 +806,7 @@
               "isLong": "00",
               "isStopOrder": "00",
               "reduceOnly": "01",
-              "size": "8f68fd9a010000000000000000000000",
+              "size": "e522ad9a010000000000000000000000",
               "triggerPrice": "0100105e5f000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -820,7 +816,7 @@
               "00",
               "00",
               "01",
-              "8f68fd9a010000000000000000000000",
+              "e522ad9a010000000000000000000000",
               "0100105e5f000000000000000000000000",
               "00",
               "00",
@@ -834,7 +830,7 @@
               "isLong": "00",
               "isStopOrder": "01",
               "reduceOnly": "01",
-              "size": "8f68fd9a010000000000000000000000",
+              "size": "e522ad9a010000000000000000000000",
               "triggerPrice": "010084d717000000000000000000000000",
               "linkedPositionId": "00",
               "acceptablePrice": "00",
@@ -844,7 +840,7 @@
               "00",
               "01",
               "01",
-              "8f68fd9a010000000000000000000000",
+              "e522ad9a010000000000000000000000",
               "010084d717000000000000000000000000",
               "00",
               "00",
@@ -858,7 +854,7 @@
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
               "ticker": "065a4543555344",
-              "accountId": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "orderId": "0800000000000000"
             },
             "positions": [
@@ -867,7 +863,7 @@
               null,
               "065a4543555344",
               null,
-              "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "0800000000000000",
               "00000000000000000000000000000000",
               "ff",
@@ -884,9 +880,9 @@
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
               "ticker": "06535549555344",
-              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "2800000000000000",
-              "acceptablePrice": "fa60a84100000000"
+              "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+              "positionId": "4b00000000000000",
+              "acceptablePrice": "9329bf4100000000"
             },
             "positions": [
               null,
@@ -894,9 +890,9 @@
               null,
               "06535549555344",
               null,
-              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "2800000000000000",
-              "fa60a84100000000",
+              "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+              "4b00000000000000",
+              "9329bf4100000000",
               null
             ],
             "typeArguments": [
@@ -910,10 +906,10 @@
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
               "ticker": "06535549555344",
-              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "2800000000000000",
-              "size": "8f68fd9a010000000000000000000000",
-              "acceptablePrice": "fa60a84100000000"
+              "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+              "positionId": "4b00000000000000",
+              "size": "e522ad9a010000000000000000000000",
+              "acceptablePrice": "9329bf4100000000"
             },
             "positions": [
               null,
@@ -921,10 +917,10 @@
               null,
               "06535549555344",
               null,
-              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "2800000000000000",
-              "8f68fd9a010000000000000000000000",
-              "fa60a84100000000",
+              "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+              "4b00000000000000",
+              "e522ad9a010000000000000000000000",
+              "9329bf4100000000",
               null
             ],
             "typeArguments": [
@@ -938,8 +934,8 @@
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
               "ticker": "06535549555344",
-              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "2800000000000000",
+              "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+              "positionId": "4b00000000000000",
               "collateralAmount": "4b420f0000000000"
             },
             "positions": [
@@ -948,8 +944,8 @@
               null,
               "06535549555344",
               null,
-              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "2800000000000000",
+              "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
+              "4b00000000000000",
               "4b420f0000000000",
               null
             ],
@@ -964,12 +960,12 @@
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
               "ticker": "06535549555344",
-              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "accountId": "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
               "orderId": "00",
-              "positionId": "2800000000000000",
+              "positionId": "4b00000000000000",
               "collateralAmount": "49420f0000000000",
-              "size": "8f68fd9a010000000000000000000000",
-              "acceptablePrice": "b5ab9c4800000000"
+              "size": "e522ad9a010000000000000000000000",
+              "acceptablePrice": "1cddaa4800000000"
             },
             "positions": [
               null,
@@ -977,12 +973,12 @@
               null,
               "06535549555344",
               null,
-              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+              "a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2a2",
               "00",
-              "2800000000000000",
+              "4b00000000000000",
               "49420f0000000000",
-              "8f68fd9a010000000000000000000000",
-              "b5ab9c4800000000",
+              "e522ad9a010000000000000000000000",
+              "1cddaa4800000000",
               null
             ],
             "typeArguments": [
@@ -1020,7 +1016,7 @@
             "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
             "sent": {
               "ticker": "065a4543555344",
-              "accountId": "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "orderId": "0800000000000000",
               "currentTriggerPrice": "48a759a14c0000000000000000000000",
               "newSize": "6c160e09000000000000000000000000",
@@ -1032,38 +1028,12 @@
               null,
               "065a4543555344",
               null,
-              "a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4a4",
+              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
               "0800000000000000",
               "48a759a14c0000000000000000000000",
               "00",
               "6c160e09000000000000000000000000",
               "fb7c9df7440000000000000000000000",
-              null
-            ],
-            "typeArguments": [
-              "0x6321b712685d4c4921c15ff4790d7a9a2b2b7d3b44f8b19a2304e60ca3ad26c7::usd::USD",
-              "0xda92f471ab201c34cade2b326638f0ac740378b98408cf7cbecfe71432c28de9::wlp::WLP"
-            ]
-          }
-        ],
-        "trading::withdraw_collateral_request": [
-          {
-            "package": "069cd6e59eb3f700a38a42e09b35d092bcd1fbc5d1d23774962238d2f45a8a07",
-            "sent": {
-              "ticker": "06535549555344",
-              "accountId": "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "positionId": "2800000000000000",
-              "amount": "4d420f0000000000"
-            },
-            "positions": [
-              null,
-              null,
-              null,
-              "06535549555344",
-              null,
-              "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
-              "2800000000000000",
-              "4d420f0000000000",
               null
             ],
             "typeArguments": [
@@ -1103,6 +1073,7 @@
         "lp_pool::cancel_redeem": "requires a pending redeem request",
         "lp_pool::mint_wlp": "Transaction would fail on-chain",
         "lp_pool::request_redeem": "requires an unstaked WLP balance; minting stakes automatically",
+        "trading::withdraw_collateral_request": "Transaction would fail on-chain",
         "waterx_staking::claim": "requires claimable rewards",
         "withdrawal_queue::route_wormhole": "the agent never bridges; this entrypoint exists in the bindings so that a bridged withdrawal is a call no action authorizes"
       }

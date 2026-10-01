@@ -165,7 +165,7 @@ export class TxExecutor {
     // the deployment's code rather than anything that exports the same name.
     // Loaded once per process; a failure here is a refusal, because a check
     // that cannot identify the code is not a check.
-    const deployment = await loadDeployment(this.config.configUrl);
+    const deployment = await loadDeployment(this.config);
     // And that the layouts every positional check relies on still describe it.
     // Checking this only in `runDoctor` protected an operator who runs the
     // preflight and nobody else; a runner signs for weeks without one.

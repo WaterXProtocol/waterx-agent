@@ -108,7 +108,7 @@ await run(async () => {
   let discovered: readonly DiscoveredGrant[] | undefined;
   if (report.signerReady && report.readReady && account === undefined) {
     try {
-      const deployment = await loadDeployment(agent.config.configUrl);
+      const deployment = await loadDeployment(agent.config);
       // The ORIGINAL package id names event types; `idsFor` lists it last.
       const accountPackage = deployment.idsFor("waterx_account").at(-1);
       discovered = (

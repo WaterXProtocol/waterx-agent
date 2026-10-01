@@ -8,10 +8,10 @@ transaction, signs the bytes, and submits them.
 
 A perp PTB has to refresh the right oracle rules for the deployment it targets,
 dedup those refreshes per ticker, and respect the per-position reentrancy lock.
-Which rules are live changes — testnet retired `PythRule` for the enclave-backed
-`WaterxRule`, mainnet re-weighted its Lazer leg — and when a client omits a leg
-that is weighted on chain, the transaction aborts with `EMissingPriceSource`
-rather than failing a type check.
+Which rules are live changes per deployment — the enclave-backed `WaterxRule`
+and mainnet's Lazer leg are weighted on chain and re-weighted over time — and
+when a client omits a leg that is weighted on chain, the transaction aborts with
+`EMissingPriceSource` rather than failing a type check.
 
 That composition already exists in the backend, is exercised by production
 traffic, and moves with each deployment. A second copy in this repo would be a
@@ -896,6 +896,28 @@ await agent.openLong({
 
 await agent.closePosition({ ticker: "BTC", positionId: 0, confirm: true });
 ```
+
+### Which config document it reads
+
+Package and object ids come from the waterx-config document at
+`{root}/{network}.json`. `WATERX_CONFIG_URL` — and the `configUrl` field of
+`AgentConfig` / `new WaterXAgent({ config: { configUrl } })` — is that **root**,
+a CDN origin with no filename; the network comes from `WATERX_NETWORK` (or the
+`network` override). Unset, it defaults per network:
+
+| network | default root | document read |
+|---|---|---|
+| mainnet | `https://main-v2.waterx-config.pages.dev` | `…/mainnet.json` |
+| testnet | `https://staging-v2.waterx-config.pages.dev` | `…/testnet.json` |
+
+A full document URL (anything ending in `.json`), a non-https URL, a GitHub
+host (`github.com`, `*.githubusercontent.com`) or a root with a query or
+fragment is refused at `loadConfig`, never rewritten — those rules are
+`@waterx/sdk`'s `waterxConfigUrlFromRoot`. `configDocumentUrl(config)` returns
+the URL actually read. The retired names `E2E_CONFIG_URL`, `PREDICT_CONFIG_URL`,
+`CONFIG_URL`, `WATERX_CONFIG_ROOT` and `WATERX_CONFIG_REF` refuse if set,
+unless `configUrl` is passed in code. The document itself must pass `@waterx/sdk`'s
+`parseConfigDocument` for the agent's network.
 
 Amounts are display units everywhere on this surface — USD for collateral and
 prices, base-asset units for size. The conversion to raw `u64`/`u128` strings

@@ -12,6 +12,9 @@
  * ability to sign because a CDN blipped, and a package set that was valid a
  * minute ago is still the right one to check against.
  */
+import { parseConfigDocument } from "@waterx/sdk/config";
+
+import { type ConfigSource, configDocumentUrl, DEFAULT_CONFIG_ROOT } from "../configUrl.ts";
 import { ExecutionPolicyError } from "../errors.ts";
 import { CAPTURING_LAYOUTS } from "./corpus.ts";
 
@@ -57,8 +60,16 @@ export interface Deployment {
    * document this module already fetches.
    */
   objects: ReadonlySet<string>;
-  /** Role name (`waterx_perp.global_config`) → object id, for per-argument pinning. */
+  /**
+   * Role name → object id, for per-argument pinning.
+   *
+   * A role is the object's path in the v2 document, root included:
+   * `objects.perp.global_config`, `objects.account.registry`,
+   * `oracle_rules.waterx.rule_config_object`.
+   */
   objectFor: (role: string) => string | undefined;
+  /** Name → the package's `version`, for reporting what the deployment runs. */
+  versionOf: (name: string) => number | undefined;
 }
 
 interface PackageEntry {
@@ -68,17 +79,30 @@ interface PackageEntry {
   [field: string]: unknown;
 }
 
+/**
+ * The consolidated waterx-config document (`schema_version: 2`), as walked.
+ *
+ * `packages.*` is package IDENTITY only — `published_at`, `original_id`,
+ * `version`, `upgrade_capability`, `mvr`. Every shared object id lives under
+ * `objects.<domain>.*`, and each oracle rule's wiring under
+ * `oracle_rules.<rule>.*`. The document is VALIDATED by the SDK's
+ * `parseConfigDocument` (schema v2 only, network match, required packages),
+ * but WALKED raw: the parse drops fields its schema does not name, and the
+ * object walk must see every id the document carries.
+ */
 interface DeploymentDocument {
   packages?: Record<string, PackageEntry | undefined>;
-  coin_registry?: unknown;
+  objects?: unknown;
+  oracle_rules?: unknown;
 }
 
 /**
- * Every object id anywhere under an entry.
+ * Every object id anywhere under a node.
  *
  * Walked rather than named field by field: the document nests markets under
- * packages and coins under the registry, and a check that had to be taught each
- * new shape would quietly stop covering the ones it had not learned.
+ * `objects.perp.markets`, credit stacks under `objects.credit.registries`, the
+ * enclave under `oracle_rules.waterx.enclave`, and a check that had to be
+ * taught each new shape would quietly stop covering the ones it had not learned.
  */
 function collectObjects(
   node: unknown,
@@ -110,8 +134,8 @@ const STRUCT_TAG = /^0x([0-9a-fA-F]{1,64})::[A-Za-z_][A-Za-z0-9_]*::[A-Za-z_][A-
  * The packages of the coin types the document declares, as TYPE identities only.
  *
  * The document says which coins the deployment custodies
- * (`native_custody.assets[].type`) and pays rewards in
- * (`waterx_staking.rewarders.<pool>.<coin>.coin_type`). A deposit, a withdrawal
+ * (`objects.custody.assets[].type`) and pays rewards in
+ * (`objects.staking.rewarders.<pool>.<coin>.coin_type`). A deposit, a withdrawal
  * and a WLP mint name those coins as type arguments — so reading package ids
  * only from the `packages` entries made USDC and the reward coin look like
  * strangers, this package had to ship them as standing exceptions, and `doctor`
@@ -204,13 +228,20 @@ const cache = new Map<string, Cached>();
  */
 const inflight = new Map<string, Promise<Deployment>>();
 
-export async function loadDeployment(configUrl: string): Promise<Deployment> {
+/**
+ * The deployment for a config (`{ configUrl, network }`, which `AgentConfig`
+ * is). Taking the config rather than a URL means the root → document
+ * composition happens here, once, and a bare root can never be fetched as if
+ * it were the document.
+ */
+export async function loadDeployment(source: ConfigSource): Promise<Deployment> {
+  const configUrl = configDocumentUrl(source);
   const held = cache.get(configUrl);
   if (held !== undefined && Date.now() - held.fetchedAt < MANIFEST_TTL_MS) return held.deployment;
 
   let refresh = inflight.get(configUrl);
   if (refresh === undefined) {
-    refresh = fetchDeployment(configUrl)
+    refresh = fetchDeployment(configUrl, source.network)
       .then((deployment) => {
         cache.set(configUrl, { deployment, fetchedAt: Date.now() });
         return deployment;
@@ -240,19 +271,30 @@ export async function loadDeployment(configUrl: string): Promise<Deployment> {
 }
 
 /** Seconds since the held manifest was fetched, for diagnostics. */
-export function manifestAgeMs(configUrl: string): number | undefined {
-  const held = cache.get(configUrl);
+export function manifestAgeMs(source: ConfigSource): number | undefined {
+  const held = cache.get(configDocumentUrl(source));
   return held === undefined ? undefined : Date.now() - held.fetchedAt;
 }
 
-async function fetchDeployment(configUrl: string): Promise<Deployment> {
+async function fetchDeployment(configUrl: string, network: ConfigSource["network"]): Promise<Deployment> {
   const response = await fetch(configUrl, { signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error(`${configUrl} returned HTTP ${String(response.status)}`);
-  const document = (await response.json()) as DeploymentDocument;
-  const entries = Object.entries(document.packages ?? {});
-  if (entries.length === 0) {
-    throw new Error(`${configUrl} lists no packages, so no transaction could be checked against it`);
+  const document: unknown = await response.json();
+  // A pre-v2 document walked as v2 would yield every package and NO objects, so
+  // every shared-object argument would be refused with a message blaming the
+  // transaction. The SDK's parse refuses it here, naming the endpoint instead.
+  try {
+    parseConfigDocument(document, network === "mainnet" ? "MAINNET" : "TESTNET");
+  } catch (error) {
+    throw new Error(
+      `${configUrl} is not a usable waterx-config v2 document for ${network}: ` +
+        `${(error as Error).message}. WATERX_CONFIG_URL must be a v2 CDN root serving ` +
+        `${network}.json (the ${network} default is ${DEFAULT_CONFIG_ROOT[network]}).`,
+      { cause: error },
+    );
   }
+  const walked = document as DeploymentDocument;
+  const entries = Object.entries(walked.packages ?? {});
 
   const callable = new Set(FRAMEWORK.map(normalizePackage));
   const typeable = new Set(FRAMEWORK.map(normalizePackage));
@@ -262,7 +304,9 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
   // beacon. Every transaction may name them and the document does not.
   const objects = new Set(["0x5", "0x6", "0x8"].map(normalizePackage));
   const byRole = new Map<string, string>();
+  const versions = new Map<string, number>();
   for (const [name, entry] of entries) {
+    if (typeof entry?.version === "number") versions.set(name, entry.version);
     const ids: string[] = [];
     idsByName.set(name, ids);
     const current = entry?.published_at;
@@ -277,10 +321,15 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
       typeable.add(normalizePackage(entry.original_id));
       ids.push(normalizePackage(entry.original_id));
     }
-    collectObjects(entry, objects, byRole, `${name}.`);
   }
-  collectObjects(document.coin_registry, objects, byRole, "coin_registry.");
-  collectCoinTypes(document.packages, typeable);
+  // v2 keeps `packages.*` to identity, so the objects are read from where the
+  // schema puts them: `objects.<domain>.*` for the protocol's shared objects and
+  // `oracle_rules.<rule>.*` for each rule's config and enclave objects, which
+  // the oracle-refresh legs of every order touch. Roles keep the root so that
+  // `objects.perp.global_config` reads as the document path it is.
+  collectObjects(walked.objects, objects, byRole, "objects.");
+  collectObjects(walked.oracle_rules, objects, byRole, "oracle_rules.");
+  collectCoinTypes(walked.objects, typeable);
   return {
     callable,
     typeable,
@@ -288,6 +337,7 @@ async function fetchDeployment(configUrl: string): Promise<Deployment> {
     objects,
     objectFor: (role) => byRole.get(role),
     idsFor: (name) => idsByName.get(name) ?? [],
+    versionOf: (name) => versions.get(name),
   };
 }
 
@@ -426,6 +476,6 @@ export function forgetDeployments(): void {
  * Production always fetches, so the failure mode of an unreachable config stays
  * real rather than something the tests quietly opt out of.
  */
-export function seedDeployment(configUrl: string, deployment: Deployment): void {
-  cache.set(configUrl, { deployment, fetchedAt: Date.now() });
+export function seedDeployment(source: ConfigSource, deployment: Deployment): void {
+  cache.set(configDocumentUrl(source), { deployment, fetchedAt: Date.now() });
 }

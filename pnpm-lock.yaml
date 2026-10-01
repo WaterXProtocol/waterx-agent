@@ -12,8 +12,8 @@ importers:
         specifier: 2.9.1
         version: 2.9.1(typescript@5.9.3)
       '@waterx/sdk':
-        specifier: 4.3.3
-        version: 4.3.3(@mysten/bcs@2.1.1)(@mysten/sui@2.9.1(typescript@5.9.3))
+        specifier: 6.1.0
+        version: 6.1.0(@mysten/bcs@2.1.1)(@mysten/sui@2.9.1(typescript@5.9.3))
       dotenv:
         specifier: ^17.0.0
         version: 17.4.2
@@ -456,8 +456,12 @@ packages:
   '@vitest/utils@3.2.7':
     resolution: {integrity: sha512-x6BDOd7dyo3PFLY3I9/HJ25X/6OurhGXk2/B9gOZNPF7XDVjeBK4k01lQE5uvDpbuheErh91qYuE1E2OEjK3Rw==}
 
-  '@waterx/sdk@4.3.3':
-    resolution: {integrity: sha512-Qvgjte/dU8dllpFmoe3v03B3TtWNR6ZWsstAGn6UOvf3EefGZ1mPG54e3pydpXiINt8u27O+O1dkfZYlycnP2w==}
+  '@waterx/config@0.1.1-staging.2':
+    resolution: {integrity: sha512-e47/3bCOyeHZnHCLeDbUDRe2z562sLnbaIjtQ5gcvKVcB/FuhzHYg1mxTeWCJxT7V8Of9E7KJwWSSXb6dqZ6jw==}
+    engines: {node: '>=18'}
+
+  '@waterx/sdk@6.1.0':
+    resolution: {integrity: sha512-5Y6KEHOE1/NuBsgSV4VuHe1WGiuFu4QmXezVP4LIiRByd0OLICX9Od9twQ/M50kn7YcZsAWjmse7ykPr+cOYWg==}
     engines: {node: '>=22'}
     peerDependencies:
       '@mysten/bcs': ^1.9.0
@@ -714,6 +718,9 @@ packages:
     resolution: {integrity: sha512-hUrmaWBdVDcxvYqnyh09zunKzROWjbZTiNy8dBEjkS7ehEDQibXJ7XvlmtbwuTclUiIyN+CyXQD4Vmko8fNm8w==}
     engines: {node: '>=8'}
     hasBin: true
+
+  zod@3.25.76:
+    resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
 snapshots:
 
@@ -1021,11 +1028,16 @@ snapshots:
       loupe: 3.2.1
       tinyrainbow: 2.0.0
 
-  '@waterx/sdk@4.3.3(@mysten/bcs@2.1.1)(@mysten/sui@2.9.1(typescript@5.9.3))':
+  '@waterx/config@0.1.1-staging.2':
+    dependencies:
+      zod: 3.25.76
+
+  '@waterx/sdk@6.1.0(@mysten/bcs@2.1.1)(@mysten/sui@2.9.1(typescript@5.9.3))':
     dependencies:
       '@mysten/bcs': 2.1.1
       '@mysten/sui': 2.9.1(typescript@5.9.3)
       '@noble/hashes': 2.3.0
+      '@waterx/config': 0.1.1-staging.2
 
   assertion-error@2.0.1: {}
 
@@ -1287,3 +1299,5 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  zod@3.25.76: {}

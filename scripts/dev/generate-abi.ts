@@ -68,8 +68,6 @@ const WANTED = [
 const MANIFEST_ALIASES: Record<string, string> = {
   bucket_v2_framework: "bucket_framework",
   waterx_constant_rule: "constant_rule",
-  waterx_pyth_rule: "pyth_rule",
-  waterx_supra_rule: "supra_rule",
 };
 
 interface Extracted {
