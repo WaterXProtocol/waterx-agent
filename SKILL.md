@@ -227,6 +227,14 @@ commit money it does not have.
 - **An order is a request, not a fill.** A write returns when the request is on
   chain; a keeper fills it afterwards. `positions` may be empty while `orders`
   shows the request. Say "submitted", not "filled", until you have checked.
+- **A partial close leaves the stop sized for the old position.** The linked stop
+  and take-profit keep their original size, so a position reduced to 5.93 still
+  shows a stop for 11.87. They are reduce-only, so nothing can over-close — but
+  do not relay the old number as protection. `positions` reports the mismatch and
+  `sync-stops --ticker <t> --position-id <id>` resizes them to match. Run it
+  **after** the fill, not after the submission: before the keeper arrives the
+  position is still its old size and there is nothing to resize. It is a write,
+  so it needs the same approval as any other.
 - **The agent is normally a *delegate*, and a delegate needs nothing.** The
   owner keeps their account and their funds and grants this wallet permission to
   trade. It needs no SUI (the backend sponsors a delegate's transactions), no

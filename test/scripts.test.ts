@@ -815,3 +815,80 @@ describe("execute settles a confirmed execution", () => {
     expect(source).not.toMatch(/settle\(submissionId, \{ landed: true, orderIds/u);
   });
 });
+
+/**
+ * `sync-stops`, and the three places that point at it.
+ *
+ * A position reduced to 5.93 still showed a stop for 11.87. It is a separate
+ * command rather than a step inside `reduce-position`, and both reasons are
+ * load-bearing: a reduce is keeper-filled, so at the moment it returns there is no
+ * correct resize to make — shrinking a stop to the size the position is ABOUT to be
+ * leaves it under-protected until the fill lands — and one approval binds one
+ * intent, so a second write on the back of the first is what the approval model
+ * exists to prevent.
+ */
+describe("sync-stops", () => {
+  const source = readFileSync("scripts/orders/sync-stops.ts", "utf8");
+
+  it("is a registered command, so the printed instruction runs", () => {
+    const manifest = JSON.parse(readFileSync("package.json", "utf8")) as {
+      scripts?: Record<string, string>;
+    };
+    expect(manifest.scripts?.["sync-stops"]).toBe("tsx scripts/orders/sync-stops.ts");
+  });
+
+  it("reads the position before resizing anything", () => {
+    // The whole design. Comparing against the observed size is what makes it
+    // idempotent and what keeps it from shrinking a stop ahead of a fill.
+    expect(source).toMatch(/agent\.read\.positions\(/u);
+    expect(source).toMatch(/oversizedStops\(position\)/u);
+  });
+
+  it("keeps each leg's trigger price", () => {
+    // Resizing must not reprice. Where a stop sits is the trader's decision.
+    expect(source).toMatch(/newTriggerPrice: stop\.triggerPrice/u);
+    expect(source).toMatch(/newSize: stop\.shouldBe/u);
+  });
+
+  it("is authorized like every other write, not waved through as a tidy-up", () => {
+    expect(source).toMatch(/confirm: confirmed\(\)/u);
+  });
+
+  it("reports a partial run instead of raising it", () => {
+    // Each leg is its own signature. One landing and the next being refused must
+    // not discard the first — and re-running is safe, because it compares sizes.
+    expect(source).toMatch(/if \(resized\.length === 0\) throw error;/u);
+  });
+
+  it("is pointed at from `positions` and from `reduce-position`", () => {
+    for (const file of ["scripts/query/positions.ts", "scripts/trading/reduce-position.ts"]) {
+      expect(readFileSync(file, "utf8"), file).toMatch(/invoke\("sync-stops"/u);
+    }
+  });
+});
+
+describe("a direct command does not claim an unconfirmed execution", () => {
+  /**
+   * `reportTx` said "submitted and executed" unconditionally. The fix for that
+   * went into the approval path only, so every DIRECT command — `reduce-position
+   * --yes`, `close-position --yes` — went on saying a sponsored submission whose
+   * status could not be read had executed. One bug, two callers, one mended.
+   */
+  const source = readFileSync("scripts/lib/cli.ts", "utf8");
+
+  it("branches on what the chain confirmed", () => {
+    expect(source).toMatch(/const confirmed = result\.executed === "SUCCEEDED";/u);
+  });
+
+  it("reports an unconfirmed submission as ambiguous, with a reconcile", () => {
+    const block = source.slice(source.indexOf("export function reportTx"), source.indexOf("// ─── The run loop"));
+    expect(block).toMatch(/status: "ambiguous"/u);
+    expect(block).toMatch(/reconcileRequired: true/u);
+    expect(block).toMatch(/must not be sent again/u);
+  });
+
+  it("still says executed when it was", () => {
+    const block = source.slice(source.indexOf("export function reportTx"), source.indexOf("// ─── The run loop"));
+    expect(block).toMatch(/submitted and executed/u);
+  });
+});

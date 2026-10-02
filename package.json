@@ -66,6 +66,7 @@
     "place-tpsl": "tsx scripts/orders/place-tpsl.ts",
     "update-order": "tsx scripts/orders/update-order.ts",
     "cancel-order": "tsx scripts/orders/cancel-order.ts",
+    "sync-stops": "tsx scripts/orders/sync-stops.ts",
     "wlp": "tsx scripts/wlp/wlp.ts",
     "accounts": "tsx scripts/query/accounts.ts",
     "balance": "tsx scripts/query/balance.ts",

@@ -427,10 +427,30 @@ export const confirmed = (): boolean =>
 /** Report a landed transaction: the result becomes the envelope's data. */
 export function reportTx(agent: WaterXAgent, label: string, result: ExecuteResult): void {
   const url = explorerTxUrl(agent.config.network, result.digest);
-  note(`${label} ✓  ${result.sponsored ? "sponsored" : "self-paid"}`);
+  // "submitted and executed" was said unconditionally, on every DIRECT command.
+  // The fix for this went into the approval path only: an abort throws, but a
+  // sponsored submission whose status could not be read inside its budget comes
+  // back `UNCONFIRMED`, and saying it executed is the same false success that
+  // path was fixed for. One bug, two callers, and only one of them was mended.
+  const confirmed = result.executed === "SUCCEEDED";
+  note(`${label} ${confirmed ? "✓" : "…"}  ${result.sponsored ? "sponsored" : "self-paid"}`);
   note(`  ${url}`);
-  show({ digest: result.digest, sponsored: result.sponsored, explorer: url });
-  setOutcome(succeeded(`${label} submitted and executed`, { submitted: true }));
+  show({ digest: result.digest, sponsored: result.sponsored, executed: result.executed, explorer: url });
+  setOutcome(
+    confirmed
+      ? succeeded(`${label} submitted and executed`, { submitted: true })
+      : {
+          status: "ambiguous",
+          message:
+            `${label} was submitted as ${result.digest} and the chain has not yet confirmed what it ` +
+            `did. It was not cancelled and must not be sent again — reconcile to find out.`,
+          submitted: true,
+          retryable: false,
+          reconcileRequired: true,
+          awaitingApproval: false,
+          nextCommand: invoke("reconcile", "--all", "--json"),
+        },
+  );
 }
 
 // ─── The run loop ─────────────────────────────────────────────────────────────
