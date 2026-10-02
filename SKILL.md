@@ -234,7 +234,10 @@ commit money it does not have.
   `sync-stops --ticker <t> --position-id <id>` resizes them to match. Run it
   **after** the fill, not after the submission: before the keeper arrives the
   position is still its old size and there is nothing to resize. It is a write,
-  so it needs the same approval as any other.
+  so it needs the same approval as any other. A `delegated-auto` runner does this
+  itself — it queues a follow-up per leg when a reduce lands and holds it until
+  the position has actually shrunk — so this is yours to run only under
+  `interactive`, where a write needs a person.
 - **The agent is normally a *delegate*, and a delegate needs nothing.** The
   owner keeps their account and their funds and grants this wallet permission to
   trade. It needs no SUI (the backend sponsors a delegate's transactions), no

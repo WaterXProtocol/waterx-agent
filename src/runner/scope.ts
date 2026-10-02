@@ -47,6 +47,11 @@ export function actionOfIntent(intent: Intent): string {
       return "increasePosition";
     case "add-margin":
       return "addMargin";
+    case "fit-stop":
+      // The write it becomes. Keyed on the same name the gate sees, so a scope
+      // that does not permit an order update refuses this too rather than
+      // letting a follow-up write slip past the ceilings its parent obeyed.
+      return "updateOrder";
     case "remove-margin":
       return "removeMargin";
     case "wlp-mint":
@@ -75,6 +80,9 @@ function increasesExposure(intent: Intent): boolean {
       return true;
     case "limit":
       return intent.reduceOnly !== true;
+    case "fit-stop":
+      // It only ever shrinks a reduce-only leg. Nothing it can do adds exposure.
+      return false;
     default:
       return false;
   }
