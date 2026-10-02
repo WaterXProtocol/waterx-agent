@@ -1,0 +1,5 @@
+# .codex/config.toml — commit as-is (Codex reads it in trusted projects only; see
+# waterx-commons harness/STANDARD.md §3 rule 5). Codex concatenates AGENTS.md from the repo
+# root down to the working directory and truncates, silently, once the combined size reaches
+# project_doc_max_bytes (32 KiB by default).
+project_doc_max_bytes = 131072

@@ -1,4 +1,4 @@
-# Typecheck and tests on every push and pull request.
+# Typecheck, tests and the agent-harness lint on every push and pull request.
 #
 # The repo signs real transactions, so "the tests passed on my machine" is not
 # a standard it can be held to. The suite is hermetic — test/setup.ts clears
@@ -56,6 +56,20 @@ jobs:
       - run: pnpm run typecheck
 
       - run: pnpm test
+
+  # The agent harness: AGENTS.md is the only instruction file (a committed
+  # CLAUDE.md hides it from Claude Code), the root stays within what both tools
+  # load, .codex/config.toml raises Codex's byte cap, and the knowledge hub has
+  # its README. The script is vendored from Bucket-Protocol/waterx-commons
+  # (harness/lint/check-harness.sh); bash and git only, so no install step.
+  harness:
+    runs-on: ubuntu-latest
+    # It reads the checkout and nothing else, so the token gets nothing more.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/agent-hooks/check-harness.sh
 
   # The corpus records argument layouts captured from real transactions, and
   # every positional check in `verify.ts` reads them. A file does not go stale
