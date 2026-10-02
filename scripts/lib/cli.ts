@@ -222,6 +222,27 @@ export function parseArgs<T extends Record<string, ArgDef>>(
   const argv = process.argv.slice(2);
 
   if (argv.includes("--help") || argv.includes("-h")) {
+    // `--json` promises one document on stdout, and this path exempted itself:
+    // `<cmd> --help --json` printed the options to the HUMAN stream and exited,
+    // leaving stdout empty. Asking a tool to describe itself is the most likely
+    // first thing an agent does, and it was the one call that broke the
+    // contract. `ok`, not `usage` — being asked for help is not a misuse — and
+    // the same `options` array a bad invocation already returned, so a caller
+    // reads one shape whether it asked correctly or not.
+    if (jsonMode) {
+      emit(
+        {
+          status: "ok",
+          message: `${scriptName}: ${String(Object.keys(all).length)} option(s).`,
+          submitted: false,
+          retryable: false,
+          reconcileRequired: false,
+          awaitingApproval: false,
+          details: { usage: invoke(scriptName, "[options]"), options: optionsOf(all) },
+        },
+        undefined,
+      );
+    }
     printUsage(all, scriptName);
     process.exit(0);
   }
@@ -271,13 +292,23 @@ export function parseArgs<T extends Record<string, ArgDef>>(
  * It used to `console.error` and `exit(1)`, which an agent could not tell from
  * a crash — and 1 is what Node exits with when it dies of an unhandled throw.
  */
-function usage(message: string, defs: Record<string, ArgDef>, scriptName: string): never {
-  const options = Object.entries(defs).map(([key, def]) => ({
+/** The options of a command, as data. One shape for `--help` and for a misuse. */
+function optionsOf(defs: Record<string, ArgDef>): {
+  flag: string;
+  description: string;
+  required: boolean;
+  default?: string;
+}[] {
+  return Object.entries(defs).map(([key, def]) => ({
     flag: `--${toKebab(key)}`,
     description: def.desc,
     required: def.required === true,
     ...(def.default === undefined ? {} : { default: def.default }),
   }));
+}
+
+function usage(message: string, defs: Record<string, ArgDef>, scriptName: string): never {
+  const options = optionsOf(defs);
   if (!jsonMode) printUsage(defs, scriptName);
   emit(
     {
@@ -383,12 +414,52 @@ export function reportTx(agent: WaterXAgent, label: string, result: ExecuteResul
  * ambiguous case is the one that may never be guessed.
  */
 export async function run(main: () => Promise<void>): Promise<void> {
+  // `--help` is answered here as well as in `parseArgs`, because eighteen scripts
+  // never call `parseArgs` — they take no options of their own — and for those
+  // the flag was silently ignored and the command RAN. `markets --help` performed
+  // the read; `fund-sui --help` would ask a faucet for money and
+  // `generate-wallet --help` would mint a key. The shim promises every command
+  // takes `--help`, and a promise that executes the action instead of describing
+  // it is worse than one that is merely unkept.
+  //
+  // Scripts that DO call `parseArgs` have already exited by now with their own
+  // option list, so this never shadows a better answer.
+  if (process.argv.slice(2).some((arg) => arg === "--help" || arg === "-h")) {
+    helpForAnOptionlessCommand();
+  }
   try {
     await main();
     emit(outcome ?? succeeded(`${commandName()} completed`), payload);
   } catch (error) {
     emit(classify(error), payload);
   }
+}
+
+/**
+ * `--help` for a command whose only options are the global ones.
+ *
+ * It says so explicitly rather than printing an empty list: "no options" and
+ * "the options could not be determined" look identical in an empty array, and
+ * only the first is true here.
+ */
+function helpForAnOptionlessCommand(): never {
+  const name = commandName();
+  if (jsonMode) {
+    emit(
+      {
+        status: "ok",
+        message: `${name} takes no options of its own.`,
+        submitted: false,
+        retryable: false,
+        reconcileRequired: false,
+        awaitingApproval: false,
+        details: { usage: invoke(name), options: optionsOf(GLOBAL), takesNoOptionsOfItsOwn: true },
+      },
+      undefined,
+    );
+  }
+  printUsage(GLOBAL, name);
+  process.exit(0);
 }
 
 export type { Outcome, Status };

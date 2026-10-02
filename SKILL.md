@@ -9,6 +9,17 @@ A TypeScript agent for the [WaterX](https://waterx.io) perpetual protocol on
 Sui. It holds a keypair, asks the WaterX backend to build each transaction,
 verifies the bytes against what was authorized, signs, and submits.
 
+> **This agent reads production by default.** With no network named it is
+> mainnet, where positions are opened with real money. That default is
+> deliberate — testnet's faucets do not produce trading funds and its keeper has
+> not been filling, so a correct order rests there forever — and it is stated
+> here rather than two sections down because every read below is already
+> touching production.
+>
+> Nothing can be SIGNED by default: the policy starts at `read-only`, and moving
+> off it is a person's decision, not yours. Every answer carries
+> `"network": "mainnet"` — say so before asking anyone to approve anything.
+
 ## Start here, every time
 
 Run this and do what it says:

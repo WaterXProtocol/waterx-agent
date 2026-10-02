@@ -514,3 +514,76 @@ describe("a configured install, seen from a subdirectory", () => {
     expect(document.data?.accountId).toBe(`0x${"a".repeat(64)}`);
   }, 60_000);
 });
+
+/**
+ * `--help` under `--json`.
+ *
+ * The contract is one JSON document on stdout, and this was the path that
+ * exempted itself: `<cmd> --help --json` wrote the option list to the HUMAN
+ * stream and exited, leaving stdout empty. Asking a tool to describe itself is
+ * the most likely first thing an agent does.
+ *
+ * And for the eighteen scripts that never call `parseArgs` — they take no
+ * options of their own — the flag was not merely unanswered, it was ignored and
+ * the command RAN. `markets --help` performed the read; `fund-sui --help` would
+ * have asked a faucet for money and `generate-wallet --help` would have minted a
+ * key. Describing an action must never perform it.
+ */
+describe("--help answers in the contract's own format", () => {
+  const help = (command: string): { status?: string; ok?: boolean; details?: { options?: unknown[]; takesNoOptionsOfItsOwn?: boolean } } => {
+    const run = spawnSync(
+      process.execPath,
+      [join(process.cwd(), "bin", "waterx.mjs"), command, "--help", "--json"],
+      { encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" } },
+    );
+    expect(run.stdout.trim(), `${command} wrote nothing to stdout`).not.toBe("");
+    return JSON.parse(run.stdout) as ReturnType<typeof help>;
+  };
+
+  it("lists a command's own options", () => {
+    const document = help("preview");
+    expect(document.ok).toBe(true);
+    expect(document.details?.options?.length ?? 0).toBeGreaterThan(5);
+  });
+
+  it("answers for a command that parses no arguments, instead of running it", () => {
+    // `markets` is a read, so running it was survivable. It is here because the
+    // same path reaches two commands that are not.
+    const document = help("markets");
+    expect(document.ok).toBe(true);
+    expect(document.details?.takesNoOptionsOfItsOwn).toBe(true);
+  });
+
+  it("describes the two commands where running instead of describing would act", () => {
+    for (const command of ["fund-sui", "generate-wallet"]) {
+      const document = help(command);
+      expect(document.ok, command).toBe(true);
+      expect(document.details?.takesNoOptionsOfItsOwn, command).toBe(true);
+    }
+  });
+
+  it("is `ok`, not `usage` — being asked for help is not a misuse", () => {
+    expect(help("limits").status).toBe("ok");
+  });
+}, 90_000);
+
+describe("what SKILL.md says before it says anything else", () => {
+  const skill = readFileSync("SKILL.md", "utf8");
+  /** Everything an agent has read by the time it runs the first command. */
+  const opening = skill.slice(0, skill.indexOf("## Start here"));
+
+  it("states that the default network is production, in the opening", () => {
+    // It was said at line 78 and line 127, and the first command is at line 16.
+    // An agent that reads top-down had already run reads against production
+    // before it learned which deployment it was talking to.
+    expect(opening).toMatch(/mainnet/u);
+    expect(opening).toMatch(/real money/u);
+  });
+
+  it("and that nothing is signed by default, so the two are not confused", () => {
+    // Reading production and spending on it are different facts. Stating the
+    // first alone would read as more alarming than it is; stating only the
+    // second would read as less.
+    expect(opening).toMatch(/read-only/u);
+  });
+});
