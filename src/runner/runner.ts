@@ -448,6 +448,19 @@ export class Runner {
           j.submittedAt = this.now();
         });
         return;
+      case "aborted":
+        // Terminal, and deliberately NOT `unresolved`: the outcome is known.
+        // The transaction was included and charged for, the Move call aborted,
+        // and nothing in the chain's state moved — so unlike `never-landed`,
+        // placing this intent again is safe, and the message says so rather
+        // than leaving an operator to work out which of the two they have.
+        this.finish(
+          job,
+          "failed",
+          `${job.digest ?? "the transaction"} was included on chain and its execution failed: ` +
+            `${verdict.reason}. Nothing was placed and nothing moved, so this intent can be queued again.`,
+        );
+        return;
       case "never-landed":
         // Deliberately NOT a retry. Re-running the intent builds a DIFFERENT
         // transaction — new gas coins, a new sponsored digest — so if this

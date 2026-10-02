@@ -29,12 +29,70 @@ function withChain(getTransaction: () => Promise<unknown>, read?: Partial<ReadAp
 const rpcError = (code: string, message: string): Error =>
   Object.assign(new Error(message), { code });
 
+/** What a node returns for a transaction that executed. */
+const succeeded = () => ({
+  $kind: "Transaction",
+  Transaction: { digest: "d", effects: { status: { success: true, error: null } } },
+});
+
+/** And for one that was included, charged for, and aborted in Move. */
+const abortedWith = (message: string) => ({
+  $kind: "FailedTransaction",
+  FailedTransaction: { digest: "d", effects: { status: { success: false, error: { message } } } },
+});
+
 describe("didLand", () => {
   it("is conclusive at once when the chain has the digest", async () => {
-    const r = withChain(() => Promise.resolve({}));
+    const r = withChain(() => Promise.resolve(succeeded()));
     await expect(r.didLand("d", SENT_AT, DEFAULT_LIMITS.digestSettleMs, SENT_AT + 1)).resolves.toEqual({
       kind: "landed",
     });
+  });
+
+  /**
+   * This method fetched the transaction and discarded the response, returning
+   * `landed` for anything the chain had heard of. Inclusion and execution are
+   * two facts: a take-profit whose Move call aborted on a stale oracle
+   * (`ETotalWeightNotEnough`) was still in a checkpoint and still charged for,
+   * and reconcile reported it as placed.
+   */
+  it("separates a transaction that aborted from one that executed", async () => {
+    const r = withChain(() => Promise.resolve(abortedWith("ETotalWeightNotEnough")));
+    const verdict = await r.didLand("d", SENT_AT, DEFAULT_LIMITS.digestSettleMs, SENT_AT + 1);
+    expect(verdict.kind).toBe("aborted");
+    // The chain's own words, not a classification. A stale oracle clears by
+    // itself and an insufficient balance does not, and nothing here can tell
+    // which one it is holding.
+    expect(verdict).toMatchObject({ reason: "ETotalWeightNotEnough" });
+  });
+
+  it("reports a failure with no reason as a failure, not as a success", async () => {
+    // A node that answered `FailedTransaction` without effects still failed.
+    // Falling back to `landed` because the reason was missing would restore the
+    // exact bug, narrowed to the case nobody tests.
+    const r = withChain(() => Promise.resolve({ $kind: "FailedTransaction", FailedTransaction: {} }));
+    const verdict = await r.didLand("d", SENT_AT, DEFAULT_LIMITS.digestSettleMs, SENT_AT + 1);
+    expect(verdict.kind).toBe("aborted");
+  });
+
+  it("does not confuse an abort with never having landed", async () => {
+    // The two have opposite consequences. An abort moved nothing, so the intent
+    // may be sent again; an absence cannot be proven, so it may not. A caller
+    // that read one as the other would either duplicate a trade or abandon one.
+    const aborted = await withChain(() => Promise.resolve(abortedWith("x"))).didLand(
+      "d",
+      SENT_AT,
+      DEFAULT_LIMITS.digestSettleMs,
+      SETTLED,
+    );
+    const absent = await withChain(() => Promise.reject(rpcError("NOT_FOUND", "not found"))).didLand(
+      "d",
+      SENT_AT,
+      DEFAULT_LIMITS.digestSettleMs,
+      SETTLED,
+    );
+    expect(aborted.kind).toBe("aborted");
+    expect(absent.kind).toBe("never-landed");
   });
 
   it("withholds judgement while absence is still too young to mean anything", async () => {

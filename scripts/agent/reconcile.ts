@@ -39,8 +39,14 @@ interface ReconcileResult {
   submissionId: string;
   digest: string;
   action: string;
-  landed: boolean | "unknown";
-  /** Whether re-sending the original order is safe. Only ever true for `landed: false`. */
+  landed: boolean | "aborted" | "unknown";
+  /**
+   * Whether re-sending the original order is safe.
+   *
+   * True for exactly the two outcomes where the chain's state did not move: the
+   * transaction never arrived, or it arrived and aborted. False while anything
+   * is unresolved, because an absence cannot be proven.
+   */
   safeToRetry: boolean;
   reason?: string;
   explorer?: string;
@@ -114,7 +120,27 @@ await run(async () => {
       continue;
     }
 
-    // On chain. What became of the order is the indexer's to say, and it may
+    if (verdict.kind === "aborted") {
+      // Included in a checkpoint, gas paid, and the Move call aborted. Settled
+      // rather than left pending — the outcome is known — and safe to retry,
+      // because a transaction that aborted changed nothing. A stale oracle
+      // (`ETotalWeightNotEnough`) is the common cause and it clears on its own;
+      // an insufficient-margin abort will not, which is why the chain's own
+      // words are passed through rather than classified here.
+      settle(submission.id, { landed: "aborted", reason: verdict.reason });
+      results.push({
+        submissionId: submission.id,
+        digest: submission.digest,
+        action: submission.action,
+        landed: "aborted",
+        reason: verdict.reason,
+        safeToRetry: true,
+        explorer: explorerTxUrl(agent.config.network, submission.digest),
+      });
+      continue;
+    }
+
+    // On chain and executed. What became of the order is the indexer's to say, and it may
     // not have caught up — `undefined` is "no answer yet", not "nothing
     // happened", so it is reported as such rather than as an empty result.
     let outcome: { orderIds: number[]; status: string } | undefined;
@@ -165,11 +191,34 @@ await run(async () => {
     return;
   }
 
+  const aborted = results.filter((r) => r.landed === "aborted");
+  const executed = results.filter((r) => r.landed === true).length;
+  const absent = results.filter((r) => r.landed === false).length;
+  const tally =
+    `${String(executed)} executed, ${String(aborted.length)} aborted on chain, ` +
+    `${String(absent)} never landed`;
+
+  // An abort is not a success, and this used to report one. `rejected` rather
+  // than `unavailable`: the transaction reached the chain and was refused
+  // there, so a caller must look at the reason before sending anything again —
+  // even though sending again is safe.
   setOutcome(
-    succeeded(
-      `${String(results.filter((r) => r.landed === true).length)} landed, ` +
-        `${String(results.filter((r) => r.landed === false).length)} never landed`,
-    ),
+    aborted.length === 0
+      ? succeeded(tally)
+      : {
+          status: "rejected",
+          message:
+            `${tally}. Aborted: ${aborted
+              .map((r) => `${r.action} (${r.reason ?? "no reason given"})`)
+              .join("; ")}. Nothing was placed and nothing moved, so these can be sent again — ` +
+            `read the reason first, because a stale oracle clears on its own and an insufficient ` +
+            `balance does not.`,
+          submitted: true,
+          retryable: false,
+          reconcileRequired: false,
+          awaitingApproval: false,
+          details: { aborted },
+        },
   );
 });
 
