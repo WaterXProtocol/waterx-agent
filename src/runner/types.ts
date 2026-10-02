@@ -82,6 +82,27 @@ export type Intent =
       positionId: number;
       amount: string | number;
     }
+  /**
+   * Resize one reduce-only leg to the position it protects.
+   *
+   * Queued by a `reduce` job once its request is on chain, and deliberately NOT
+   * carrying a size. A reduce fills under the KEEPER's digest afterwards, so at
+   * the moment this is queued the position is usually still its old size — a size
+   * written from here would be one that was predicted, and a stop shrunk ahead of
+   * its fill leaves the position under-protected through exactly the move it
+   * exists for. The size is resolved from a read at the instant of the write.
+   *
+   * `wasHolding` is the position's size when this was queued. It is used for ONE
+   * decision — whether the fill has landed yet — and never to compute what is
+   * written.
+   */
+  | {
+      kind: "fit-stop";
+      ticker: string;
+      positionId: number;
+      orderId: number;
+      wasHolding: number;
+    }
   | { kind: "wlp-mint"; amount: string | number }
   | { kind: "wlp-burn"; amount: string | number }
   | { kind: "wlp-cancel-burn"; requestId: string | number }

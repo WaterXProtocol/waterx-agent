@@ -20,7 +20,9 @@
 import { randomUUID } from "node:crypto";
 
 import type { WaterXAgent } from "../agent/agent.ts";
-import { ExecutionPolicyError, WaterXApiError } from "../errors.ts";
+import { ExecutionPolicyError, UsageError, WaterXApiError } from "../errors.ts";
+import { oversizedStops } from "../agent/stops.ts";
+import type { Position } from "../api/types.ts";
 import type { Inbox, InboxEntry } from "./inbox.ts";
 import type { Reconciler } from "./reconcile.ts";
 import type { JobStore } from "./store.ts";
@@ -45,12 +47,23 @@ export interface RunnerOptions {
   now?: () => number;
   /** Progress reporting. Defaults to stdout. */
   log?: (line: string) => void;
+  /**
+   * Whether a reduce queues a follow-up to resize the protective legs it
+   * outgrows. On by default, because a stale stop is the defect and an off-by-
+   * default fix stays broken for everyone who does not know it exists.
+   *
+   * An off switch exists because this is the one thing the runner does that
+   * nobody queued. It is still bounded by the scope — the follow-up is an
+   * `updateOrder` and the gate checks it like any other write.
+   */
+  fitStops?: boolean;
 }
 
 export class Runner {
   private readonly agent: WaterXAgent;
   private readonly store: JobStore;
   private readonly reconciler: Reconciler;
+  private readonly fitStopsEnabled: boolean;
   private readonly limits: RunnerLimits;
   private readonly inbox: Inbox | undefined;
   private readonly now: () => number;
@@ -66,6 +79,7 @@ export class Runner {
     this.inbox = options.inbox;
     this.now = options.now ?? Date.now;
     this.log = options.log ?? ((line) => process.stdout.write(`${line}\n`));
+    this.fitStopsEnabled = options.fitStops ?? true;
   }
 
   /**
@@ -347,6 +361,10 @@ export class Runner {
           return;
         }
         if (job.notBefore !== undefined && at < job.notBefore) return;
+        // A `fit-stop` may have nothing to do, and a job that sends nothing must
+        // never enter `submitting` — the one state that needs evidence rather
+        // than a decision to leave. So it looks before it leaps.
+        if (job.intent.kind === "fit-stop" && !(await this.readyToFit(job, job.intent))) return;
         await this.submit(job);
         return;
       }
@@ -500,6 +518,11 @@ export class Runner {
         // for a fill that settles under the keeper's digest would strand this
         // job until the deadline and then call a success `unresolved`.
         this.finish(job, "filled", "the request is on chain");
+        // And a reduce leaves its protective legs sized for the position it used
+        // to be. Queued AFTER the job is terminal and outside its result, because
+        // a follow-up that could fail the reduce would be a worse bug than a
+        // stale stop: the reduce happened, and that is what this job reports.
+        if (job.intent.kind === "reduce") await this.queueStopFits(job, job.intent);
         return;
       case "gone":
         await this.awaitDisappearance(job);
@@ -668,6 +691,8 @@ export class Runner {
           amount: intent.amount,
           onSubmitting,
         });
+      case "fit-stop":
+        return this.fitStop(intent, onSubmitting);
       case "wlp-mint":
         return this.agent.mintWlp({ amount: intent.amount, onSubmitting });
       case "wlp-burn":
@@ -687,6 +712,165 @@ export class Runner {
       j.events.push({ at, state, note });
       mutate?.(j);
     });
+  }
+
+  /**
+   * Queue a `fit-stop` for each protective leg a reduce will outgrow.
+   *
+   * Best-effort by design, and it runs after the reduce job is already terminal:
+   * nothing here may change what that job reported. A read that fails, an inbox
+   * that will not write, a position that vanished — each leaves the legs where
+   * they were, which is where they started, and `positions` still reports the
+   * mismatch for a person.
+   *
+   * One job per leg, because one job is one write, one idempotency key and one
+   * at-most-once guarantee. Two writes inside one job would make a crash between
+   * them a new kind of ambiguity, and this feature is not worth that.
+   *
+   * The key is the reduce's own digest, so the inbox suppresses a repeat if this
+   * runs twice — and a LATER reduce on the same position has a different digest
+   * and queues its own. Even without that, `fit-stop` compares observed sizes, so
+   * a duplicate finds nothing to do.
+   */
+  private async queueStopFits(
+    job: Job,
+    intent: Extract<Intent, { kind: "reduce" }>,
+  ): Promise<void> {
+    // No inbox means this runner accepts no queued work, so there is nowhere to
+    // leave a follow-up. Not an error: such a runner was configured to drain a
+    // store and nothing else.
+    const inbox = this.inbox;
+    if (!this.fitStopsEnabled || inbox === undefined) return;
+    try {
+      const position = await this.position(intent.ticker, intent.positionId);
+      if (position === undefined) return;
+      const legs = position.linkedOrders.filter((order) => order.reduceOnly);
+      if (legs.length === 0) return;
+
+      const at = this.now();
+      for (const leg of legs) {
+        inbox.submit({
+          intent: {
+            kind: "fit-stop",
+            ticker: position.ticker,
+            positionId: Number(position.id),
+            orderId: Number(leg.id),
+            // What the position holds NOW, before the keeper fills. Used to tell
+            // "not filled yet" from "already correct", never to size a write.
+            wasHolding: position.sizeInAsset,
+          },
+          // The keeper needs a moment, and asking before then costs a read to
+          // learn nothing.
+          notBefore: at + FIT_STOP_GRACE_MS,
+          expiresAt: at + FIT_STOP_WINDOW_MS,
+          key: `fit-stop:${position.ticker}:${position.id}:${leg.id}:${job.digest ?? String(at)}`,
+        });
+      }
+      this.log(
+        `queued  ${job.id.slice(0, 8)}  ${String(legs.length)} stop fit(s) for ` +
+          `${position.ticker}#${position.id} once the fill lands`,
+      );
+    } catch (error) {
+      // Said, not raised. The reduce is done and its job is terminal.
+      this.log(`note    ${job.id.slice(0, 8)}  could not queue a stop fit: ${describeError(error)}`);
+    }
+  }
+
+  /**
+   * Whether a `fit-stop` has work to do yet. Writes nothing either way.
+   *
+   * Three answers, and the middle one is the whole reason this exists:
+   *
+   *  - **the leg is oversized** — go. The write resolves its own size.
+   *  - **the position is still the size it was** — the keeper has not filled the
+   *    reduce yet, so there is nothing to fit TO. Deferred, not failed: an answer
+   *    of "no work" here would be indistinguishable from "already correct", and
+   *    acting would shrink the stop ahead of the fill.
+   *  - **smaller, and every leg fits** — somebody already did it, or the position
+   *    never had an oversized leg. Terminal, and nothing was sent.
+   *
+   * `wasHolding` is read for the middle case alone. It never reaches a size that
+   * gets written.
+   */
+  private async readyToFit(
+    job: Job,
+    intent: Extract<Intent, { kind: "fit-stop" }>,
+  ): Promise<boolean> {
+    let position: Position | undefined;
+    try {
+      position = await this.position(intent.ticker, intent.positionId);
+    } catch (error) {
+      // A read that failed says nothing about the world. Left queued so the next
+      // tick asks again, bounded by the job's own window.
+      this.log(`waiting ${job.id.slice(0, 8)}  could not read the position: ${describeError(error)}`);
+      return false;
+    }
+
+    if (position === undefined) {
+      this.finish(job, "cancelled", "the position is closed; the protocol cancels its legs");
+      return false;
+    }
+    if (oversizedStops(position).some((stop) => stop.orderId === intent.orderId)) return true;
+
+    if (position.sizeInAsset >= intent.wasHolding) {
+      // Not filled yet. Try again after the grace period rather than now — a tick
+      // is cheap but a read per tick for fifteen minutes is not.
+      this.store.update(job.id, (j) => {
+        j.notBefore = this.now() + FIT_STOP_GRACE_MS;
+        j.updatedAt = this.now();
+      });
+      return false;
+    }
+
+    this.finish(job, "cancelled", `${intent.ticker}#${String(intent.orderId)} already fits`);
+    return false;
+  }
+
+  /**
+   * Resize one reduce-only leg to the position it protects.
+   *
+   * The size is read HERE, by the code that writes it. The pre-flight in `drive`
+   * decided whether to write at all; it does not hand a number across, because a
+   * number that travelled is a number that was true somewhere else. A reduce
+   * fills under the keeper's digest after the request lands, so the only size
+   * worth writing is the one the chain reports at this instant.
+   *
+   * The trigger price is carried over unchanged. Resizing must not reprice: where
+   * a stop sits is the trader's decision and nothing here is entitled to move it.
+   */
+  private async fitStop(
+    intent: Extract<Intent, { kind: "fit-stop" }>,
+    onSubmitting: (digest: string) => Promise<void>,
+  ): Promise<{ digest: string }> {
+    const position = await this.position(intent.ticker, intent.positionId);
+    if (position === undefined) {
+      // Pre-flight saw it a moment ago. Gone now means closed in between, and the
+      // protocol cancels its legs — so there is nothing to resize and nothing to
+      // report as a failure either. Refused as permanent: retrying cannot bring a
+      // closed position back.
+      throw new UsageError(
+        `position ${intent.ticker}#${String(intent.positionId)} is gone, so its legs need no resizing`,
+      );
+    }
+    const stop = oversizedStops(position).find((s) => s.orderId === intent.orderId);
+    if (stop === undefined) {
+      throw new UsageError(
+        `${intent.ticker}#${String(intent.orderId)} already fits the position it protects`,
+      );
+    }
+    return this.agent.updateOrder({
+      ticker: stop.ticker,
+      orderId: stop.orderId,
+      newTriggerPrice: stop.triggerPrice,
+      newSize: stop.shouldBe,
+      onSubmitting,
+    });
+  }
+
+  /** One position by ticker and id, or `undefined`. */
+  private async position(ticker: string, positionId: number): Promise<Position | undefined> {
+    const positions = await this.agent.read.positions(this.agent.accountId);
+    return positions.find((p) => p.ticker === ticker && p.id === String(positionId));
   }
 
   private finish(job: Job, state: JobState, note: string): void {
@@ -714,6 +898,24 @@ const RANK: Record<JobState, number> = {
 const byAmbiguityFirst = (a: Job, b: Job): number =>
   RANK[a.state] - RANK[b.state] || a.createdAt - b.createdAt;
 
+/**
+ * How long to wait between asking whether a reduce has filled.
+ *
+ * A reduce fills under the keeper's digest, which this job cannot watch, so the
+ * only way to know is to look at the position. A tick is cheap; a read every tick
+ * for the whole window is not.
+ */
+const FIT_STOP_GRACE_MS = 30_000;
+
+/**
+ * How long a `fit-stop` keeps asking before giving up.
+ *
+ * Expiring is an honest outcome: the reduce did not fill inside the window, so
+ * there was never anything to resize. The legs are unchanged, which is where they
+ * started, and `positions` reports the mismatch if one appears later.
+ */
+const FIT_STOP_WINDOW_MS = 15 * 60_000;
+
 export function describeIntent(intent: Intent): string {
   switch (intent.kind) {
     case "open":
@@ -738,6 +940,8 @@ export function describeIntent(intent: Intent): string {
       return `add margin ${intent.ticker}#${String(intent.positionId)} +${String(intent.amount)}`;
     case "remove-margin":
       return `remove margin ${intent.ticker}#${String(intent.positionId)} -${String(intent.amount)}`;
+    case "fit-stop":
+      return `fit stop ${intent.ticker}#${String(intent.orderId)} to position #${String(intent.positionId)}`;
     case "wlp-mint":
       return `wlp mint ${String(intent.amount)}`;
     case "wlp-burn":

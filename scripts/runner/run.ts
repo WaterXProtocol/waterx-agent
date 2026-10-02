@@ -9,6 +9,7 @@
  * would manufacture, on every clean shutdown, exactly the ambiguity the ledger
  * exists to recover from.
  */
+import { ConfigError } from "../../src/errors.ts";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -55,6 +56,7 @@ await run(async () => {
       reconciler,
       // Lets `queue` add work without the store's writer lock.
       inbox: new Inbox(`${storePath.replace(/\.json$/, "")}.inbox`),
+      fitStops: fitStops(),
     });
     runner.assertCanRunUnattended();
 
@@ -100,3 +102,21 @@ await run(async () => {
     store.close();
   }
 });
+
+/**
+ * Whether a reduce queues a follow-up to resize the legs it outgrows.
+ *
+ * On unless explicitly turned off. Parsed strictly rather than by truthiness: a
+ * value nobody recognises is refused, because a setting that looks present and
+ * does nothing is worse for an operator than one that is absent — and
+ * `WATERX_RUNNER_FIT_STOPS=no` silently meaning "yes" is exactly that.
+ */
+function fitStops(): boolean {
+  const raw = process.env.WATERX_RUNNER_FIT_STOPS?.trim();
+  if (raw === undefined || raw === "") return true;
+  if (raw === "true" || raw === "false") return raw === "true";
+  throw new ConfigError(
+    `WATERX_RUNNER_FIT_STOPS is "${raw}". It takes "true" or "false"; omit it for the default, ` +
+      `which is to resize a protective leg once the reduce it outgrew has filled.`,
+  );
+}
