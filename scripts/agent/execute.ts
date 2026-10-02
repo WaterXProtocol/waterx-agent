@@ -187,7 +187,9 @@ await run(async () => {
   });
 
   const url = explorerTxUrl(agent.config.network, result.digest);
-  note(`${request.action} ✓  ${result.sponsored ? "sponsored" : "self-paid"}`);
+  // An abort threw; what is left is executed, or submitted-and-not-yet-readable.
+  const confirmed = result.executed === "SUCCEEDED";
+  note(`${request.action} ${confirmed ? "✓" : "…"}  ${result.sponsored ? "sponsored" : "self-paid"}`);
   note(`  ${url}`);
   show({
     approvalId: id,
@@ -196,9 +198,28 @@ await run(async () => {
     sponsored: result.sponsored,
     explorer: url,
     submissionId,
+    executed: result.executed,
     preview: previewOf(request.plan),
   });
-  setOutcome(succeeded(`${request.action} executed as ${result.digest}`, { submitted: true }));
+  // `ok` used to be unconditional once a digest came back, so a transaction that
+  // was accepted and then aborted — or one whose outcome was simply not readable
+  // yet — reported as a placed order. Only a confirmed execution says so now.
+  setOutcome(
+    confirmed
+      ? succeeded(`${request.action} executed as ${result.digest}`, { submitted: true })
+      : {
+          status: "ambiguous",
+          message:
+            `${request.action} was submitted as ${result.digest} and the chain has not yet ` +
+            `confirmed what it did. It was not cancelled and must not be sent again — ` +
+            `reconcile to find out.`,
+          submitted: true,
+          retryable: false,
+          reconcileRequired: true,
+          awaitingApproval: false,
+          nextCommand: invoke("reconcile", "--id", submissionId ?? "", "--json"),
+        },
+  );
 });
 
 /**

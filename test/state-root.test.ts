@@ -9,8 +9,8 @@
  * made `approvals` and `next` read different ledgers and report different
  * numbers for the same question.
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { beforeEach, describe, expect, it } from "vitest";
@@ -59,5 +59,41 @@ describe("finding the state an install already has", () => {
     mkdirSync(fresh, { recursive: true });
 
     expect(stateRoot(fresh)).toBe(fresh);
+  });
+});
+
+describe("the home directory is a boundary", () => {
+  /**
+   * The walk accepted any `.waterx`, and `~/.waterx` exists on any machine that
+   * has installed the PREDICT agent — a different product with a different
+   * wallet. So every project under `$HOME` with no marker of its own resolved to
+   * `$HOME`, putting two agents' approval ledgers in one directory. Measured on
+   * a real machine, where `stateRoot()` from a checkout answered `/Users/<user>`
+   * and the approvals file answered `~/.waterx/approvals.jsonl`.
+   *
+   * Which is the same failure as the bug above, reached from the other side: an
+   * install's state has to belong to the install.
+   */
+  it("does not walk out of a project into the home directory", () => {
+    const home = homedir();
+    // A real subdirectory of home that holds no marker. `$HOME` itself holds
+    // `.waterx` on this machine or it does not; either way the answer for a
+    // project must be the project.
+    const project = mkdtempSync(join(home, ".waterx-agent-test-"));
+    const deep = join(project, "src", "nested");
+    mkdirSync(deep, { recursive: true });
+    try {
+      expect(stateRoot(deep)).toBe(deep);
+      expect(stateRoot(project)).toBe(project);
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it("still answers the home directory when that is where it was asked from", () => {
+    // A boundary, not a refusal. Somebody who ran the agent in their home
+    // directory meant their home directory, and sending them elsewhere would be
+    // a second surprise rather than a fix.
+    expect(stateRoot(homedir())).toBe(homedir());
   });
 });

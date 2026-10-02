@@ -21,7 +21,15 @@ import type { ReadApi } from "../api/read.ts";
 import type { AgentConfig } from "../config.ts";
 
 export type LandedVerdict =
+  /** On chain AND the Move call succeeded. */
   | { kind: "landed" }
+  /**
+   * On chain, included in a checkpoint, gas paid — and the Move call aborted.
+   * Terminal, and the opposite of `never-landed` in what it licenses: the
+   * transaction changed nothing, so placing the intent again is SAFE. Never
+   * folded into `landed`; that read is what let a failed order report success.
+   */
+  | { kind: "aborted"; reason: string }
   | { kind: "never-landed" }
   /** Not on chain yet, and not old enough for absence to mean anything. */
   | { kind: "unknown"; reason: string };
@@ -73,7 +81,17 @@ export class Reconciler {
    */
   async didLand(digest: string, submittedAt: number, settleMs: number, now: number): Promise<LandedVerdict> {
     try {
-      await this.client().core.getTransaction({ digest });
+      // `effects` is requested because the answer is IN it. This used to fetch
+      // the transaction and discard the response, returning `landed` for
+      // anything the chain had heard of — so an order whose Move call aborted
+      // (a stale oracle returns `ETotalWeightNotEnough`, and the transaction is
+      // still included and still charged for) reported as placed. Inclusion and
+      // execution are two facts, and only the second one is the question this
+      // method's name asks.
+      const result = await this.client().core.getTransaction({ digest, include: { effects: true } });
+      if (result.$kind === "FailedTransaction") {
+        return { kind: "aborted", reason: abortReason(result.FailedTransaction.effects) };
+      }
       return { kind: "landed" };
     } catch (error) {
       // A lookup that failed for a transport reason is not evidence of absence.
@@ -202,6 +220,21 @@ export class Reconciler {
  * `Transaction%20<digest>%20not%20found` and a naive substring match for
  * "not found" silently never fires — which is exactly how this was found.
  */
+/**
+ * Why a transaction aborted, in the words the chain used.
+ *
+ * Defensive about its own input: a node that answered `FailedTransaction`
+ * without the effects still failed, and reporting "it failed, reason unknown"
+ * is right where inventing a reason is not.
+ */
+const abortReason = (effects: unknown): string => {
+  const status = (effects as { status?: { success?: boolean; error?: { message?: string } } } | undefined)?.status;
+  const message = status?.error?.message;
+  return typeof message === "string" && message.trim() !== ""
+    ? message.trim()
+    : "the chain reported a failed execution without a reason";
+};
+
 function isNotFound(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code;
   if (typeof code === "string") return code.toUpperCase() === "NOT_FOUND";

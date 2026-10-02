@@ -280,11 +280,41 @@ function executor(
   const signer = new KeypairSigner(keypair);
   const signTransaction = vi.spyOn(signer, "signTransaction");
   return {
-    executor: new TxExecutor(signer, config, api, gate, grpc),
+    // A sponsored submission now reads its own status back, because Enoki
+    // answers with a digest and a digest is not an execution. So every sponsored
+    // test needs a chain to ask, and the default one says "it succeeded" — a
+    // test that did NOT have to supply this would be a test that passes while
+    // the read is broken.
+    executor: new TxExecutor(signer, config, api, gate, grpc ?? chainSaying("Transaction")),
     gate,
     executeSponsored,
     signTransaction,
   };
+}
+
+/** A fullnode that answers `getTransaction` with one fixed verdict. */
+function chainSaying(kind: "Transaction" | "FailedTransaction", message?: string): SuiGrpcClient {
+  return {
+    core: {
+      getTransaction: async () =>
+        kind === "Transaction"
+          ? { $kind: "Transaction", Transaction: { digest: "sponsored-1", effects: { status: { success: true, error: null } } } }
+          : {
+              $kind: "FailedTransaction",
+              FailedTransaction: {
+                digest: "sponsored-1",
+                effects: { status: { success: false, error: { message: message ?? "MoveAbort" } } },
+              },
+            },
+    },
+  } as unknown as SuiGrpcClient;
+}
+
+/** A fullnode that never answers — propagation lag, not an error. */
+function chainSilent(): SuiGrpcClient {
+  return {
+    core: { getTransaction: async () => { throw new Error("not found"); } },
+  } as unknown as SuiGrpcClient;
 }
 
 /**
@@ -536,7 +566,11 @@ describe("execution policy", () => {
   it('allows a confirmed write under "interactive"', async () => {
     const { executor: exec, gate, executeSponsored } = executor("interactive");
     const result = await exec.execute(sponsored(), intentFor("openLong"), await permitFor(gate, "openLong", true));
-    expect(result).toEqual({ digest: "executed-1", sponsored: true });
+    // `executed` is the fact that was missing. A digest from Enoki means the
+    // transaction was ACCEPTED; this says the chain has confirmed what it did.
+    expect(result.digest).toBe("executed-1");
+    expect(result.sponsored).toBe(true);
+    expect(result.executed).toBe("SUCCEEDED");
     expect(executeSponsored).toHaveBeenCalledOnce();
   });
 
@@ -761,4 +795,56 @@ describe("delegate addressing", () => {
       TxExecutionError,
     );
   });
+});
+
+describe("a sponsored submission learns what the chain did", () => {
+  /**
+   * Enoki answers `/sponsor/execute` with a digest and nothing else, and the
+   * code took that as success. But a Sui transaction can be included in a
+   * checkpoint, be charged for, and still abort in Move — a stale oracle
+   * returns `ETotalWeightNotEnough` — so placing a take-profit that FAILED on
+   * chain reported `ok`, and the next reconcile said `landed: true` because it
+   * asked whether the chain had heard of the digest rather than what it did.
+   *
+   * An external tester read "order placed" and had no order. The self-paid
+   * branch had always checked this; the branch nobody tests by hand was the one
+   * missing it.
+   */
+  it("throws when the transaction aborted on chain, as the self-paid branch does", async () => {
+    const { executor: exec, gate } = executor(
+      "interactive",
+      {},
+      chainSaying("FailedTransaction", "ETotalWeightNotEnough"),
+    );
+    await expect(
+      exec.execute(sponsored(), intentFor("openLong"), await permitFor(gate, "openLong", true)),
+    ).rejects.toThrow(TxExecutionError);
+  });
+
+  it("carries the chain's own words, so an operator can tell transient from terminal", async () => {
+    // A stale oracle clears on its own; an insufficient balance does not. This
+    // process classifies neither — it passes through what the chain said.
+    const { executor: exec, gate } = executor(
+      "interactive",
+      {},
+      chainSaying("FailedTransaction", "ETotalWeightNotEnough"),
+    );
+    await expect(
+      exec.execute(sponsored(), intentFor("openLong"), await permitFor(gate, "openLong", true)),
+    ).rejects.toThrow(/included on chain and its execution failed/);
+  });
+
+  it("says UNCONFIRMED rather than guessing when the status cannot be read", async () => {
+    // Propagation lag is not an error and it is not a success. Reporting either
+    // one would be a claim about money that nothing supports — and the digest is
+    // durable, so `reconcile` answers the same question later with no deadline.
+    const { executor: exec, gate } = executor("interactive", {}, chainSilent());
+    const result = await exec.execute(
+      sponsored(),
+      intentFor("openLong"),
+      await permitFor(gate, "openLong", true),
+    );
+    expect(result.digest).toBe("executed-1");
+    expect(result.executed).toBe("UNCONFIRMED");
+  }, 20_000);
 });

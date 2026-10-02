@@ -75,7 +75,27 @@ export interface ExecuteResult {
   sponsored: boolean;
   /** Absent for sponsored submissions — Enoki returns only the digest. */
   effects?: unknown;
+  /**
+   * Whether the chain is known to have EXECUTED this, not merely accepted it.
+   *
+   * The self-paid branch learns it from the submission itself. The sponsored
+   * branch is told only a digest, so it reads the status back — and when that
+   * read cannot resolve in time the honest answer is `UNCONFIRMED`, which a
+   * caller must not report as success. An abort never arrives here at all: it
+   * throws, exactly as it does on the self-paid branch.
+   */
+  executed: "SUCCEEDED" | "UNCONFIRMED";
 }
+
+/**
+ * How long a sponsored submission waits to learn its own outcome.
+ *
+ * Short by design: Enoki has already executed the transaction before it answers
+ * with a digest, so this covers read-node propagation rather than execution.
+ * Exceeding it yields `UNCONFIRMED`, never a guess in either direction.
+ */
+const STATUS_READ_BUDGET_MS = 6_000;
+const STATUS_READ_INTERVAL_MS = 750;
 
 export class TxExecutor {
   private grpc?: SuiGrpcClient;
@@ -204,7 +224,12 @@ export class TxExecutor {
         signature,
         source: options.source ?? `agent/${action}`,
       });
-      return { digest: result.digest, sponsored: true };
+      // Enoki answers with a digest and nothing else, and a digest is proof of
+      // ACCEPTANCE, not of execution. A transaction can be included in a
+      // checkpoint, be charged for, and still abort in Move — a stale oracle
+      // returns `ETotalWeightNotEnough` — so returning here used to report a
+      // failed order as a placed one.
+      return { digest: result.digest, sponsored: true, ...(await this.statusOf(result.digest, action)) };
     }
 
     // A delegate wallet is not expected to hold gas — the backend sponsors it
@@ -260,7 +285,57 @@ export class TxExecutor {
       digest: result.Transaction.digest,
       sponsored: false,
       effects: result.Transaction.effects,
+      // Learned from the submission: the branch above threw on
+      // `FailedTransaction`, so reaching here IS the chain's confirmation.
+      executed: "SUCCEEDED",
     };
+  }
+
+  /**
+   * Read back what the chain did with a sponsored digest.
+   *
+   * Three outcomes, and conflating any two of them is a money bug:
+   *
+   *  - **aborted** — included, charged for, and the Move call failed. Thrown,
+   *    so it surfaces exactly where a self-paid abort does.
+   *  - **succeeded** — included and executed.
+   *  - **not yet visible** — `UNCONFIRMED`. Enoki has already submitted it, so
+   *    this is propagation lag and not an error, but it is also not success,
+   *    and the caller is told to reconcile rather than told it worked.
+   *
+   * Bounded on purpose. A read that will not resolve must not hold a trading
+   * process open, and the digest is durable — `reconcile` answers the same
+   * question later with no deadline.
+   */
+  private async statusOf(
+    digest: string,
+    action: string,
+  ): Promise<{ executed: "SUCCEEDED" | "UNCONFIRMED"; effects?: unknown }> {
+    const deadline = Date.now() + STATUS_READ_BUDGET_MS;
+    for (;;) {
+      try {
+        const result = await this.grpcClient().core.getTransaction({
+          digest,
+          include: { effects: true },
+        });
+        if (result.$kind === "FailedTransaction") {
+          throw new TxExecutionError(
+            `${action}: the transaction was included on chain and its execution failed.`,
+            digest,
+            result.FailedTransaction.effects,
+          );
+        }
+        return { executed: "SUCCEEDED", effects: result.Transaction.effects };
+      } catch (error) {
+        // A real abort is the answer, not a failed read. Re-thrown rather than
+        // retried, or the one conclusive outcome would be the one that times out.
+        if (error instanceof TxExecutionError) throw error;
+        if (Date.now() + STATUS_READ_INTERVAL_MS >= deadline) {
+          return { executed: "UNCONFIRMED" };
+        }
+        await new Promise((resolve) => setTimeout(resolve, STATUS_READ_INTERVAL_MS));
+      }
+    }
   }
 
   /** Lazily built so a read-only process never opens a chain connection. */

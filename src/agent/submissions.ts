@@ -52,7 +52,15 @@ export interface Submission {
 
 /** What the chain and the indexer eventually said. */
 export interface Settlement {
-  landed: boolean | "unknown";
+  /**
+   * `true` executed, `"aborted"` was included and its Move call failed, `false`
+   * never reached the chain, `"unknown"` not resolved yet.
+   *
+   * `"aborted"` is the value this record used to be unable to hold, so an
+   * aborted transaction settled as `true` and a failed order read as a placed
+   * one. Old records hold a boolean and still parse.
+   */
+  landed: boolean | "aborted" | "unknown";
   reason?: string;
   orderIds?: number[];
   status?: string;
