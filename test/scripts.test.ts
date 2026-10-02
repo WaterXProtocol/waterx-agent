@@ -15,7 +15,7 @@
  * rule below is about `const`/`let`/`var`, not about helpers in general.
  */
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -377,5 +377,68 @@ describe("a read command does not touch the write plane", () => {
       offenders,
       "a read command reached the write plane; `agent.subjectWallet()` answers the same question and resolves the owner first",
     ).toEqual([]);
+  });
+});
+
+describe("a scope that is already over", () => {
+  // `--not-after` in the past was accepted and reported `ok`, so the next
+  // unattended write refused for a reason the operator had just been told was
+  // fine — and the remedy, rewriting the scope, is what they had done.
+  it("refuses to write a delegation that has already expired, and writes nothing", () => {
+    const at = join(mkdtempSync(join(tmpdir(), "waterx-scope-")), "scope.json");
+    const run = spawnSync(
+      process.execPath,
+      [
+        "--import", "tsx", "scripts/agent/limits.ts",
+        "--write", at,
+        "--accounts", `0x${"a".repeat(64)}`,
+        "--not-after", "2020-01-01T00:00:00Z",
+        "--max-collateral-per-order", "10",
+        "--max-open-collateral", "20",
+        "--max-cumulative-collateral", "100",
+        "--max-leverage", "3",
+        "--max-slippage-percent", "1",
+      ],
+      { encoding: "utf8" },
+    );
+
+    expect(run.stdout + run.stderr).toMatch(/already passed/u);
+    // The assertion that matters: a refusal that still wrote the file would be
+    // a scope on disk nobody meant to install.
+    expect(existsSync(at), "an expired scope was written anyway").toBe(false);
+  }, 30_000);
+});
+
+describe("the one JSON document --json promises", () => {
+  // The flag promises stdout carries exactly one document, and this shim was
+  // exempting itself: an unknown command, `--help` and a maintainer tool all
+  // wrote prose to stderr and left stdout EMPTY. A caller that parses stdout —
+  // which is what the flag is for — met its first mistake as a parse error
+  // rather than as an answer, so the most likely first interaction with this
+  // binary was also the one that broke the contract.
+  const shim = (argv: readonly string[]) =>
+    spawnSync(process.execPath, ["bin/waterx.mjs", ...argv], { encoding: "utf8" });
+
+  for (const [label, argv] of [
+    ["an unknown command", ["zzz-not-a-command", "--json"]],
+    ["help", ["--help", "--json"]],
+    ["a maintainer tool", ["capture-corpus", "--json"]],
+  ] as const) {
+    it(`answers ${label} with one parseable document`, () => {
+      const run = shim(argv);
+      expect(run.stdout, `${label}: stdout was empty`).not.toBe("");
+      const parsed = JSON.parse(run.stdout) as { ok: boolean; status: string; message: string };
+      expect(typeof parsed.ok).toBe("boolean");
+      expect(parsed.status.length).toBeGreaterThan(0);
+      expect(parsed.message.length).toBeGreaterThan(0);
+    });
+  }
+
+  it("leaves the human output alone when nobody asked for JSON", () => {
+    // The prose is still prose, and stdout is still clean for a caller that
+    // pipes it without the flag.
+    const run = shim(["zzz-not-a-command"]);
+    expect(run.stdout).toBe("");
+    expect(run.stderr).toMatch(/unknown command/u);
   });
 });

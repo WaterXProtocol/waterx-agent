@@ -9,6 +9,8 @@
  * that is absent.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { classify } from "../src/cli/classify.ts";
+import { ConfigError } from "../src/errors.ts";
 
 import { loadConfig } from "../src/config.ts";
 import { ACTION_RULES } from "../src/chain/verify.ts";
@@ -133,4 +135,34 @@ describe("WATERX_MANIFEST_GRACE_MINUTES", () => {
     vi.stubEnv("WATERX_MANIFEST_GRACE_MINUTES", "30");
     expect(() => loadConfig()).not.toThrow();
   });
+});
+
+describe("a configuration mistake is not an outage", () => {
+  // `WATERX_NETWORK=devnet` answered `unavailable` — exit 7, which this
+  // contract reserves for "retrying is safe". So an agent branching on the exit
+  // code retried a typo, forever, and the one thing that would have fixed it is
+  // the one thing retrying never does. Every refusal in this file is a value
+  // somebody typed, and none of them gets better by being asked again.
+  const refusals: [string, string, string][] = [
+    ["an unknown network", "WATERX_NETWORK", "devnet"],
+    ["an unknown execution policy", "WATERX_EXECUTION_POLICY", "yolo"],
+    // A bare word is a command NAME and is accepted; a broken array is not.
+    ["a signer command whose array is malformed", "WATERX_SIGNER_COMMAND", '["keystore",'],
+  ];
+
+  for (const [label, key, value] of refusals) {
+    it(`reports ${label} as configuration, not as transient`, () => {
+      vi.stubEnv(key, value);
+      let thrown: unknown;
+      try {
+        loadConfig();
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, `${label} was accepted`).toBeInstanceOf(ConfigError);
+      const outcome = classify(thrown);
+      expect(outcome.status).toBe("config");
+      expect(outcome.retryable, "an agent told to retry a typo retries it forever").toBe(false);
+    });
+  }
 });

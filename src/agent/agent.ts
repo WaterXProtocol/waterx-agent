@@ -1023,6 +1023,11 @@ export class WaterXAgent {
   async planCreateAccount(
     params: WriteOptions & { name: string; referralCode?: string },
   ): Promise<TradePlan> {
+    // A delegate cannot create an account: the account would belong to whoever
+    // signed, and a delegate signs for somebody else's. Refused before an
+    // approval is asked for, like the rest of the owner-only set.
+    await this.resolveIdentity();
+    this.assertOwnerSigned("createAccount");
     const intent: WriteIntent = {
       action: "createAccount",
       accountId: "",
@@ -1060,6 +1065,15 @@ export class WaterXAgent {
   async planDeposit(
     params: WriteOptions & { assetType: string; amount: string | number },
   ): Promise<TradePlan> {
+    // Here, where `withdraw` already refuses, and for the same reason: a
+    // deposit is paid from the SIGNER's own balance, and a delegate's balance
+    // is not the account owner's to spend. The backend refused it at execute
+    // with `delegateSender is not allowed`, so a person previewed it, approved
+    // it, and learned at the last step that the approval could never apply —
+    // while `withdraw`, which fails the same way, was refused before they were
+    // asked. One of the two was telling them in time.
+    await this.resolveIdentity();
+    this.assertOwnerSigned("deposit");
     const intent: WriteIntent = {
       action: "deposit",
       accountId: this.accountId,

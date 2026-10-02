@@ -22,9 +22,10 @@
  * and so is "on what".
  */
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { inStateRoot } from "../state-root.ts";
 import { dirname } from "node:path";
 
-export const SPEND_FILE = process.env.WATERX_SPEND_FILE?.trim() || ".waterx/spend.jsonl";
+export const SPEND_FILE = process.env.WATERX_SPEND_FILE?.trim() || inStateRoot(".waterx", "spend.jsonl");
 
 export interface SpendEntry {
   v: 1;

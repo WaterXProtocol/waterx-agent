@@ -11,6 +11,8 @@
  * It is read-only and signs nothing, so it is safe to run under any execution
  * policy — including on mainnet.
  */
+import { statSync } from "node:fs";
+
 import { HttpClient } from "./api/http.ts";
 import { ReadApi } from "./api/read.ts";
 import { TxApi } from "./api/tx.ts";
@@ -173,6 +175,8 @@ export async function runDoctor(overrides: Partial<AgentConfig> = {}): Promise<D
     // An unattended policy with the key in this address space is the
     // combination the signer boundary exists to avoid. It is legal, and it is
     // not what anyone should reach for on purpose.
+    const commandCheck = signerCommandCheck(signer);
+    if (commandCheck !== undefined) checks.push(commandCheck);
     if (config.executionPolicy === "delegated-auto" && signer.kind === "in-process-keypair") {
       checks.push(
         warn(
@@ -851,4 +855,49 @@ export function signerRole(config: AgentConfig, signerAddress: string): string {
   return config.accountId === undefined
     ? "no account yet, so neither an owner's key nor a delegate's until one is adopted or created"
     : `owner not settled — ${config.accountId} could not be read, so whose key this is is unknown`;
+}
+
+/**
+ * Is the program this signer would spawn actually here?
+ *
+ * Constructing an external signer stores an argv and checks nothing, so
+ * `WATERX_SIGNER_COMMAND=/nonexistent/signer` passed the preflight and failed
+ * at the first signature — with an order priced and a person waiting. A
+ * preflight that cannot catch a typed path is a preflight for the one case that
+ * never goes wrong.
+ *
+ * Only an ABSOLUTE path is checked. A bare name is resolved against a PATH this
+ * process may not share with the one that spawns it, so "not on my PATH" would
+ * be a failure about the wrong machine — reported as unknown rather than as
+ * broken.
+ *
+ * Named and exported so it can be tested without a preflight, which needs a
+ * network this check does not.
+ */
+export function signerCommandCheck(
+  signer: { readonly kind: string; readonly executable?: string },
+  exists: (path: string) => boolean = (path) => {
+    try {
+      return statSync(path).isFile();
+    } catch {
+      return false;
+    }
+  },
+): DoctorCheck | undefined {
+  if (signer.kind !== "external-command") return undefined;
+  const executable = signer.executable ?? "";
+  if (!executable.startsWith("/") && !executable.startsWith(".")) {
+    return warn(
+      "signer command",
+      `\`${executable}\` is resolved on PATH when it is spawned, so this preflight cannot confirm it exists. ` +
+        `An absolute path is checkable; a name is not, from here.`,
+    );
+  }
+  return exists(executable)
+    ? ok("signer command", `${executable} is on this machine.`)
+    : fail(
+        "signer command",
+        `${executable} is not a file on this machine, so every signature would fail at the moment one is needed. ` +
+          `Fix WATERX_SIGNER_COMMAND, or point it at a bare name this host resolves on PATH.`,
+      );
 }
