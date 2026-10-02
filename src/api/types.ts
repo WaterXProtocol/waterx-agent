@@ -409,7 +409,18 @@ export interface AppInfo {
   rewardTokens: InfoRewardTokenMeta[];
 }
 
-export type CandleTimeframe = "1m" | "5m" | "15m" | "1h" | "4h" | "1d";
+/**
+ * The timeframes the candles route serves.
+ *
+ * A runtime list with the type derived FROM it, because the CLI cast an
+ * unvalidated `--tf` straight into the union: `--tf zzz` reached the server and
+ * came back `rejected`, which this contract reserves for a request the server
+ * refused on its merits. It was a value somebody typed, so it is `usage`, and the
+ * only way to say that before the request is to have the list at runtime. Derived
+ * rather than written twice, so the two cannot drift.
+ */
+export const CANDLE_TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1d"] as const;
+export type CandleTimeframe = (typeof CANDLE_TIMEFRAMES)[number];
 
 /**
  * The window the WLP statistics routes accept.

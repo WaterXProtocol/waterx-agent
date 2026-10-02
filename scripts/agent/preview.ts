@@ -431,22 +431,33 @@ async function withBackingAsset(
  */
 async function feasibilityFacts(
   agent: WaterXAgent,
-  preview: { ticker?: string },
+  preview: { ticker?: string; positionId?: number },
 ): Promise<FeasibilityFacts | undefined> {
   if (preview.ticker === undefined) return undefined;
   try {
-    const [params, overview] = await Promise.all([
+    const [params, overview, positions] = await Promise.all([
       agent.read.marketParams(preview.ticker),
       agent.config.accountId === undefined
         ? Promise.resolve(undefined)
         : agent.read.overview(agent.config.accountId).catch(() => undefined),
+      // Only when a position is named, and failing softly like the others: a
+      // position this could not read is a position nothing was checked against,
+      // which `checkFeasibility` reports rather than treating as approval.
+      preview.positionId === undefined || agent.config.accountId === undefined
+        ? Promise.resolve(undefined)
+        : agent.read.positions(agent.config.accountId).catch(() => undefined),
     ]);
     const market = params as { maxLeverage?: number; minCollateral?: number };
     const account = overview as { freeMargin?: number } | undefined;
+    const position = positions?.find(
+      (p) => p.ticker === preview.ticker && p.id === String(preview.positionId),
+    );
     return {
       ...(typeof market.maxLeverage === "number" ? { maxLeverage: market.maxLeverage } : {}),
       ...(typeof market.minCollateral === "number" ? { minCollateral: market.minCollateral } : {}),
       ...(typeof account?.freeMargin === "number" ? { freeMargin: account.freeMargin } : {}),
+      ...(typeof position?.collateral === "number" ? { positionCollateral: position.collateral } : {}),
+      ...(typeof position?.size === "number" ? { positionNotional: position.size } : {}),
     };
   } catch {
     return undefined;

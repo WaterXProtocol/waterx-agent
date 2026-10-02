@@ -92,6 +92,16 @@ export interface Envelope {
   reconcileRequired: boolean;
   awaitingApproval: boolean;
   nextCommand?: string;
+  /**
+   * Standing facts about this runtime that a caller must not have to infer.
+   *
+   * "MAINNET — this spends real money" was written to the human stream only, so
+   * an agent reading `--json` had to derive the risk from the `network` field and
+   * know what that implied. Present on EVERY document rather than only on a
+   * preview: whether this installation can spend real money is not a property of
+   * one command. Absent when there is nothing to say.
+   */
+  warnings?: string[];
   /** The command's own result. Absent when it produced none. */
   data?: unknown;
   /**

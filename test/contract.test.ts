@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 
 import { classify } from "../src/cli/classify.ts";
+import { CANDLE_TIMEFRAMES, type CandleTimeframe } from "../src/api/types.ts";
 import { EXIT, firstRunnable, invoke, stepOwnerLabel } from "../src/cli/contract.ts";
 import { SignerError } from "../src/chain/signer.ts";
 import {
@@ -259,5 +260,22 @@ describe("a refusal the owner has to lift", () => {
       new WaterXApiError(ErrorCode.InsufficientAccountBalance, "not enough balance", 400),
     );
     expect((outcome.details as { hint?: string }).hint).toBeUndefined();
+  });
+});
+
+describe("a timeframe is not cast into its own type", () => {
+  /**
+   * `--tf zzz` was cast straight into the closed union, reached the server, and
+   * came back `rejected` — which this contract reserves for a request the server
+   * refused on its merits. It was a value somebody typed.
+   */
+  it("keeps the runtime list and the type in step", () => {
+    // Derived, not written twice: the type comes FROM the list, so a timeframe
+    // added to one is in the other by construction. Asserted because the pair is
+    // the whole mechanism.
+    const every: CandleTimeframe[] = [...CANDLE_TIMEFRAMES];
+    expect(every).toContain("1h");
+    expect(every).toHaveLength(6);
+    expect((CANDLE_TIMEFRAMES as readonly string[]).includes("zzz")).toBe(false);
   });
 });

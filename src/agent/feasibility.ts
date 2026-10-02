@@ -32,6 +32,10 @@ export interface FeasibilityFacts {
   minCollateral?: number;
   /** `overview.freeMargin`, in display USD. */
   freeMargin?: number;
+  /** The named position's own margin, in display USD. */
+  positionCollateral?: number;
+  /** And its notional, so a margin removal's resulting leverage is computable. */
+  positionNotional?: number;
 }
 
 /** The part of a preview this reasons about. Structural, so tests need no plan. */
@@ -40,6 +44,8 @@ export interface FeasibleOrder {
   side?: "long" | "short";
   leverage?: number;
   collateralUsd?: number;
+  /** Display units moved by a margin or pool action. */
+  amount?: number;
   referencePrice?: number;
   legs?: readonly { kind: "take-profit" | "stop-loss"; triggerPrice: number }[];
   bound?: { slippagePercent?: number };
@@ -104,6 +110,34 @@ export function checkFeasibility(order: FeasibleOrder, supplied: FeasibilityFact
       blocking: true,
       detail: `This commits ${money(order.collateralUsd)} and the account has ${money(facts.freeMargin)} free. The order cannot be funded.`,
     });
+  }
+
+  // Taking margin out of a position raises its leverage, and taking all of it out
+  // leaves a position with nothing behind it. The preview showed `leverage: null`
+  // and let a person approve it — the null was the symptom, and nothing read it.
+  if (order.action === "remove-margin" && order.amount !== undefined && facts.positionCollateral !== undefined) {
+    if (order.amount >= facts.positionCollateral) {
+      findings.push({
+        code: "MARGIN_REMOVAL_LEAVES_NOTHING",
+        blocking: true,
+        detail:
+          `Removing ${money(order.amount)} from a position holding ${money(facts.positionCollateral)} ` +
+          `leaves it with no margin at all. Close the position instead of emptying it.`,
+      });
+    } else if (facts.positionNotional !== undefined && facts.maxLeverage !== undefined) {
+      // Said, not refused, and only when a ceiling is known: how much leverage
+      // to run is the trader's call right up to the market's own limit.
+      const resulting = facts.positionNotional / (facts.positionCollateral - order.amount);
+      if (resulting > facts.maxLeverage) {
+        findings.push({
+          code: "MARGIN_REMOVAL_PASSES_MARKET_MAX_LEVERAGE",
+          blocking: true,
+          detail:
+            `Removing ${money(order.amount)} leaves this position at ${resulting.toFixed(1)}x, above ` +
+            `this market's maximum of ${String(facts.maxLeverage)}x. The chain refuses it.`,
+        });
+      }
+    }
   }
 
   // Direction, not distance. How far a stop sits from entry is a judgement
