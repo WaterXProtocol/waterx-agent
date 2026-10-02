@@ -69,15 +69,15 @@ const money = (value: number): string => `$${value.toFixed(2)}`;
  */
 const OPENS = new Set(["open-long", "open-short", "place-order", "increase-position"]);
 
-export function checkFeasibility(order: FeasibleOrder, facts: FeasibilityFacts | undefined): Feasibility {
-  if (facts === undefined) {
-    return {
-      checked: false,
-      findings: [],
-      blocking: [],
-      reason: "the market parameters and the account could not be read, so nothing about this order was checked against them",
-    };
-  }
+export function checkFeasibility(order: FeasibleOrder, supplied: FeasibilityFacts | undefined): Feasibility {
+  // Unreadable facts used to return here, which stopped the checks that need no
+  // facts at all — a stop-loss on the winning side and an impossible slippage
+  // are both decidable from the order alone, and both went unsaid because a
+  // market lookup had failed. Each check below already requires the fact it
+  // compares against, so an empty set simply means the comparisons that need
+  // one do not fire.
+  const facts = supplied ?? {};
+  const unread = supplied === undefined;
 
   const findings: Finding[] = [];
   const opening = OPENS.has(order.action);
@@ -146,5 +146,19 @@ export function checkFeasibility(order: FeasibleOrder, facts: FeasibilityFacts |
     });
   }
 
-  return { checked: true, findings, blocking: findings.filter((f) => f.blocking).map((f) => f.code) };
+  return {
+    // `checked` is about the FACTS, not about whether anything ran. A caller
+    // that sees no findings needs to know which of the two it is looking at:
+    // an order checked against its market, or one nothing could be compared to.
+    checked: !unread,
+    findings,
+    blocking: findings.filter((f) => f.blocking).map((f) => f.code),
+    ...(unread
+      ? {
+          reason:
+            "the market parameters and the account could not be read, so nothing was checked " +
+            "against them — the checks that need no market facts still ran",
+        }
+      : {}),
+  };
 }

@@ -22,9 +22,20 @@
 import { basename } from "node:path";
 
 import dotenv from "dotenv";
+
+import { inStateRoot } from "../../src/state-root.ts";
+
+// From the state root, not from the working directory.
+//
+// `stateRoot()` anchored where `.env` is WRITTEN and where the ledgers live, and
+// left this line — where `.env` is READ — still resolving against `cwd`. So
+// `next` found the install from a subdirectory and every command that needs a
+// configured account did not: `balance` answered "no WaterX account configured"
+// two directories below the one that had configured it.
+//
 // `quiet` suppresses dotenv's own "injecting env" tip, which is written to
 // stdout and would otherwise be the first thing an agent's JSON parser sees.
-dotenv.config({ quiet: true });
+dotenv.config({ path: inStateRoot(".env"), quiet: true });
 
 import { WaterXAgent } from "../../src/agent/agent.ts";
 import { explorerTxUrl, loadConfig } from "../../src/config.ts";

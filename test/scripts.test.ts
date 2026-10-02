@@ -442,3 +442,75 @@ describe("the one JSON document --json promises", () => {
     expect(run.stderr).toMatch(/unknown command/u);
   });
 });
+
+/**
+ * What `preview` tells a machine about its own risk checks.
+ *
+ * The findings were written with `note()` only, so they reached a human reading
+ * the terminal and nothing reached an agent reading `--json`: no `warnings`
+ * field, and no way to tell a preview CHECKED against its market from one where
+ * the market could not be read. An external tester previewed 1000x leverage, saw
+ * nothing, and reasonably reported the check as missing — it had run and had
+ * nothing to compare against, and the document could not say so.
+ *
+ * Static, like the rest of this file: the scripts have no end-to-end harness,
+ * and a deleted field should fail here rather than in somebody's test report.
+ */
+describe("preview's machine-readable risk report", () => {
+  const source = readFileSync("scripts/agent/preview.ts", "utf8");
+
+  it("puts the feasibility report in the document, not only on the human stream", () => {
+    expect(source).toMatch(/feasibility: feasibilityReport/);
+    expect(source).toMatch(/checked: feasibility\.checked/);
+  });
+
+  it("says WHY nothing was checked, when nothing was", () => {
+    // `checked: false` with no reason is a dead end for the caller: it cannot
+    // tell a market that is down from an account it has not adopted.
+    expect(source).toMatch(/notCheckedBecause/);
+  });
+
+  it("also reports it on the blocking path, where an approval was withheld", () => {
+    // The refusal already carried `feasibility`; it has to carry the same shape,
+    // or a caller parses one field two ways depending on the answer.
+    expect(source).toMatch(/blocking: feasibility\.blocking/);
+  });
+});
+
+/**
+ * Where `.env` is READ from.
+ *
+ * `stateRoot()` anchored where `.env` is written and where the four ledgers
+ * live, and left `dotenv.config()` resolving against the working directory. So
+ * half the fix shipped: `next` found the install from a subdirectory and every
+ * command that needs a configured account did not. An external tester saw `next`
+ * answer and `balance` answer "No WaterX account configured" from the same
+ * install, two directories apart.
+ *
+ * Spawned, because that is the only way this is observable — the bug was in
+ * module-load order, which no in-process import can reproduce. `limits` is the
+ * subject because it reads the account and touches no network.
+ */
+describe("a configured install, seen from a subdirectory", () => {
+  it("finds the account that .env names", () => {
+    const install = mkdtempSync(join(tmpdir(), "waterx-subdir-"));
+    const deep = join(install, "a", "b");
+    mkdirSync(deep, { recursive: true });
+    writeFileSync(
+      join(install, ".env"),
+      `WATERX_ACCOUNT_ID=0x${"a".repeat(64)}\nWATERX_NETWORK=testnet\n`,
+    );
+
+    const run = spawnSync(process.execPath, [join(process.cwd(), "bin", "waterx.mjs"), "limits", "--json"], {
+      cwd: deep,
+      encoding: "utf8",
+      // A clean environment, or the suite's own WATERX_* would supply the very
+      // thing this asserts has to come from the file.
+      env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" },
+    });
+
+    const document = JSON.parse(run.stdout) as { status?: string; data?: { accountId?: string } };
+    expect(document.status, run.stdout).toBe("ok");
+    expect(document.data?.accountId).toBe(`0x${"a".repeat(64)}`);
+  }, 60_000);
+});

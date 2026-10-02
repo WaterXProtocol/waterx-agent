@@ -89,7 +89,15 @@ await run(async () => {
   const feasibility = checkFeasibility(preview, await feasibilityFacts(agent, preview));
   if (feasibility.blocking.length > 0) {
     for (const finding of feasibility.findings) note(`  ${finding.blocking ? "✗" : "!"} ${finding.code} — ${finding.detail}`);
-    show({ feasibility, preview, approvalId: null });
+    show({
+      feasibility: {
+        checked: feasibility.checked,
+        blocking: feasibility.blocking,
+        warnings: feasibility.findings.map((f) => ({ code: f.code, detail: f.detail, blocking: f.blocking })),
+      },
+      preview,
+      approvalId: null,
+    });
     setOutcome({
       status: "rejected",
       message: `This order cannot be placed as described, so nothing was written for anyone to approve: ${feasibility.blocking.join(", ")}.`,
@@ -101,6 +109,21 @@ await run(async () => {
     return;
   }
   for (const finding of feasibility.findings) note(`  ! ${finding.code} — ${finding.detail}`);
+  // Said on the human stream AND in the document. These were written with
+  // `note` alone, so an agent reading `--json` saw a clean preview: no
+  // `warnings`, and — worse — no way to tell a preview that was checked and
+  // found fine from one where nothing was checked at all. An external tester
+  // previewed 1000x leverage, saw no warning, and reasonably concluded the
+  // check was missing. Absence of a finding is only evidence when `checked` is
+  // true, so both travel together.
+  const feasibilityReport = {
+    checked: feasibility.checked,
+    warnings: feasibility.findings.map((f) => ({ code: f.code, detail: f.detail })),
+    ...(feasibility.reason === undefined ? {} : { notCheckedBecause: feasibility.reason }),
+  };
+  if (!feasibility.checked) {
+    note(`  ! NOT_CHECKED — ${feasibility.reason ?? "nothing could be read to check against"}`);
+  }
 
   const request = requestApproval({
     action: plan.action,
@@ -123,6 +146,7 @@ await run(async () => {
     executionPolicy: agent.config.executionPolicy,
     expiresAt: new Date(request.expiresAt).toISOString(),
     intentFingerprint: request.fingerprint,
+    feasibility: feasibilityReport,
     preview,
     // The exact intent the gate will authorize. Included so a reviewer can see
     // the raw values the chain receives, not only the display rendering of them.

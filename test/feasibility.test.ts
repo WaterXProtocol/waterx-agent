@@ -125,3 +125,42 @@ describe("what it does not claim to know", () => {
     expect(codes({ action: "close-position", side: "long", collateralUsd: 1, leverage: 1000 })).toEqual([]);
   });
 });
+
+describe("what is decidable without a market", () => {
+  /**
+   * Unreadable facts returned early, so NOTHING was checked — including the two
+   * things that need no market at all. A stop-loss on the winning side and a
+   * slippage of zero are both decidable from the order itself, and both went
+   * unsaid because a market lookup had failed.
+   */
+  it("still catches a stop-loss on the winning side with no facts at all", () => {
+    const result = checkFeasibility(
+      {
+        action: "open-long",
+        side: "long",
+        referencePrice: 1.17,
+        legs: [{ kind: "stop-loss", triggerPrice: 2 }],
+      },
+      undefined,
+    );
+    expect(result.blocking).toContain("STOP_LOSS_ON_THE_WINNING_SIDE");
+  });
+
+  it("still warns about an impossible slippage with no facts at all", () => {
+    const result = checkFeasibility(
+      { action: "open-long", bound: { slippagePercent: 0 } },
+      undefined,
+    );
+    expect(result.findings.map((f) => f.code)).toContain("SLIPPAGE_LEAVES_NO_ROOM");
+  });
+
+  it("still reports that the market facts were not read", () => {
+    // Running some checks is not the same as having checked. A caller that sees
+    // no leverage finding must be able to tell "within the cap" from "no cap was
+    // ever fetched", and `checked` is the only thing that says which.
+    const result = checkFeasibility({ action: "open-long", leverage: 1000 }, undefined);
+    expect(result.checked).toBe(false);
+    expect(result.reason).toBeDefined();
+    expect(result.blocking).not.toContain("LEVERAGE_ABOVE_MARKET_MAX");
+  });
+});
