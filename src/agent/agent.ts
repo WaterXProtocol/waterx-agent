@@ -988,6 +988,13 @@ export class WaterXAgent {
     params: WriteOptions & { ticker: string; orderId: number },
   ): Promise<TradePlan> {
     const ticker = await this.markets.resolveTicker(params.ticker);
+    // Looked up, as `planUpdateOrder` already did. Cancelling an order that does
+    // not exist previewed cleanly and was approved by a person before the chain
+    // refused it — the same half-checked set the owner-only actions were in, and
+    // the same remedy: the refusal was never in doubt, only when somebody heard
+    // it. `requireOrder` names the open orders, so a mistyped id is corrected
+    // rather than merely rejected.
+    await this.requireOrder(ticker, params.orderId);
     const intent: WriteIntent = {
       action: "cancelOrder",
       accountId: this.accountId,

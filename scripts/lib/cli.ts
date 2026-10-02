@@ -160,6 +160,7 @@ function emit(final: Outcome, data: unknown): never {
       reconcileRequired: final.reconcileRequired,
       awaitingApproval: final.awaitingApproval,
       ...(final.nextCommand === undefined ? {} : { nextCommand: final.nextCommand }),
+      ...(standingWarnings().length === 0 ? {} : { warnings: standingWarnings() }),
       ...(data === undefined ? {} : { data }),
       // `error` is for things that went wrong. `needs-approval` did not go
       // wrong — it is the designed resting state of a preview, and labelling it
@@ -201,6 +202,35 @@ function safeNetwork(): string {
     return loadConfig().network;
   } catch {
     return process.env.WATERX_NETWORK?.trim() ?? "unknown";
+  }
+}
+
+/**
+ * What a caller must know about this runtime before reading anything else.
+ *
+ * Defensive for the same reason `safeNetwork` is: a command reporting a broken
+ * configuration still has to print its envelope, so a config that will not load
+ * yields no warnings rather than an unprintable document.
+ */
+function standingWarnings(): string[] {
+  try {
+    const config = loadConfig();
+    const warnings: string[] = [];
+    if (config.network === "mainnet") {
+      warnings.push("MAINNET — writes from this runtime spend real money.");
+    }
+    if (config.executionPolicy === "read-only") {
+      warnings.push("The execution policy is read-only, so nothing here can be signed.");
+    }
+    if (config.executionPolicy === "delegated-auto") {
+      warnings.push(
+        "The execution policy is delegated-auto: a write inside the configured scope proceeds " +
+          "with no per-order approval.",
+      );
+    }
+    return warnings;
+  } catch {
+    return [];
   }
 }
 

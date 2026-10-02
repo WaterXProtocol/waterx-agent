@@ -711,3 +711,107 @@ describe("preview's action list matches its dispatch", () => {
     expect(dispatched().length).toBe(advertised().length);
   });
 });
+
+/**
+ * What every document says about the runtime it came from.
+ *
+ * "MAINNET — this spends real money" was written to the human stream only, so an
+ * agent reading `--json` had to derive the risk from the `network` field and know
+ * what that implied. On every document rather than only on a preview: whether this
+ * installation can spend real money is not a property of one command.
+ *
+ * Spawned, because the warning is assembled from the loaded config at the moment
+ * the envelope is written.
+ */
+describe("standing warnings travel with every document", () => {
+  const documentFrom = (env: Record<string, string>): { warnings?: string[]; network?: string } => {
+    const home = mkdtempSync(join(tmpdir(), "waterx-warn-"));
+    writeFileSync(
+      join(home, ".env"),
+      Object.entries(env).map(([k, v]) => `${k}=${v}`).join("\n") + "\n",
+    );
+    const run = spawnSync(
+      process.execPath,
+      [join(process.cwd(), "bin", "waterx.mjs"), "markets", "--help", "--json"],
+      { cwd: home, encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: home } },
+    );
+    expect(run.stdout.trim(), run.stderr).not.toBe("");
+    return JSON.parse(run.stdout) as { warnings?: string[]; network?: string };
+  };
+
+  it("says mainnet spends real money, in the document", () => {
+    const document = documentFrom({ WATERX_NETWORK: "mainnet" });
+    expect(document.network).toBe("mainnet");
+    expect((document.warnings ?? []).join(" ")).toMatch(/real money/u);
+  });
+
+  it("says nothing of the sort on testnet", () => {
+    // The assertion that makes the first one mean something. A warning on every
+    // document regardless would be noise, and noise is ignored.
+    const document = documentFrom({ WATERX_NETWORK: "testnet" });
+    expect((document.warnings ?? []).join(" ")).not.toMatch(/real money/u);
+  });
+
+  it("says when nothing can be signed, which is the other half of the risk", () => {
+    // Reading production and spending on it are different facts, and a caller
+    // told only the first would read it as worse than it is.
+    const document = documentFrom({ WATERX_NETWORK: "mainnet" });
+    expect((document.warnings ?? []).join(" ")).toMatch(/read-only/u);
+  });
+}, 90_000);
+
+describe("a bad --tf is the caller's mistake, not the server's refusal", () => {
+  it("refuses an unknown timeframe before the request, as usage", () => {
+    // `--tf zzz` was cast into the closed union, reached the server, and came
+    // back `rejected` — the code this contract reserves for a request refused on
+    // its merits. An agent branching on it would report a server problem for a
+    // value it typed itself.
+    const home = mkdtempSync(join(tmpdir(), "waterx-tf-"));
+    writeFileSync(join(home, ".env"), "WATERX_NETWORK=testnet\n");
+    const run = spawnSync(
+      process.execPath,
+      [join(process.cwd(), "bin", "waterx.mjs"), "candles", "--ticker", "SUIUSD", "--tf", "zzz", "--json"],
+      { cwd: home, encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: home } },
+    );
+    const document = JSON.parse(run.stdout) as { status?: string; message?: string };
+    expect(document.status, run.stdout).toBe("usage");
+    // And it lists them, so the next attempt is right rather than another guess.
+    expect(document.message ?? "").toMatch(/1m, 5m, 15m, 1h, 4h, 1d/u);
+  }, 60_000);
+});
+
+/**
+ * `execute` settles what it confirmed.
+ *
+ * It left every submission outstanding whatever happened, so `next` blocked the
+ * next action until somebody ran `reconcile` — and SKILL.md says to reconcile only
+ * an `ambiguous` result, so the instruction and the behaviour disagreed. It could
+ * not settle before: it did not know the outcome. Now it reads the status back, so
+ * it does.
+ *
+ * Static, and the limit is worth stating: this asserts the call is there and
+ * guarded by the confirmation, not that a real sponsored submission settles. That
+ * needs a signature and a chain, which `packages/e2e` is for and which has not
+ * run. The behaviour either side of it IS covered — `didLand` separating an abort
+ * from an execution, and the executor's three outcomes.
+ */
+describe("execute settles a confirmed execution", () => {
+  const source = readFileSync("scripts/agent/execute.ts", "utf8");
+
+  it("settles the submission it just confirmed", () => {
+    expect(source).toMatch(/settle\(submissionId, \{ landed: true \}\)/u);
+  });
+
+  it("only when the chain confirmed it, never on an unconfirmed digest", () => {
+    // The guard that matters. Settling an UNCONFIRMED submission would clear it
+    // from `next` while nobody knew what it did — which is worse than blocking.
+    expect(source).toMatch(/if \(confirmed && submissionId !== undefined\) settle\(/u);
+  });
+
+  it("records nothing about the ORDER, which the indexer may not have yet", () => {
+    // `landed: true` and no more. `reconcile` already reports a lagging indexer as
+    // `not-indexed-yet` rather than as an empty result, and inventing an order
+    // status here would be a claim about something nobody read.
+    expect(source).not.toMatch(/settle\(submissionId, \{ landed: true, orderIds/u);
+  });
+});

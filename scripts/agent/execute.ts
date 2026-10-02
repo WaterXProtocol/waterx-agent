@@ -29,7 +29,7 @@
  * transaction that already executed.
  */
 import { markConsumed, statusOf } from "../../src/agent/approvals.ts";
-import { recordSubmission } from "../../src/agent/submissions.ts";
+import { recordSubmission, settle } from "../../src/agent/submissions.ts";
 import { previewOf } from "../../src/agent/plan.ts";
 import { AmbiguousSubmissionError, ConfigError, UsageError } from "../../src/errors.ts";
 import { invoke, succeeded } from "../../src/cli/contract.ts";
@@ -204,6 +204,17 @@ await run(async () => {
   // `ok` used to be unconditional once a digest came back, so a transaction that
   // was accepted and then aborted — or one whose outcome was simply not readable
   // yet — reported as a placed order. Only a confirmed execution says so now.
+  // Settled here, on the chain's own confirmation. `execute` used to leave every
+  // submission outstanding whatever happened, so `next` blocked the next action
+  // until somebody ran `reconcile` — and SKILL.md says to reconcile only an
+  // `ambiguous` result, so the instruction and the behaviour disagreed. It could
+  // not settle before, because it did not know the outcome; now it does.
+  //
+  // `landed: true` and nothing more: what became of the ORDER is the indexer's to
+  // say and it may not have caught up, which `reconcile` already reports as
+  // `not-indexed-yet` rather than as an empty answer.
+  if (confirmed && submissionId !== undefined) settle(submissionId, { landed: true });
+
   setOutcome(
     confirmed
       ? succeeded(`${request.action} executed as ${result.digest}`, { submitted: true })
