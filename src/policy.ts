@@ -343,6 +343,81 @@ export interface SpendMeter {
   record?: (entry: { action: string; accountId: string; collateral: number }) => void;
 }
 
+/**
+ * The scope rules a caller may ask about BEFORE the moment of signing.
+ *
+ * Every rule here reads the intent and the scope and nothing else, so its answer
+ * at any earlier time is the answer at execution time too. That is what makes it
+ * safe to publish: queueing an intent the scope can never permit used to be
+ * accepted and only refused when a runner reached it, which left an operator
+ * believing the queue had been validated — and the queued work either sat there
+ * or failed one pass at a time.
+ *
+ * The rules NOT here are the ones that read live state: what collateral is open
+ * at this instant, and what the cumulative ledger says. Those are deliberately
+ * absent rather than approximated. An answer about them now is an answer about a
+ * different moment, and a caller told "in scope" on the strength of a stale
+ * measurement is worse off than one told nothing.
+ *
+ * Returns every violation rather than the first, because a caller fixing a
+ * queued intent wants the list, while `assertInScope` refuses on the first and
+ * keeps its message unchanged.
+ */
+export function statelessScopeViolations(
+  intent: Pick<
+    WriteIntent,
+    "action" | "accountId" | "increasesExposure" | "ticker" | "side" | "collateral" | "leverage" | "slippagePercent"
+  >,
+  scope: PolicyScope,
+  /** The instant the write would be attempted — not necessarily now. */
+  at: number,
+): string[] {
+  const violations: string[] = [];
+
+  if (at > Date.parse(scope.notAfter)) {
+    violations.push(`the delegation scope ended at ${scope.notAfter}`);
+  }
+  if (!scope.accounts.includes(intent.accountId)) {
+    violations.push(`account ${intent.accountId} is not in the scope's account list`);
+  }
+  if (intent.ticker !== undefined && scope.markets !== undefined && !scope.markets.includes(intent.ticker)) {
+    violations.push(`market ${intent.ticker} is not in the scope's market list (${scope.markets.join(", ")})`);
+  }
+  if (intent.side !== undefined && scope.sides !== undefined && !scope.sides.includes(intent.side)) {
+    violations.push(`${intent.side} is not an allowed side (${scope.sides.join(", ")})`);
+  }
+  if (intent.slippagePercent !== undefined && intent.slippagePercent > scope.maxSlippagePercent) {
+    violations.push(
+      `slippage ${String(intent.slippagePercent)}% exceeds the ceiling ${String(scope.maxSlippagePercent)}%`,
+    );
+  }
+
+  // Only exposure-increasing actions are metered. Closing, reducing, adding
+  // margin and cancelling stay available to a bounded agent by design.
+  //
+  // BOTH have to agree. `increasesExposure` is supplied by the caller and
+  // bound to nothing in the transaction, so on its own it was a single
+  // unverifiable boolean that skipped every ceiling below. The action name is
+  // bound — a transaction has to call that action's defining entrypoint to be
+  // accepted as it — so an action outside the exit set is metered whatever
+  // the flag says. This can only add metering, never remove it.
+  if (!intent.increasesExposure && EXITS.has(intent.action)) return violations;
+
+  if (intent.leverage !== undefined && intent.leverage > scope.maxLeverage) {
+    violations.push(`leverage ${String(intent.leverage)}x exceeds the ceiling ${String(scope.maxLeverage)}x`);
+  }
+  if (intent.collateral !== undefined && intent.collateral > scope.maxCollateralPerOrder) {
+    violations.push(
+      `collateral ${String(intent.collateral)} exceeds the per-order ceiling ` +
+        `${String(scope.maxCollateralPerOrder)}`,
+    );
+  }
+  return violations;
+}
+
+/** Actions a delegated-auto process refuses outright, whatever a scope says. */
+export const isOwnerOnlyAction = (action: string): boolean => OWNER_ONLY_ACTIONS.has(action);
+
 export class PolicyGate {
   private readonly permits = new Set<Permit>();
   private cumulativeCollateral: number;
@@ -591,46 +666,18 @@ export class PolicyGate {
       throw new ExecutionPolicyError(`Out of scope: ${intent.action} — ${reason}.`);
     };
 
-    const expiry = Date.parse(scope.notAfter);
-    if (Date.now() > expiry) {
-      refuse(`the delegation scope ended at ${scope.notAfter}`);
-    }
-    if (!scope.accounts.includes(intent.accountId)) {
-      refuse(`account ${intent.accountId} is not in the scope's account list`);
-    }
-    if (intent.ticker !== undefined && scope.markets !== undefined && !scope.markets.includes(intent.ticker)) {
-      refuse(`market ${intent.ticker} is not in the scope's market list (${scope.markets.join(", ")})`);
-    }
-    if (intent.side !== undefined && scope.sides !== undefined && !scope.sides.includes(intent.side)) {
-      refuse(`${intent.side} is not an allowed side (${scope.sides.join(", ")})`);
-    }
-    if (intent.slippagePercent !== undefined && intent.slippagePercent > scope.maxSlippagePercent) {
-      refuse(
-        `slippage ${String(intent.slippagePercent)}% exceeds the ceiling ${String(scope.maxSlippagePercent)}%`,
-      );
-    }
+    // The rules that need nothing but the intent, shared with whoever wants to
+    // know the answer before the moment of signing. They live outside this class
+    // precisely so a caller asking early asks THESE rules rather than writing
+    // its own approximation of them.
+    const settled = statelessScopeViolations(intent, scope, Date.now());
+    if (settled[0] !== undefined) refuse(settled[0]);
 
-    // Only exposure-increasing actions are metered. Closing, reducing, adding
-    // margin and cancelling stay available to a bounded agent by design.
-    //
-    // BOTH have to agree. `increasesExposure` is supplied by the caller and
-    // bound to nothing in the transaction, so on its own it was a single
-    // unverifiable boolean that skipped every ceiling below. The action name is
-    // bound — a transaction has to call that action's defining entrypoint to be
-    // accepted as it — so an action outside the exit set is metered whatever
-    // the flag says. This can only add metering, never remove it.
+    // Everything from here reads live state, which is why it cannot be hoisted
+    // out and must not be answered early: the measurement that matters is the
+    // one at the moment of the write.
     if (!intent.increasesExposure && EXITS.has(intent.action)) return;
-
-    if (intent.leverage !== undefined && intent.leverage > scope.maxLeverage) {
-      refuse(`leverage ${String(intent.leverage)}x exceeds the ceiling ${String(scope.maxLeverage)}x`);
-    }
     if (intent.collateral !== undefined) {
-      if (intent.collateral > scope.maxCollateralPerOrder) {
-        refuse(
-          `collateral ${String(intent.collateral)} exceeds the per-order ceiling ` +
-            `${String(scope.maxCollateralPerOrder)}`,
-        );
-      }
       // What is open right now. The gate reads nothing, so this arrives
       // measured; absent, the ceiling cannot be checked and the only honest
       // answer is no. A NaN measurement would pass every comparison below, so

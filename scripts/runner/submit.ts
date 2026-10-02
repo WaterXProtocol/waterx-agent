@@ -3,8 +3,10 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 import { Inbox } from "../../src/runner/inbox.ts";
+import { admissible } from "../../src/runner/scope.ts";
 import type { Intent } from "../../src/runner/types.ts";
-import { asNumber, initAgent, parseArgs, run } from "../lib/cli.ts";
+import { ExecutionPolicyError } from "../../src/errors.ts";
+import { asNumber, initAgent, note, parseArgs, run, setOutcome, show } from "../lib/cli.ts";
 
 const args = parseArgs(
   {
@@ -79,6 +81,23 @@ await run(async () => {
     );
   }
 
+  // Checked BEFORE anything is written. An intent the scope can never permit used
+  // to be accepted here and refused later by a runner, one pass at a time — and an
+  // operator who reads `ok` believes the queue was validated. Only the settled
+  // rules are answered: see `admissible`, which refuses to approximate the two
+  // ceilings that read live state.
+  const startsAt = after === undefined ? at : at + after * 1000;
+  const scope = agent.config.policyScope;
+  if (agent.config.executionPolicy === "delegated-auto" && scope !== undefined) {
+    const verdict = admissible(intent, scope, agent.config.accountId ?? "", startsAt);
+    if (verdict.violations.length > 0) {
+      throw new ExecutionPolicyError(
+        `Not queued: ${verdict.action} is outside this installation's scope — ` +
+          `${verdict.violations.join("; ")}. Nothing was written to the inbox.`,
+      );
+    }
+  }
+
   const inbox = new Inbox(inboxDir(args.store ?? ".waterx/jobs.json"));
   const id = inbox.submit({
     intent,
@@ -88,12 +107,45 @@ await run(async () => {
     ...(cooldownSeconds !== undefined ? { cooldownMs: cooldownSeconds * 1000 } : {}),
   });
 
-  console.log(`\nqueued ${id}`);
+  note(`\nqueued ${id}`);
   if (after !== undefined) {
-    console.log(`not before ${new Date(at + after * 1000).toISOString()}`);
-    console.log(`expires    ${new Date(at + (expiresIn ?? 0) * 1000).toISOString()}`);
+    note(`not before ${new Date(at + after * 1000).toISOString()}`);
+    note(`expires    ${new Date(at + (expiresIn ?? 0) * 1000).toISOString()}`);
   }
-  console.log(`The runner picks it up on its next pass (\`runner\`).`);
+  note(`The runner picks it up on its next pass (\`runner\`).`);
+
+  // The id reaches the caller. It was written with `console.log` — which this
+  // CLI redirects to stderr under `--json`, so the document was an envelope with
+  // no `data` at all and an agent that queued something could not learn what it
+  // had queued, nor find it again in `jobs`.
+  show({
+    id,
+    kind: args.kind,
+    ...(args.key === undefined ? {} : { key: args.key }),
+    notBefore: after === undefined ? null : new Date(startsAt).toISOString(),
+    expiresAt: expiresIn === undefined ? null : new Date(at + expiresIn * 1000).toISOString(),
+    // Said in the answer, not only in a comment. A caller that reads "queued"
+    // must not read it as "authorized": the settled scope rules were checked and
+    // the two ceilings that read live state were not, because an answer about
+    // them now is an answer about a different moment.
+    scopeChecked:
+      agent.config.executionPolicy === "delegated-auto" && agent.config.policyScope !== undefined
+        ? {
+            settledRulesChecked: true,
+            decidedAtExecution: ["maxOpenCollateral", "maxCumulativeCollateral"],
+          }
+        : { settledRulesChecked: false, why: `no scope applies under ${agent.config.executionPolicy}` },
+  }, { rendered: true });
+  setOutcome({
+    status: "ok",
+    message:
+      `queued ${id}. The runner picks it up on its next pass, and the policy gate authorizes it ` +
+      `then — admission here is not authorization.`,
+    submitted: false,
+    retryable: false,
+    reconcileRequired: false,
+    awaitingApproval: false,
+  });
 });
 
 /** The inbox sits beside the store it feeds. */
