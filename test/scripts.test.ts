@@ -587,3 +587,127 @@ describe("what SKILL.md says before it says anything else", () => {
     expect(opening).toMatch(/read-only/u);
   });
 });
+
+/**
+ * `jobs` answers a machine as well as a person.
+ *
+ * Everything it printed went through `note` — the human stream — so `--json`
+ * returned an envelope with no `data` at all, and an agent asking what was
+ * scheduled got a document that said nothing either way. An operator reading
+ * "no jobs" from a full inbox queues the work twice; an agent reading an empty
+ * document cannot even tell that it was not told.
+ *
+ * Spawned with a real store and a real inbox, because the two halves coming from
+ * two files is the thing that was wrong.
+ */
+describe("jobs reports the queue in the document", () => {
+  it("names what is queued, what is in the store, and what it could not read", () => {
+    const home = mkdtempSync(join(tmpdir(), "waterx-jobs-"));
+    const inbox = join(home, ".waterx", "jobs.inbox");
+    mkdirSync(inbox, { recursive: true });
+    // One readable intent and one file that is not. An unreadable entry must be
+    // COUNTED, not skipped: it is the one state where either number alone lies.
+    writeFileSync(
+      join(inbox, "aaaaaaaa-1.json"),
+      JSON.stringify({ intent: { action: "open-long", ticker: "SUIUSD", side: "long" }, key: "k" }),
+    );
+    writeFileSync(join(inbox, "bbbbbbbb-2.json"), "{ not json");
+
+    const run = spawnSync(
+      process.execPath,
+      [join(process.cwd(), "bin", "waterx.mjs"), "jobs", "--store", join(home, ".waterx", "jobs.json"), "--json"],
+      { cwd: home, encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: home } },
+    );
+
+    const document = JSON.parse(run.stdout) as {
+      data?: { queued?: { readable?: boolean }[]; counts?: { queued?: number; unreadable?: number; inStore?: number } };
+    };
+    expect(document.data, run.stdout).toBeDefined();
+    expect(document.data?.counts?.queued).toBe(2);
+    expect(document.data?.counts?.unreadable).toBe(1);
+    expect(document.data?.counts?.inStore).toBe(0);
+    // And the empty store is still reported, rather than ending the answer: the
+    // early return meant a full inbox produced no document at all.
+    expect(document.data?.queued?.some((q) => q.readable === false)).toBe(true);
+  }, 60_000);
+});
+
+/**
+ * Every action an agent is allowed to take can be previewed.
+ *
+ * `place-tpsl` and `update-order` were not in `preview`, so the only way to
+ * reach them was a direct command with `--yes` — and SKILL.md forbids an agent
+ * from passing `--yes`, because that is the flag that skips the person. A
+ * capability an agent is told not to use and given no alternative to is a dead
+ * end, not a safeguard. Both plan methods already existed; only the dispatch was
+ * missing.
+ */
+describe("preview covers the actions an agent may ask for", () => {
+  const preview = (action: string): { status?: string; message?: string } => {
+    const run = spawnSync(
+      process.execPath,
+      [join(process.cwd(), "bin", "waterx.mjs"), "preview", "--action", action, "--json"],
+      { encoding: "utf8", env: { PATH: process.env.PATH ?? "", HOME: process.env.HOME ?? "" } },
+    );
+    expect(run.stdout.trim(), `${action} wrote nothing`).not.toBe("");
+    return JSON.parse(run.stdout) as { status?: string; message?: string };
+  };
+
+  for (const action of ["place-tpsl", "update-order"]) {
+    it(`knows ${action}, and asks for its arguments rather than rejecting it`, () => {
+      const document = preview(action);
+      // The distinction that matters: "which market?" is a recognised action
+      // missing an argument. "Unknown --action" is the bug.
+      expect(document.message ?? "").not.toMatch(/Unknown --action/u);
+      expect(document.message ?? "").toMatch(/--ticker is required/u);
+    });
+  }
+
+  it("still refuses an action that does not exist", () => {
+    // The guard on the test above: if preview accepted anything, the two
+    // assertions would pass without the dispatch existing.
+    expect(preview("not-an-action").message ?? "").toMatch(/Unknown --action/u);
+  });
+}, 90_000);
+
+/**
+ * The advertised action list and the dispatch that serves it.
+ *
+ * `ACTIONS` is only a list for a message; the switch's `default` is the
+ * validation. So they drift in both directions and both lies are quiet:
+ *
+ *  - in the switch, not in `ACTIONS` — it works and is never advertised, which
+ *    is what `place-tpsl` would have been had only the dispatch been added;
+ *  - in `ACTIONS`, not in the switch — it is advertised and then refused as
+ *    unknown, in a message that lists it among the valid ones.
+ *
+ * Found by a verify-by-removal that did NOT fail: deleting the two entries from
+ * `ACTIONS` left the capability working, which is how I learned the list was not
+ * what enforced anything.
+ */
+describe("preview's action list matches its dispatch", () => {
+  const source = readFileSync("scripts/agent/preview.ts", "utf8");
+
+  const advertised = (): string[] => {
+    const block = source.slice(source.indexOf("const ACTIONS = ["), source.indexOf("] as const;"));
+    return [...block.matchAll(/^\s*"([a-z-]+)",$/gmu)].map((m) => m[1] as string);
+  };
+  const dispatched = (): string[] => {
+    const block = source.slice(source.indexOf("function planFor("));
+    // The trailing `{` is optional: a branch with a block body is still a
+    // branch, and the first version of this regex missed `case "place-order": {`
+    // and reported a drift that was its own.
+    return [...block.matchAll(/^\s*case "([a-z-]+)":\s*\{?$/gmu)].map((m) => m[1] as string);
+  };
+
+  it("advertises exactly what it serves", () => {
+    expect([...advertised()].sort()).toEqual([...dispatched()].sort());
+  });
+
+  it("found both lists at all, so an empty match cannot pass", () => {
+    // Two regexes parsing one file is a test that fails open if either stops
+    // matching. This is the assertion that closes it.
+    expect(advertised().length).toBeGreaterThan(10);
+    expect(dispatched().length).toBe(advertised().length);
+  });
+});

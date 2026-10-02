@@ -40,6 +40,12 @@ const ACTIONS = [
   "add-margin",
   "remove-margin",
   "cancel-order",
+  // Previewable because SKILL.md forbids an agent from passing `--yes`, which
+  // left these two reachable only by the one route an agent must not take. A
+  // capability an agent is told not to use and given no alternative to is not a
+  // safeguard, it is a dead end — and the plan methods were already here.
+  "place-tpsl",
+  "update-order",
   "create-account",
   "deposit",
   "withdraw",
@@ -312,6 +318,23 @@ function planFor(agent: WaterXAgent, action: string): Promise<TradePlan> {
         amount: demand(args.amount, "--amount", "how much margin to withdraw"),
       });
 
+    case "place-tpsl":
+      return agent.planPlaceTpSl({
+        ticker: demand(args.ticker, "--ticker", "which market the position is in"),
+        positionId: Number(demand(args.positionId, "--position-id", "which position to protect")),
+        // Not demanded individually: either one alone is a valid bracket, and
+        // `planPlaceTpSl` refuses neither-of-them in its own words.
+        ...(args.tp === undefined ? {} : { takeProfitPrice: args.tp }),
+        ...(args.sl === undefined ? {} : { stopLossPrice: args.sl }),
+        ...(args.size === undefined ? {} : { size: args.size }),
+      });
+    case "update-order":
+      return agent.planUpdateOrder({
+        ticker: demand(args.ticker, "--ticker", "which market the order is in"),
+        orderId: Number(demand(args.orderId, "--order-id", "which order to change")),
+        newTriggerPrice: demand(args.triggerPrice, "--trigger-price", "the new trigger price"),
+        newSize: demand(args.size, "--size", "the new base-asset size"),
+      });
     case "cancel-order":
       return agent.planCancelOrder({
         ticker: demand(args.ticker, "--ticker", "which market the order is in"),
