@@ -121,3 +121,5 @@ need read access there as well), and not in cloud sessions; Codex users link the
 a plugin skill (the root `SKILL.md` is product copy, not a repo skill). Known conflict:
 `waterx-code-review` expects `## [Unreleased]` with the PR number on each entry, while this
 repository's `CHANGELOG.md` uses `## Unreleased` for breaking changes (see "Repo-wide gotchas").
+When a change here makes a waterx-commons handbook page, architecture map or plugin skill wrong,
+name it in your summary; fix it in waterx-commons only when asked.
