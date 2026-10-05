@@ -19,6 +19,27 @@ cleanup or a doc the task did not call for goes in the summary as a suggestion. 
 state-changing command outside the working tree (a command that signs, `git push`), check that
 the evidence supports that specific action.
 
+An approval covers the one action it names. Approval to plan, prepare, or open something is not
+approval to sign, publish, or merge it; approval for testnet is not approval for mainnet; approval
+for one PR, transaction, or publish does not carry over to the next, even in the same session.
+Commands that look administrative change state too (a `policy` or `limits` write, `npm publish`;
+`gh pr merge` or enabling auto-merge). When the next step needs an approval you do not have,
+report where you stopped and ask. Before saying a change is on `main`, check the PR's base branch
+and that its merge commit is an ancestor of `origin/main`.
+
+This repository is one part of the WaterX system; the waterx-commons handbook names each
+repository and what it owns (the WaterX backend builds the transactions this CLI verifies, the
+SDK supplies the ABI, waterx-arena vendors a patched copy of this package). When a change here
+makes a waterx-commons handbook page, architecture map or plugin skill wrong, name it in your
+summary; fix it in waterx-commons only when asked. A sibling checkout may be on another branch
+with uncommitted work: inspect its branch, commit and worktree before relying on it, and read the
+default branch (`git show origin/main:<path>`) when the question is what is current. When sources
+disagree, code on the owning repository's default branch wins over docs, plans and copies; a path
+the user gives wins over an old plan's. Do not write internal topology into versioned files (no
+internal IPs, bastion hostnames, access-tunnel projects, credentials, or personal absolute paths
+such as `/Users/...`): point at gcp-infra's docs/access-and-connection-guide.md and use
+placeholders.
+
 ## The three root prompt files are shipped product copy
 
 `SKILL.md`, `AGENT_INSTRUCTIONS.md` and `AGENT.md` are listed in `package.json#files` and are
@@ -121,5 +142,3 @@ need read access there as well), and not in cloud sessions; Codex users link the
 a plugin skill (the root `SKILL.md` is product copy, not a repo skill). Known conflict:
 `waterx-code-review` expects `## [Unreleased]` with the PR number on each entry, while this
 repository's `CHANGELOG.md` uses `## Unreleased` for breaking changes (see "Repo-wide gotchas").
-When a change here makes a waterx-commons handbook page, architecture map or plugin skill wrong,
-name it in your summary; fix it in waterx-commons only when asked.
