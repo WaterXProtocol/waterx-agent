@@ -97,7 +97,7 @@ describe("commands named in the documentation", () => {
 
   it("all exist in package.json", () => {
     const missing: string[] = [];
-    for (const doc of ["README.md", "SKILL.md", "AGENT_INSTRUCTIONS.md", "AGENT.md", ".env.example"]) {
+    for (const doc of ["README.md", "SKILL.md", "AGENT_INSTRUCTIONS.md", "AGENT.md", "AGENTS.md", ".env.example"]) {
       const text = readFileSync(doc, "utf8");
       // Both spellings this package uses for itself.
       const named = [
